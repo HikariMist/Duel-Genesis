@@ -68,6 +68,11 @@ namespace DuelGenesis.Cards
             ResourcePaths[cardId] = resourcePath;
         }
 
+        public static void ClearRegistrations()
+        {
+            ResourcePaths.Clear();
+        }
+
         public static GameObject LoadPrefab(string cardId)
         {
             if (string.IsNullOrWhiteSpace(cardId)) return null;
@@ -155,10 +160,14 @@ namespace DuelGenesis.Cards
 
         public void LoadIfPresent()
         {
+            CardDatabase.Clear();
+            CardModelRegistry.ClearRegistrations();
+            LoadedCardCount = 0;
+
             string path = Path.Combine(Application.streamingAssetsPath, CatalogFileName);
             if (!File.Exists(path))
             {
-                LoadedCardCount = 0;
+                Debug.LogWarning($"Duel: Genesis production card catalog is missing. Build {CatalogFileName} from the DMO card library before opening packs or dueling.");
                 return;
             }
 
@@ -166,9 +175,9 @@ namespace DuelGenesis.Cards
             {
                 string json = File.ReadAllText(path);
                 ExternalCardCatalog catalog = JsonUtility.FromJson<ExternalCardCatalog>(json);
-                if (catalog?.cards == null)
+                if (catalog?.cards == null || catalog.cards.Count == 0)
                 {
-                    Debug.LogWarning("Duel: Genesis external card catalog exists but contains no cards.");
+                    Debug.LogWarning("Duel: Genesis production card catalog contains no cards. No prototype fallback will be loaded.");
                     return;
                 }
 
@@ -185,12 +194,13 @@ namespace DuelGenesis.Cards
                 }
 
                 LoadedCardCount = registered;
-                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production card records from {CatalogFileName}. Booster packs now use the production card pool.");
+                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production cards. Prototype cards are disabled.");
             }
             catch (Exception exception)
             {
+                CardDatabase.Clear();
                 LoadedCardCount = 0;
-                Debug.LogError("Failed to load Duel: Genesis external card catalog: " + exception.Message);
+                Debug.LogError("Failed to load Duel: Genesis production card catalog: " + exception.Message);
             }
         }
     }
