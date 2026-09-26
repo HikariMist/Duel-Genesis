@@ -55,6 +55,9 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<PrototypeVisualPolish>() == null)
                 systems.AddComponent<PrototypeVisualPolish>();
 
+            if (Object.FindFirstObjectByType<RuntimeTextMeshFixer>() == null)
+                systems.AddComponent<RuntimeTextMeshFixer>();
+
             if (Object.FindFirstObjectByType<DuelArenaFX>() == null)
                 systems.AddComponent<DuelArenaFX>();
 
