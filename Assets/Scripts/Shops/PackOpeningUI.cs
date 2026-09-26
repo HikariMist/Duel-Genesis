@@ -12,6 +12,7 @@ namespace DuelGenesis.Shops
         private bool _open;
         private int _revealedCount;
         private ThirdPersonPlayerController _playerController;
+        private ThirdPersonCamera _thirdPersonCamera;
         private Vector2 _scroll;
 
         public bool IsOpen => _open;
@@ -38,7 +39,10 @@ namespace DuelGenesis.Shops
             _open = true;
             _scroll = Vector2.zero;
             _playerController = player.GetComponent<ThirdPersonPlayerController>();
+            _thirdPersonCamera = Object.FindFirstObjectByType<ThirdPersonCamera>();
+
             _playerController?.SetMovementEnabled(false);
+            _thirdPersonCamera?.SetLookEnabled(false);
 
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -75,10 +79,9 @@ namespace DuelGenesis.Shops
 
             _open = false;
             _playerController?.SetMovementEnabled(true);
+            _thirdPersonCamera?.SetLookEnabled(true);
             _playerController = null;
-
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            _thirdPersonCamera = null;
         }
 
         private void OnGUI()
