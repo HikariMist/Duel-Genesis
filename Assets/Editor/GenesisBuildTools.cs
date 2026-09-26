@@ -12,7 +12,7 @@ namespace DuelGenesis.EditorTools
         private const string ScenePath = "Assets/Scenes/GenesisPrototype.unity";
         private const string BuildFolder = "Builds/DuelGenesis";
         private const string ExePath = BuildFolder + "/DuelGenesis.exe";
-        private const string Version = "0.6.0";
+        private const string Version = "0.7.0";
 
         [MenuItem("Duel Genesis/Build/Windows Playable")]
         public static void BuildWindowsPlayable()
@@ -73,9 +73,6 @@ namespace DuelGenesis.EditorTools
                 ? BuildOptions.Development | BuildOptions.AllowDebugging
                 : BuildOptions.None;
 
-            if (runAfterBuild)
-                buildOptions |= BuildOptions.AutoRunPlayer;
-
             BuildPlayerOptions options = new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },
@@ -90,9 +87,29 @@ namespace DuelGenesis.EditorTools
 
             if (summary.result == BuildResult.Succeeded)
             {
+                DmoProductionAssetTools.CopyCardLibraryToBuiltPlayer(ExePath, out string cardArtReport);
+
+                bool launched = false;
+                if (runAfterBuild)
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = Path.GetFullPath(ExePath),
+                            UseShellExecute = true
+                        });
+                        launched = true;
+                    }
+                    catch (System.Exception exception)
+                    {
+                        Debug.LogWarning("Duel: Genesis build succeeded but automatic launch failed: " + exception.Message);
+                    }
+                }
+
                 string message =
-                    $"Build succeeded.\n\n{ExePath}\n\nVersion: {Version}\nSize: {summary.totalSize / (1024f * 1024f):0.0} MB" +
-                    (runAfterBuild ? "\n\nThe playable build is launching now." : string.Empty);
+                    $"Build succeeded.\n\n{ExePath}\n\nVersion: {Version}\nUnity player size: {summary.totalSize / (1024f * 1024f):0.0} MB\n\n{cardArtReport}" +
+                    (launched ? "\n\nThe playable build is launching now." : string.Empty);
                 Debug.Log("Duel: Genesis Windows build succeeded: " + ExePath);
                 EditorUtility.DisplayDialog("Duel: Genesis Build", message, "OK");
             }
