@@ -1,4 +1,5 @@
 using DuelGenesis.Cards;
+using DuelGenesis.Dueling;
 using DuelGenesis.Economy;
 using DuelGenesis.Player;
 using DuelGenesis.Shops;
@@ -35,6 +36,9 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
                 systems.AddComponent<DeckBuilderUI>();
+
+            if (Object.FindFirstObjectByType<DuelPrototype>() == null)
+                systems.AddComponent<DuelPrototype>();
 
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
