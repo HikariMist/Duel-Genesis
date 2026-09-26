@@ -30,7 +30,7 @@ namespace DuelGenesis.EditorTools
             {
                 EditorUtility.DisplayDialog(
                     "Duel: Genesis Build",
-                    "GenesisPrototype.unity was not found. Open Duel Genesis > Build First Playable Prototype first.",
+                    "GenesisPrototype.unity was not found. Restore or rebuild the playable scene before building.",
                     "OK");
                 return;
             }
@@ -39,7 +39,7 @@ namespace DuelGenesis.EditorTools
 
             PlayerSettings.productName = "Duel Genesis";
             PlayerSettings.companyName = "HikariMist";
-            PlayerSettings.bundleVersion = "0.4.0";
+            PlayerSettings.bundleVersion = "0.5.0";
             PlayerSettings.defaultScreenWidth = 1600;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
@@ -64,7 +64,7 @@ namespace DuelGenesis.EditorTools
 
             if (summary.result == BuildResult.Succeeded)
             {
-                string message = $"Build succeeded.\n\n{ExePath}\n\nSize: {summary.totalSize / (1024f * 1024f):0.0} MB";
+                string message = $"Build succeeded.\n\n{ExePath}\n\nVersion: 0.5.0\nSize: {summary.totalSize / (1024f * 1024f):0.0} MB";
                 Debug.Log("Duel: Genesis Windows build succeeded: " + ExePath);
                 EditorUtility.DisplayDialog("Duel: Genesis Build", message, "OK");
             }
