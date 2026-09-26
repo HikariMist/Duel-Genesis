@@ -47,16 +47,12 @@ namespace DuelGenesis.UI
         {
             if (_collection == null)
                 _collection = UnityEngine.Object.FindFirstObjectByType<PlayerCollection>();
-
             if (_deck == null)
                 _deck = UnityEngine.Object.FindFirstObjectByType<PlayerDeck>();
-
             if (_playerController == null)
                 _playerController = UnityEngine.Object.FindFirstObjectByType<ThirdPersonPlayerController>();
-
             if (_cameraController == null)
                 _cameraController = UnityEngine.Object.FindFirstObjectByType<ThirdPersonCamera>();
-
             if (_packOpening == null)
                 _packOpening = UnityEngine.Object.FindFirstObjectByType<PackOpeningUI>();
         }
@@ -102,33 +98,37 @@ namespace DuelGenesis.UI
             GUI.depth = -100;
 
             Rect full = new Rect(20f, 20f, Screen.width - 40f, Screen.height - 40f);
-            GUI.Box(full, string.Empty);
+            GenesisTheme.Box(full, GenesisTheme.Background);
 
             GUIStyle title = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 28,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = GenesisTheme.Cyan }
             };
 
             GUIStyle header = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 19,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft
+                alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = Color.white }
             };
 
             GUIStyle row = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 14,
-                wordWrap = true
+                wordWrap = true,
+                normal = { textColor = Color.white }
             };
 
             GUIStyle statusStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 16,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = GenesisTheme.Green }
             };
 
             GUI.Label(new Rect(full.x + 20f, full.y + 12f, full.width - 40f, 38f), "DUEL: GENESIS — DECK BUILDER", title);
@@ -138,9 +138,12 @@ namespace DuelGenesis.UI
             float halfWidth = (full.width - 54f) * 0.5f;
 
             GUI.Label(new Rect(full.x + 18f, top, 170f, 28f), "Search Collection:", row);
+            Color oldBackground = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.15f, 0.18f, 0.24f, 1f);
             _search = GUI.TextField(new Rect(full.x + 160f, top + 2f, 250f, 28f), _search ?? string.Empty);
+            GUI.backgroundColor = oldBackground;
 
-            if (GUI.Button(new Rect(full.xMax - 330f, top, 135f, 30f), "AUTO BUILD"))
+            if (GenesisTheme.Button(new Rect(full.xMax - 330f, top, 135f, 30f), "AUTO BUILD", GenesisTheme.Cyan))
             {
                 int count = _deck.AutoBuild(_collection);
                 _status = count >= PlayerDeck.MinimumDeckSize
@@ -149,13 +152,13 @@ namespace DuelGenesis.UI
                 UpdateValidationStatus();
             }
 
-            if (GUI.Button(new Rect(full.xMax - 185f, top, 95f, 30f), "CLEAR"))
+            if (GenesisTheme.Button(new Rect(full.xMax - 185f, top, 95f, 30f), "CLEAR", GenesisTheme.Danger))
             {
                 _deck.Clear();
                 UpdateValidationStatus();
             }
 
-            if (GUI.Button(new Rect(full.xMax - 80f, top, 55f, 30f), "X"))
+            if (GenesisTheme.Button(new Rect(full.xMax - 80f, top, 55f, 30f), "X", GenesisTheme.Purple))
                 Close();
 
             float columnsTop = top + toolbarHeight;
@@ -176,7 +179,7 @@ namespace DuelGenesis.UI
 
         private void DrawCollectionPanel(Rect panel, GUIStyle header, GUIStyle row)
         {
-            GUI.Box(panel, string.Empty);
+            GenesisTheme.Box(panel, new Color(0.04f, 0.16f, 0.20f, 1f));
             GUI.Label(new Rect(panel.x + 12f, panel.y + 8f, panel.width - 24f, 30f),
                 $"YOUR COLLECTION — {_collection.TotalCardCount} cards", header);
 
@@ -192,7 +195,7 @@ namespace DuelGenesis.UI
             }
 
             Rect scrollRect = new Rect(panel.x + 10f, panel.y + 44f, panel.width - 20f, panel.height - 54f);
-            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, owned.Count * 74f));
+            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, owned.Count * 78f));
             _collectionScroll = GUI.BeginScrollView(scrollRect, _collectionScroll, content);
 
             for (int i = 0; i < owned.Count; i++)
@@ -200,17 +203,23 @@ namespace DuelGenesis.UI
                 var entry = owned[i];
                 CardData card = entry.card;
                 int inDeck = _deck.GetQuantity(card.id);
-                float y = i * 74f;
+                float y = i * 78f;
 
-                GUI.Box(new Rect(0f, y, content.width, 66f), string.Empty);
+                Rect cardRect = new Rect(0f, y, content.width, 70f);
+                GenesisTheme.Box(cardRect, GenesisTheme.CardColor(card));
+
+                Color old = GUI.contentColor;
+                GUI.contentColor = GenesisTheme.RarityColor(card.rarity);
                 GUI.Label(new Rect(8f, y + 5f, content.width - 95f, 22f),
                     $"{card.cardName} [{card.RarityLabel}]", row);
-                GUI.Label(new Rect(8f, y + 27f, content.width - 95f, 34f),
+                GUI.contentColor = Color.white;
+                GUI.Label(new Rect(8f, y + 27f, content.width - 95f, 36f),
                     $"Owned {entry.quantity} • In Deck {inDeck} • {card.kind} • {card.ShortStats}", row);
+                GUI.contentColor = old;
 
                 bool canAdd = _deck.CanAdd(card, _collection, out _);
                 GUI.enabled = canAdd;
-                if (GUI.Button(new Rect(content.width - 78f, y + 17f, 66f, 32f), "ADD"))
+                if (GenesisTheme.Button(new Rect(content.width - 78f, y + 18f, 66f, 32f), "ADD", GenesisTheme.Green))
                 {
                     _deck.AddCard(card, _collection);
                     UpdateValidationStatus();
@@ -223,28 +232,29 @@ namespace DuelGenesis.UI
 
         private void DrawDeckPanel(Rect panel, GUIStyle header, GUIStyle row)
         {
-            GUI.Box(panel, string.Empty);
+            GenesisTheme.Box(panel, new Color(0.14f, 0.06f, 0.20f, 1f));
             GUI.Label(new Rect(panel.x + 12f, panel.y + 8f, panel.width - 24f, 30f),
                 $"MAIN DECK — {_deck.MainDeckCount}/{PlayerDeck.MaximumDeckSize}", header);
 
             var deckCards = _deck.GetDeckCardsSorted();
             Rect scrollRect = new Rect(panel.x + 10f, panel.y + 44f, panel.width - 20f, panel.height - 54f);
-            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, deckCards.Count * 74f));
+            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, deckCards.Count * 78f));
             _deckScroll = GUI.BeginScrollView(scrollRect, _deckScroll, content);
 
             for (int i = 0; i < deckCards.Count; i++)
             {
                 var entry = deckCards[i];
                 CardData card = entry.card;
-                float y = i * 74f;
+                float y = i * 78f;
 
-                GUI.Box(new Rect(0f, y, content.width, 66f), string.Empty);
+                Rect cardRect = new Rect(0f, y, content.width, 70f);
+                GenesisTheme.Box(cardRect, GenesisTheme.CardColor(card));
                 GUI.Label(new Rect(8f, y + 5f, content.width - 108f, 22f),
                     $"x{entry.quantity}  {card.cardName}", row);
-                GUI.Label(new Rect(8f, y + 27f, content.width - 108f, 34f),
+                GUI.Label(new Rect(8f, y + 27f, content.width - 108f, 36f),
                     $"{card.kind} • {card.attribute} • {card.ShortStats}", row);
 
-                if (GUI.Button(new Rect(content.width - 92f, y + 17f, 80f, 32f), "REMOVE"))
+                if (GenesisTheme.Button(new Rect(content.width - 92f, y + 18f, 80f, 32f), "REMOVE", GenesisTheme.Danger))
                 {
                     _deck.RemoveCard(card);
                     UpdateValidationStatus();
