@@ -4,13 +4,22 @@ namespace DuelGenesis.Core
 {
     public class RuntimeTextMeshFixer : MonoBehaviour
     {
+        private bool _fixed;
+
         private void Start()
         {
-            FixSigns();
+            _fixed = FixSigns() > 0;
         }
 
-        public static void FixSigns()
+        private void LateUpdate()
         {
+            if (_fixed) return;
+            _fixed = FixSigns() > 0;
+        }
+
+        public static int FixSigns()
+        {
+            int fixedCount = 0;
             TextMesh[] meshes = Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None);
             foreach (TextMesh mesh in meshes)
             {
@@ -19,8 +28,13 @@ namespace DuelGenesis.Core
 
                 MeshRenderer renderer = mesh.GetComponent<MeshRenderer>();
                 if (renderer != null)
+                {
                     renderer.sharedMaterial = mesh.font.material;
+                    fixedCount++;
+                }
             }
+
+            return fixedCount;
         }
     }
 }
