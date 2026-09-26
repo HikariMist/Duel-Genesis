@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using DuelGenesis.Cards;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace DuelGenesis.Dueling
 {
