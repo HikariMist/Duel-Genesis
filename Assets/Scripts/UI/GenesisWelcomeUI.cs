@@ -13,6 +13,7 @@ namespace DuelGenesis.UI
         private DuelistProfile _profile;
         private PlayerCollection _collection;
         private PlayerDeck _deck;
+        private GenesisMainMenu _mainMenu;
 
         private void Start()
         {
@@ -48,15 +49,17 @@ namespace DuelGenesis.UI
             if (_profile == null) _profile = Object.FindFirstObjectByType<DuelistProfile>();
             if (_collection == null) _collection = Object.FindFirstObjectByType<PlayerCollection>();
             if (_deck == null) _deck = Object.FindFirstObjectByType<PlayerDeck>();
+            if (_mainMenu == null) _mainMenu = Object.FindFirstObjectByType<GenesisMainMenu>();
         }
 
         private void OnGUI()
         {
             if (!_visible) return;
             Resolve();
+            if (_mainMenu != null && _mainMenu.IsOpen) return;
 
-            float width = Mathf.Min(720f, Screen.width - 60f);
-            Rect panel = new Rect((Screen.width - width) * 0.5f, 36f, width, 210f);
+            float width = Mathf.Min(760f, Screen.width - 60f);
+            Rect panel = new Rect((Screen.width - width) * 0.5f, 36f, width, 220f);
             GenesisTheme.Box(panel, GenesisTheme.Background);
 
             GUIStyle title = new GUIStyle(GUI.skin.label)
@@ -84,8 +87,8 @@ namespace DuelGenesis.UI
                 : $"LEVEL {_profile.Level} • {_profile.Title} • Record {_profile.Wins}-{_profile.Losses}";
 
             GUI.Label(new Rect(panel.x + 16f, panel.y + 14f, panel.width - 32f, 38f), "DUEL: GENESIS — PLAYABLE VERTICAL SLICE", title);
-            GUI.Label(new Rect(panel.x + 28f, panel.y + 58f, panel.width - 56f, 112f),
-                $"{profile}\n\n{objective}\n\nWASD Move  •  Mouse Look  •  E Interact  •  C Collection  •  B Deck Builder  •  F1 Help", body);
+            GUI.Label(new Rect(panel.x + 28f, panel.y + 58f, panel.width - 56f, 122f),
+                $"{profile}\n\n{objective}\n\nWASD Move  •  Mouse Look  •  E Interact  •  C Collection  •  B Deck Builder  •  P Profile  •  F1 Help", body);
 
             string check = GenesisRuntimeDiagnostics.LastPassed ? "SYSTEM CHECK: PASS" : "SYSTEM CHECK: " + GenesisRuntimeDiagnostics.LastReport;
             GUI.Label(new Rect(panel.x + 24f, panel.yMax - 34f, panel.width - 48f, 24f), check, body);
