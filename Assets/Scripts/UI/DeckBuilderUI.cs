@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using DuelGenesis.Cards;
+using DuelGenesis.Dueling;
 using DuelGenesis.Player;
 using DuelGenesis.Shops;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace DuelGenesis.UI
         private ThirdPersonPlayerController _playerController;
         private ThirdPersonCamera _cameraController;
         private PackOpeningUI _packOpening;
+        private DuelGameController _duel;
 
         private bool _open;
         private Vector2 _collectionScroll;
@@ -35,7 +37,7 @@ namespace DuelGenesis.UI
             {
                 if (_open)
                     Close();
-                else if (_packOpening == null || !_packOpening.IsOpen)
+                else if ((_packOpening == null || !_packOpening.IsOpen) && (_duel == null || !_duel.IsActive))
                     Open();
             }
 
@@ -55,12 +57,14 @@ namespace DuelGenesis.UI
                 _cameraController = UnityEngine.Object.FindFirstObjectByType<ThirdPersonCamera>();
             if (_packOpening == null)
                 _packOpening = UnityEngine.Object.FindFirstObjectByType<PackOpeningUI>();
+            if (_duel == null)
+                _duel = UnityEngine.Object.FindFirstObjectByType<DuelGameController>();
         }
 
         public void Open()
         {
             ResolveSystems();
-            if (_collection == null || _deck == null) return;
+            if (_collection == null || _deck == null || (_duel != null && _duel.IsActive)) return;
 
             _open = true;
             _collectionScroll = Vector2.zero;
