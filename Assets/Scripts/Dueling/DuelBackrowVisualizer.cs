@@ -1,22 +1,16 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
+using System.Text;
 using DuelGenesis.Cards;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace DuelGenesis.Dueling
 {
     public class DuelBackrowVisualizer : MonoBehaviour
     {
-        private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
-        private DuelPrototype _duel;
+        private DuelGameController _duel;
         private Transform _table;
         private Transform _playerRoot;
         private Transform _cpuRoot;
-        private FieldInfo _playerZonesInfo;
-        private FieldInfo _cpuZonesInfo;
         private string _playerSignature = string.Empty;
         private string _cpuSignature = string.Empty;
         private float _nextSync;
@@ -24,6 +18,7 @@ namespace DuelGenesis.Dueling
         private static readonly Color SpellColor = new Color(0.10f, 0.80f, 0.52f, 1f);
         private static readonly Color TrapColor = new Color(0.78f, 0.20f, 0.88f, 1f);
         private static readonly Color CardBack = new Color(0.045f, 0.055f, 0.12f, 1f);
+        private static readonly Color NegatedColor = new Color(0.52f, 0.52f, 0.58f, 1f);
 
         private void Update()
         {
@@ -31,7 +26,7 @@ namespace DuelGenesis.Dueling
             EnsureRoots();
             if (_duel == null || _table == null || Time.unscaledTime < _nextSync) return;
 
-            _nextSync = Time.unscaledTime + 0.15f;
+            _nextSync = Time.unscaledTime + 0.12f;
             if (!_duel.IsActive)
             {
                 Clear(_playerRoot);
@@ -48,15 +43,7 @@ namespace DuelGenesis.Dueling
         private void Resolve()
         {
             if (_duel == null)
-            {
-                _duel = Object.FindFirstObjectByType<DuelPrototype>();
-                if (_duel != null)
-                {
-                    Type type = typeof(DuelPrototype);
-                    _playerZonesInfo = type.GetField("_playerSpellTrap", PrivateInstance);
-                    _cpuZonesInfo = type.GetField("_opponentSpellTrap", PrivateInstance);
-                }
-            }
+                _duel = Object.FindFirstObjectByType<DuelGameController>();
 
             if (_table == null)
             {
@@ -83,15 +70,11 @@ namespace DuelGenesis.Dueling
 
         private void Sync(bool playerSide)
         {
-            FieldInfo info = playerSide ? _playerZonesInfo : _cpuZonesInfo;
+            IReadOnlyList<DuelBackrowState> states = playerSide ? _duel.PlayerBackrow : _duel.CpuBackrow;
             Transform root = playerSide ? _playerRoot : _cpuRoot;
-            if (info == null || root == null) return;
+            if (root == null) return;
 
-            IEnumerable zones = info.GetValue(_duel) as IEnumerable;
-            if (zones == null) return;
-
-            List<BackrowState> states = Read(zones);
-            string signature = Signature(states);
+            string signature = Signature(states, _duel.TurnNumber);
             string old = playerSide ? _playerSignature : _cpuSignature;
             if (signature == old) return;
 
@@ -101,36 +84,22 @@ namespace DuelGenesis.Dueling
             else _cpuSignature = signature;
         }
 
-        private static List<BackrowState> Read(IEnumerable zones)
+        private static string Signature(IReadOnlyList<DuelBackrowState> states, int turn)
         {
-            List<BackrowState> result = new();
-            foreach (object entry in zones)
+            if (states == null || states.Count == 0) return "EMPTY";
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < states.Count; i++)
             {
-                if (entry == null) continue;
-                Type type = entry.GetType();
-                CardData card = type.GetField("Card")?.GetValue(entry) as CardData;
-                object faceDownValue = type.GetField("FaceDown")?.GetValue(entry);
-                if (card == null) continue;
-
-                result.Add(new BackrowState
-                {
-                    Card = card,
-                    FaceDown = faceDownValue is bool value && value
-                });
+                DuelBackrowState state = states[i];
+                builder.Append(state.Card.id)
+                    .Append(state.FaceDown ? 'D' : 'U')
+                    .Append(state.IsNegated(turn) ? 'N' : 'A')
+                    .Append('|');
             }
-            return result;
-        }
-
-        private static string Signature(List<BackrowState> states)
-        {
-            if (states.Count == 0) return "EMPTY";
-            System.Text.StringBuilder builder = new();
-            foreach (BackrowState state in states)
-                builder.Append(state.Card.id).Append(state.FaceDown ? 'D' : 'U').Append('|');
             return builder.ToString();
         }
 
-        private static void Build(Transform root, List<BackrowState> states, bool playerSide)
+        private void Build(Transform root, IReadOnlyList<DuelBackrowState> states, bool playerSide)
         {
             const float startX = -1.68f;
             const float spacing = 0.84f;
@@ -138,9 +107,9 @@ namespace DuelGenesis.Dueling
 
             for (int i = 0; i < states.Count && i < 5; i++)
             {
-                BackrowState state = states[i];
+                DuelBackrowState state = states[i];
                 GameObject card = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                card.name = $"Backrow {state.Card.id}";
+                card.name = "Backrow " + state.Card.id;
                 card.transform.SetParent(root, false);
                 card.transform.localPosition = new Vector3(startX + spacing * i, 1.405f, z);
                 card.transform.localScale = new Vector3(0.44f, 0.025f, 0.31f);
@@ -148,16 +117,18 @@ namespace DuelGenesis.Dueling
 
                 Color color = state.FaceDown
                     ? CardBack
-                    : state.Card.kind == CardKind.Spell ? SpellColor : TrapColor;
+                    : state.IsNegated(_duel.TurnNumber)
+                        ? NegatedColor
+                        : state.Card.kind == CardKind.Spell ? SpellColor : TrapColor;
                 SetMaterial(card, color);
 
                 bool hideName = !playerSide && state.FaceDown;
                 if (!hideName)
-                    CreateLabel(card.transform, state.Card.cardName, color);
+                    CreateLabel(card.transform, state.Card.cardName, color, state.IsNegated(_duel.TurnNumber));
             }
         }
 
-        private static void CreateLabel(Transform parent, string label, Color color)
+        private static void CreateLabel(Transform parent, string label, Color color, bool negated)
         {
             GameObject labelObject = new GameObject("Backrow Label");
             labelObject.transform.SetParent(parent, false);
@@ -165,7 +136,7 @@ namespace DuelGenesis.Dueling
             labelObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             TextMesh text = labelObject.AddComponent<TextMesh>();
-            text.text = label;
+            text.text = label + (negated ? "\nNEGATED" : string.Empty);
             text.anchor = TextAnchor.MiddleCenter;
             text.alignment = TextAlignment.Center;
             text.characterSize = 0.12f;
@@ -201,12 +172,6 @@ namespace DuelGenesis.Dueling
             if (root == null) return;
             for (int i = root.childCount - 1; i >= 0; i--)
                 Object.Destroy(root.GetChild(i).gameObject);
-        }
-
-        private sealed class BackrowState
-        {
-            public CardData Card;
-            public bool FaceDown;
         }
     }
 }
