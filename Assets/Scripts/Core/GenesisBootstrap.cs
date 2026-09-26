@@ -52,6 +52,9 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
 
+            if (Object.FindFirstObjectByType<GenesisPauseMenu>() == null)
+                systems.AddComponent<GenesisPauseMenu>();
+
             if (Object.FindFirstObjectByType<PrototypeVisualPolish>() == null)
                 systems.AddComponent<PrototypeVisualPolish>();
 
