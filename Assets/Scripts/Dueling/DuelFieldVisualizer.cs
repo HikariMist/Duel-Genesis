@@ -1,7 +1,10 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using DuelGenesis.Cards;
 using UnityEngine;
+using UnityEngine.Animations;
+using UnityEngine.Playables;
 
 namespace DuelGenesis.Dueling
 {
@@ -131,13 +134,16 @@ namespace DuelGenesis.Dueling
                     continue;
                 }
 
-                GameObject prefab = CardModelRegistry.LoadPrefab(state.Card.id);
+                CreateFaceUpCard(actor.transform, state.Card, playerSide);
+
+                GameObject prefab = CardModelRegistry.LoadPrefab(state.Card);
                 if (prefab != null)
                 {
                     GameObject model = Object.Instantiate(prefab, actor.transform);
                     model.name = "Monster Model - " + state.Card.cardName;
                     NormalizeModel(model.transform, 0.52f);
                     model.transform.localPosition = new Vector3(0f, 0.30f, 0f);
+                    model.AddComponent<DmoMonsterAnimationPlayer>().Configure(state.Card);
                 }
                 else
                 {
@@ -151,21 +157,47 @@ namespace DuelGenesis.Dueling
 
         private static void BuildFaceDownCard(Transform parent, bool playerSide)
         {
-            GameObject card = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            card.name = "Face Down Monster Card";
-            card.transform.SetParent(parent, false);
-            card.transform.localPosition = new Vector3(0f, 0.035f, 0f);
-            card.transform.localScale = new Vector3(0.38f, 0.035f, 0.54f);
-            RemoveCollider(card);
-            SetMaterial(card, new Color(0.035f, 0.045f, 0.10f, 1f), true);
+            Texture2D cardBack = ProductionCardArtRegistry.LoadCardBack();
+            CreateCardPlane(
+                parent,
+                "Face Down Monster Card",
+                cardBack,
+                new Vector3(0f, 0.055f, 0f),
+                new Vector3(0.38f, 0.54f, 1f),
+                cardBack == null ? new Color(0.035f, 0.045f, 0.10f, 1f) : Color.white);
 
             GameObject stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
             stripe.name = "Card Back Accent";
             stripe.transform.SetParent(parent, false);
-            stripe.transform.localPosition = new Vector3(0f, 0.056f, 0f);
+            stripe.transform.localPosition = new Vector3(0f, 0.035f, 0f);
             stripe.transform.localScale = new Vector3(0.28f, 0.012f, 0.05f);
             RemoveCollider(stripe);
             SetMaterial(stripe, playerSide ? PlayerColor : CpuColor, true);
+        }
+
+        private static void CreateFaceUpCard(Transform parent, CardData card, bool playerSide)
+        {
+            Texture2D texture = ProductionCardArtRegistry.LoadDisplayTexture(card);
+            Color fallback = playerSide ? new Color(0.05f, 0.16f, 0.22f, 1f) : new Color(0.20f, 0.05f, 0.15f, 1f);
+            CreateCardPlane(
+                parent,
+                "Card Face - " + card.cardName,
+                texture,
+                new Vector3(0f, 0.052f, 0f),
+                new Vector3(0.36f, 0.51f, 1f),
+                texture == null ? fallback : Color.white);
+        }
+
+        private static void CreateCardPlane(Transform parent, string name, Texture2D texture, Vector3 localPosition, Vector3 localScale, Color tint)
+        {
+            GameObject card = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            card.name = name;
+            card.transform.SetParent(parent, false);
+            card.transform.localPosition = localPosition;
+            card.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            card.transform.localScale = localScale;
+            RemoveCollider(card);
+            SetTexturedMaterial(card, texture, tint);
         }
 
         private static void CreatePedestal(Transform parent, Color color)
@@ -233,6 +265,27 @@ namespace DuelGenesis.Dueling
             model.localScale *= targetSize / largest;
         }
 
+        private static void SetTexturedMaterial(GameObject obj, Texture2D texture, Color tint)
+        {
+            Renderer renderer = obj.GetComponent<Renderer>();
+            if (renderer == null) return;
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Unlit/Texture");
+            if (shader == null) shader = Shader.Find("Standard");
+            if (shader == null) return;
+
+            Material material = new Material(shader);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", tint);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", tint);
+            if (texture != null)
+            {
+                if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+                if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+            }
+            renderer.material = material;
+        }
+
         private static void SetMaterial(GameObject obj, Color color, bool emission)
         {
             Renderer renderer = obj.GetComponent<Renderer>();
@@ -264,6 +317,62 @@ namespace DuelGenesis.Dueling
             if (root == null) return;
             for (int i = root.childCount - 1; i >= 0; i--)
                 Object.Destroy(root.GetChild(i).gameObject);
+        }
+    }
+
+    public class DmoMonsterAnimationPlayer : MonoBehaviour
+    {
+        private PlayableGraph _graph;
+        private AnimationClipPlayable _playable;
+        private AnimationClip _clip;
+
+        public void Configure(CardData card)
+        {
+            Animator animator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
+            if (animator == null) return;
+
+            AnimationClip[] clips = CardModelRegistry.LoadAnimationClips(card);
+            if (clips == null || clips.Length == 0) return;
+
+            _clip = SelectClip(clips);
+            if (_clip == null || _clip.length <= 0f) return;
+
+            _graph = PlayableGraph.Create("DMO Hologram - " + card.cardName);
+            _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+            AnimationPlayableOutput output = AnimationPlayableOutput.Create(_graph, "Animation", animator);
+            _playable = AnimationClipPlayable.Create(_graph, _clip);
+            _playable.SetApplyFootIK(false);
+            _playable.SetApplyPlayableIK(false);
+            output.SetSourcePlayable(_playable);
+            _graph.Play();
+        }
+
+        private void Update()
+        {
+            if (!_graph.IsValid() || _clip == null || _clip.length <= 0f) return;
+            if (_playable.GetTime() >= _clip.length)
+                _playable.SetTime(0d);
+        }
+
+        private void OnDestroy()
+        {
+            if (_graph.IsValid())
+                _graph.Destroy();
+        }
+
+        private static AnimationClip SelectClip(IEnumerable<AnimationClip> clips)
+        {
+            AnimationClip[] usable = clips.Where(clip => clip != null && clip.length > 0.01f).ToArray();
+            if (usable.Length == 0) return null;
+
+            string[] idleHints = { "idle", "wait", "stand", "normal", "breath", "default" };
+            foreach (string hint in idleHints)
+            {
+                AnimationClip match = usable.FirstOrDefault(clip => clip.name.ToLowerInvariant().Contains(hint));
+                if (match != null) return match;
+            }
+
+            return usable[0];
         }
     }
 
