@@ -48,6 +48,32 @@ namespace DuelGenesis.Cards
             return Cards.FirstOrDefault(c => c.id == id);
         }
 
+        public static void RegisterOrReplace(CardData card)
+        {
+            if (card == null || string.IsNullOrWhiteSpace(card.id))
+                return;
+
+            int index = Cards.FindIndex(existing => existing.id == card.id);
+            if (index >= 0)
+                Cards[index] = card;
+            else
+                Cards.Add(card);
+        }
+
+        public static int RegisterOrReplace(IEnumerable<CardData> cards)
+        {
+            if (cards == null) return 0;
+            int count = 0;
+            foreach (CardData card in cards)
+            {
+                if (card == null || string.IsNullOrWhiteSpace(card.id))
+                    continue;
+                RegisterOrReplace(card);
+                count++;
+            }
+            return count;
+        }
+
         public static CardData GetRandomCard(bool guaranteedRareOrBetter = false)
         {
             CardRarity rarity = RollRarity(guaranteedRareOrBetter);
