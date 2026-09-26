@@ -65,10 +65,22 @@ namespace DuelGenesis.Cards
             return entry?.quantity ?? 0;
         }
 
+        public int RemovePrototypeCards()
+        {
+            int removed = cards.RemoveAll(entry => entry == null || CardDatabase.IsPrototypeId(entry.cardId));
+            if (removed > 0)
+            {
+                Save();
+                CollectionChanged?.Invoke();
+                Debug.Log($"Duel: Genesis removed {removed} prototype card entries from the saved collection.");
+            }
+            return removed;
+        }
+
         public List<(CardData card, int quantity)> GetOwnedCardsSorted()
         {
             return cards
-                .Where(e => e.quantity > 0)
+                .Where(e => e != null && e.quantity > 0)
                 .Select(e => (CardDatabase.GetById(e.cardId), e.quantity))
                 .Where(pair => pair.Item1 != null)
                 .OrderByDescending(pair => pair.Item1.rarity)
