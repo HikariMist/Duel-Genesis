@@ -139,9 +139,15 @@ namespace DuelGenesis.Dueling
             _playerController = player.GetComponent<ThirdPersonPlayerController>();
             _cameraController = UnityEngine.Object.FindFirstObjectByType<ThirdPersonCamera>();
 
-            if (_savedDeck == null || !_savedDeck.Validate(_collection, out string validation))
+            if (_savedDeck == null)
             {
-                Debug.LogWarning("Cannot start duel: " + (_savedDeck == null ? "deck system missing." : validation));
+                Debug.LogWarning("Cannot start duel: deck system missing.");
+                return false;
+            }
+
+            if (!_savedDeck.Validate(_collection, out string validation))
+            {
+                Debug.LogWarning("Cannot start duel: " + validation);
                 return false;
             }
 
@@ -879,7 +885,8 @@ namespace DuelGenesis.Dueling
                     if (destroyed)
                     {
                         SendMonsterToGraveyard(defender, defenderIsPlayer);
-                        if (!_duelOver) RewardDestroy(attacker, attackerIsPlayer);
+                        if (_duelOver) return;
+                        RewardDestroy(attacker, attackerIsPlayer);
                     }
 
                     if (!_duelOver && !TriggerBarrier(defenderIsPlayer, difference))
@@ -896,7 +903,8 @@ namespace DuelGenesis.Dueling
                     if (destroyed)
                     {
                         SendMonsterToGraveyard(attacker, attackerIsPlayer);
-                        if (!_duelOver) RewardDestroy(defender, defenderIsPlayer);
+                        if (_duelOver) return;
+                        RewardDestroy(defender, defenderIsPlayer);
                     }
 
                     if (!_duelOver && !TriggerBarrier(attackerIsPlayer, damage))
@@ -910,8 +918,16 @@ namespace DuelGenesis.Dueling
                 {
                     bool attackerDestroyed = !TryProtect(attackerIsPlayer, attacker);
                     bool defenderDestroyed = !TryProtect(defenderIsPlayer, defender);
-                    if (attackerDestroyed) SendMonsterToGraveyard(attacker, attackerIsPlayer);
-                    if (!_duelOver && defenderDestroyed) SendMonsterToGraveyard(defender, defenderIsPlayer);
+                    if (attackerDestroyed)
+                    {
+                        SendMonsterToGraveyard(attacker, attackerIsPlayer);
+                        if (_duelOver) return;
+                    }
+                    if (defenderDestroyed)
+                    {
+                        SendMonsterToGraveyard(defender, defenderIsPlayer);
+                        if (_duelOver) return;
+                    }
                     _message = "Equal ATK — both monsters were destroyed unless protected.";
                 }
             }
@@ -923,7 +939,8 @@ namespace DuelGenesis.Dueling
                     if (destroyed)
                     {
                         SendMonsterToGraveyard(defender, defenderIsPlayer);
-                        if (!_duelOver) RewardDestroy(attacker, attackerIsPlayer);
+                        if (_duelOver) return;
+                        RewardDestroy(attacker, attackerIsPlayer);
                     }
                     _message = $"{attacker.Card.cardName} broke through {defender.Card.cardName}'s DEF.";
                 }
