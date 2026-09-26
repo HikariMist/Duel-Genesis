@@ -25,7 +25,7 @@ namespace DuelGenesis.Core
             IReadOnlyList<CardData> cards = CardDatabase.All;
 
             if (cards == null || cards.Count == 0)
-                failures.Add("Card database is empty.");
+                failures.Add("Production card database is empty. Build the real DMO card catalog.");
             else
             {
                 if (cards.Any(card => card == null))
@@ -34,39 +34,30 @@ namespace DuelGenesis.Core
                 if (cards.Where(card => card != null).Select(card => card.id).Distinct().Count() != cards.Count)
                     failures.Add("Card database contains duplicate IDs.");
 
+                if (cards.Any(card => card != null && CardDatabase.IsPrototypeId(card.id)))
+                    failures.Add("Retired prototype cards are still present in the runtime database.");
+
                 foreach (CardData card in cards.Where(card => card != null))
                 {
                     if (string.IsNullOrWhiteSpace(card.id) || string.IsNullOrWhiteSpace(card.cardName))
-                        failures.Add("A card is missing an ID or name.");
+                        failures.Add("A production card is missing an ID or name.");
                     if (card.kind == CardKind.Monster && (card.attack < 0 || card.defense < 0 || card.level < 0))
                         failures.Add($"{card.cardName} has invalid monster stats.");
                 }
 
-                if (!cards.Any(card => card.kind == CardKind.Monster)) failures.Add("No Monster cards found.");
-                if (!cards.Any(card => card.kind == CardKind.Spell)) failures.Add("No Spell cards found.");
-                if (!cards.Any(card => card.kind == CardKind.Trap)) failures.Add("No Trap cards found.");
-
-                string[] requiredEffectCards =
-                {
-                    "DG001", "DG002", "DG003", "DG004", "DG005", "DG006", "DG007",
-                    "DG009", "DG010", "DG011", "DG012", "DG013", "DG014", "DG015",
-                    "DG016", "DG017", "DG018", "DG019", "DG020", "DG022", "DG023", "DG024"
-                };
-                foreach (string id in requiredEffectCards)
-                {
-                    if (CardDatabase.GetById(id) == null)
-                        failures.Add($"Required duel-engine card {id} is missing.");
-                }
+                if (!cards.Any(card => card.kind == CardKind.Monster)) failures.Add("No Monster cards found in production catalog.");
+                if (!cards.Any(card => card.kind == CardKind.Spell)) failures.Add("No Spell cards found in production catalog.");
+                if (!cards.Any(card => card.kind == CardKind.Trap)) failures.Add("No Trap cards found in production catalog.");
             }
 
             if (PlayerDeck.MinimumDeckSize != 40 || PlayerDeck.MaximumDeckSize != 60 || PlayerDeck.MaximumCopiesPerCard != 3)
                 failures.Add("Deck rule constants are incorrect.");
 
             if (StarterLoadout.StarterDeckSize != 40)
-                failures.Add("Starter loadout is not exactly 40 cards.");
+                failures.Add("Production starter loadout is not exactly 40 cards.");
 
             if (Object.FindFirstObjectByType<DuelGameController>() == null)
-                failures.Add("DuelGameController v0.5 runtime system is missing.");
+                failures.Add("DuelGameController runtime system is missing.");
             if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
                 failures.Add("PackOpeningUI runtime system is missing.");
             if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
@@ -98,10 +89,12 @@ namespace DuelGenesis.Core
             PlayerCollection collection = Object.FindFirstObjectByType<PlayerCollection>();
             if (deck != null)
             {
-                foreach (DeckEntry entry in deck.Entries)
+                foreach (DeckEntry entry in deck.Entries.Where(entry => entry != null))
                 {
+                    if (CardDatabase.IsPrototypeId(entry.cardId))
+                        failures.Add($"Deck still references retired prototype card {entry.cardId}.");
                     if (CardDatabase.GetById(entry.cardId) == null)
-                        failures.Add($"Deck references missing card ID {entry.cardId}.");
+                        failures.Add($"Deck references missing production card ID {entry.cardId}.");
                     if (entry.quantity < 0 || entry.quantity > PlayerDeck.MaximumCopiesPerCard)
                         failures.Add($"Deck contains invalid copy count for {entry.cardId}.");
                     if (collection != null && entry.quantity > collection.GetQuantity(entry.cardId))
@@ -113,7 +106,7 @@ namespace DuelGenesis.Core
             LastReport = LastPassed ? "PASS" : string.Join(" | ", failures);
 
             if (LastPassed)
-                Debug.Log("Duel: Genesis runtime diagnostics PASS — v0.6 playable shell, duel engine and presentation systems are present.");
+                Debug.Log($"Duel: Genesis runtime diagnostics PASS — {CardDatabase.ProductionCardCount:N0} production cards loaded and no prototype cards remain.");
             else
                 Debug.LogError("Duel: Genesis runtime diagnostics FAILED: " + LastReport);
         }
