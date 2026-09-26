@@ -35,8 +35,6 @@ namespace DuelGenesis.Core
             if (systems == null)
                 systems = new GameObject("Genesis Runtime Systems");
 
-            // Awake loads optional StreamingAssets/duel_genesis_cards.json immediately,
-            // before first-frame starter/deck systems run.
             if (Object.FindFirstObjectByType<ExternalCardCatalogLoader>() == null)
                 systems.AddComponent<ExternalCardCatalogLoader>();
 
@@ -46,8 +44,8 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
                 systems.AddComponent<DeckBuilderUI>();
 
-            if (Object.FindFirstObjectByType<DuelPrototype>() == null)
-                systems.AddComponent<DuelPrototype>();
+            if (Object.FindFirstObjectByType<DuelGameController>() == null)
+                systems.AddComponent<DuelGameController>();
 
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
@@ -69,6 +67,9 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<DuelBackrowVisualizer>() == null)
                 systems.AddComponent<DuelBackrowVisualizer>();
+
+            if (Object.FindFirstObjectByType<DuelPileVisualizer>() == null)
+                systems.AddComponent<DuelPileVisualizer>();
 
             if (Object.FindFirstObjectByType<GenesisRuntimeDiagnostics>() == null)
                 systems.AddComponent<GenesisRuntimeDiagnostics>();
