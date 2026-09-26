@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using DuelGenesis.Cards;
+using DuelGenesis.Dueling;
 using UnityEditor;
 using UnityEngine;
 
@@ -39,14 +40,15 @@ namespace DuelGenesis.EditorTools
 
             string[] requiredIds =
             {
-                "DG001", "DG006", "DG009", "DG010", "DG011", "DG012",
-                "DG013", "DG016", "DG017", "DG018", "DG020", "DG023", "DG024"
+                "DG001", "DG002", "DG003", "DG004", "DG005", "DG006", "DG007",
+                "DG009", "DG010", "DG011", "DG012", "DG013", "DG014", "DG015",
+                "DG016", "DG017", "DG018", "DG019", "DG020", "DG022", "DG023", "DG024"
             };
 
             foreach (string id in requiredIds)
             {
                 if (CardDatabase.GetById(id) == null)
-                    failures.Add($"Required prototype card {id} is missing.");
+                    failures.Add($"Required duel-engine card {id} is missing.");
             }
 
             for (int i = 0; i < 250; i++)
@@ -74,9 +76,24 @@ namespace DuelGenesis.EditorTools
             if (PlayerDeck.MaximumCopiesPerCard != 3)
                 failures.Add("Maximum copies per card must be 3.");
 
+            System.Type duelType = typeof(DuelGameController);
+            if (duelType.GetMethod("StartDuel") == null)
+                failures.Add("DuelGameController.StartDuel is missing.");
+            if (duelType.GetMethod("CloseDuel") == null)
+                failures.Add("DuelGameController.CloseDuel is missing.");
+            if (duelType.GetProperty("PlayerMonsters") == null || duelType.GetProperty("CpuMonsters") == null)
+                failures.Add("DuelGameController monster-state API is missing.");
+            if (duelType.GetProperty("PlayerBackrow") == null || duelType.GetProperty("CpuBackrow") == null)
+                failures.Add("DuelGameController backrow-state API is missing.");
+
+            if (!System.Enum.IsDefined(typeof(DuelMonsterPosition), DuelMonsterPosition.FaceUpAttack) ||
+                !System.Enum.IsDefined(typeof(DuelMonsterPosition), DuelMonsterPosition.FaceUpDefense) ||
+                !System.Enum.IsDefined(typeof(DuelMonsterPosition), DuelMonsterPosition.FaceDownDefense))
+                failures.Add("Monster position states are incomplete.");
+
             bool passed = failures.Count == 0;
             string report = passed
-                ? "Duel: Genesis automated smoke tests PASS — database, pack rolls and deck constants are valid."
+                ? "Duel: Genesis automated smoke tests PASS — v0.5 database, pack, deck and duel-controller API are valid."
                 : "Duel: Genesis automated smoke tests FAILED:\n- " + string.Join("\n- ", failures);
 
             if (passed)
