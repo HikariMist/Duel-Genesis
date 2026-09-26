@@ -5,7 +5,7 @@ namespace DuelGenesis.Dueling
 {
     public class DmoModelMaterialRuntimeAdapter : MonoBehaviour
     {
-        private readonly HashSet<int> _processedRenderers = new();
+        private readonly HashSet<Renderer> _processedRenderers = new();
         private float _nextScan;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -27,13 +27,13 @@ namespace DuelGenesis.Dueling
             Renderer[] renderers = Object.FindObjectsByType<Renderer>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (Renderer renderer in renderers)
             {
-                if (renderer == null || _processedRenderers.Contains(renderer.GetInstanceID()))
+                if (renderer == null || _processedRenderers.Contains(renderer))
                     continue;
                 if (!IsDmoMonsterRenderer(renderer.transform))
                     continue;
 
                 AdaptRenderer(renderer);
-                _processedRenderers.Add(renderer.GetInstanceID());
+                _processedRenderers.Add(renderer);
             }
         }
 
