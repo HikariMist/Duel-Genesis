@@ -37,7 +37,7 @@ namespace DuelGenesis.Cards
         public event Action DeckChanged;
 
         public IReadOnlyList<DeckEntry> Entries => mainDeck;
-        public int MainDeckCount => mainDeck.Sum(entry => Mathf.Max(0, entry.quantity));
+        public int MainDeckCount => mainDeck.Where(entry => entry != null).Sum(entry => Mathf.Max(0, entry.quantity));
         public bool IsLegalSize => MainDeckCount >= MinimumDeckSize && MainDeckCount <= MaximumDeckSize;
 
         private void Awake()
@@ -47,7 +47,7 @@ namespace DuelGenesis.Cards
 
         public int GetQuantity(string cardId)
         {
-            DeckEntry entry = mainDeck.FirstOrDefault(e => e.cardId == cardId);
+            DeckEntry entry = mainDeck.FirstOrDefault(e => e != null && e.cardId == cardId);
             return entry?.quantity ?? 0;
         }
 
@@ -88,7 +88,7 @@ namespace DuelGenesis.Cards
             if (!CanAdd(card, collection, out _))
                 return false;
 
-            DeckEntry entry = mainDeck.FirstOrDefault(e => e.cardId == card.id);
+            DeckEntry entry = mainDeck.FirstOrDefault(e => e != null && e.cardId == card.id);
             if (entry == null)
             {
                 entry = new DeckEntry(card.id, 0);
@@ -104,7 +104,7 @@ namespace DuelGenesis.Cards
         {
             if (card == null) return false;
 
-            DeckEntry entry = mainDeck.FirstOrDefault(e => e.cardId == card.id);
+            DeckEntry entry = mainDeck.FirstOrDefault(e => e != null && e.cardId == card.id);
             if (entry == null || entry.quantity <= 0) return false;
 
             entry.quantity--;
@@ -113,6 +113,17 @@ namespace DuelGenesis.Cards
 
             SaveAndNotify();
             return true;
+        }
+
+        public int RemovePrototypeCards()
+        {
+            int removed = mainDeck.RemoveAll(entry => entry == null || CardDatabase.IsPrototypeId(entry.cardId));
+            if (removed > 0)
+            {
+                SaveAndNotify();
+                Debug.Log($"Duel: Genesis removed {removed} prototype card entries from the saved Main Deck.");
+            }
+            return removed;
         }
 
         public void Clear()
@@ -138,7 +149,7 @@ namespace DuelGenesis.Cards
                 int copies = Mathf.Min(MaximumCopiesPerCard, entry.quantity);
                 for (int i = 0; i < copies && MainDeckCount < MinimumDeckSize; i++)
                 {
-                    DeckEntry deckEntry = mainDeck.FirstOrDefault(e => e.cardId == entry.card.id);
+                    DeckEntry deckEntry = mainDeck.FirstOrDefault(e => e != null && e.cardId == entry.card.id);
                     if (deckEntry == null)
                     {
                         deckEntry = new DeckEntry(entry.card.id, 0);
@@ -158,7 +169,7 @@ namespace DuelGenesis.Cards
         public List<(CardData card, int quantity)> GetDeckCardsSorted()
         {
             return mainDeck
-                .Where(e => e.quantity > 0)
+                .Where(e => e != null && e.quantity > 0)
                 .Select(e => (CardDatabase.GetById(e.cardId), e.quantity))
                 .Where(pair => pair.Item1 != null)
                 .OrderBy(pair => pair.Item1.kind)
@@ -168,6 +179,12 @@ namespace DuelGenesis.Cards
 
         public bool Validate(PlayerCollection collection, out string message)
         {
+            if (!CardDatabase.IsReady)
+            {
+                message = "Production card catalog is not loaded.";
+                return false;
+            }
+
             if (MainDeckCount < MinimumDeckSize)
             {
                 message = $"Need {MinimumDeckSize - MainDeckCount} more cards.";
@@ -180,19 +197,30 @@ namespace DuelGenesis.Cards
                 return false;
             }
 
-            foreach (DeckEntry entry in mainDeck)
+            foreach (DeckEntry entry in mainDeck.Where(entry => entry != null))
             {
+                CardData card = CardDatabase.GetById(entry.cardId);
+                if (card == null)
+                {
+                    message = $"Deck contains unavailable card ID {entry.cardId}.";
+                    return false;
+                }
+
+                if (CardDatabase.IsPrototypeId(entry.cardId))
+                {
+                    message = "Deck still contains retired prototype cards.";
+                    return false;
+                }
+
                 if (entry.quantity > MaximumCopiesPerCard)
                 {
-                    CardData card = CardDatabase.GetById(entry.cardId);
-                    message = $"Too many copies of {card?.cardName ?? entry.cardId}.";
+                    message = $"Too many copies of {card.cardName}.";
                     return false;
                 }
 
                 if (collection != null && entry.quantity > collection.GetQuantity(entry.cardId))
                 {
-                    CardData card = CardDatabase.GetById(entry.cardId);
-                    message = $"Deck uses more copies of {card?.cardName ?? entry.cardId} than you own.";
+                    message = $"Deck uses more copies of {card.cardName} than you own.";
                     return false;
                 }
             }
