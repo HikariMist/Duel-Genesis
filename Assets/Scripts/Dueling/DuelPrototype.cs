@@ -68,7 +68,13 @@ namespace DuelGenesis.Dueling
             _playerController = player.GetComponent<ThirdPersonPlayerController>();
             _cameraController = Object.FindFirstObjectByType<ThirdPersonCamera>();
 
-            if (_savedDeck == null || !_savedDeck.Validate(_collection, out string validation))
+            if (_savedDeck == null)
+            {
+                Debug.LogWarning("Cannot start duel: player deck system is missing.");
+                return false;
+            }
+
+            if (!_savedDeck.Validate(_collection, out string validation))
             {
                 Debug.LogWarning("Cannot start duel: " + validation);
                 return false;
@@ -130,7 +136,6 @@ namespace DuelGenesis.Dueling
             _opponentDeck.Clear();
             IReadOnlyList<CardData> all = CardDatabase.All;
 
-            // Prototype CPU deck: up to two copies of the current Genesis test card pool.
             for (int copy = 0; copy < 2 && _opponentDeck.Count < 40; copy++)
             {
                 foreach (CardData card in all)
@@ -151,7 +156,9 @@ namespace DuelGenesis.Dueling
             for (int i = list.Count - 1; i > 0; i--)
             {
                 int j = Random.Range(0, i + 1);
-                (list[i], list[j]) = (list[j], list[i]);
+                T temp = list[i];
+                list[i] = list[j];
+                list[j] = temp;
             }
         }
 
@@ -363,7 +370,6 @@ namespace DuelGenesis.Dueling
                 return;
             }
 
-            // Simple CPU: attack the weakest monster first.
             FieldMonster defender = _playerField.OrderBy(monster => monster.Card.attack).First();
             int difference = attacker.Card.attack - defender.Card.attack;
 
@@ -429,7 +435,7 @@ namespace DuelGenesis.Dueling
 
             _active = false;
             _duelOver = false;
-            _playerController?.SetMovementEnabled(false); // Remain seated until Q is pressed at the table.
+            _playerController?.SetMovementEnabled(false);
             _cameraController?.SetLookEnabled(true);
 
             _playerObject = null;
