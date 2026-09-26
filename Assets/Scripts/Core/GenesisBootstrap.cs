@@ -2,6 +2,7 @@ using DuelGenesis.Cards;
 using DuelGenesis.Dueling;
 using DuelGenesis.Economy;
 using DuelGenesis.Player;
+using DuelGenesis.Progression;
 using DuelGenesis.Shops;
 using DuelGenesis.UI;
 using UnityEngine;
@@ -27,6 +28,9 @@ namespace DuelGenesis.Core
             if (playerObject.GetComponent<GenesisWallet>() == null)
                 playerObject.AddComponent<GenesisWallet>();
 
+            if (playerObject.GetComponent<DuelistProfile>() == null)
+                playerObject.AddComponent<DuelistProfile>();
+
             GameObject systems = GameObject.Find("Genesis Runtime Systems");
             if (systems == null)
                 systems = new GameObject("Genesis Runtime Systems");
@@ -48,6 +52,15 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<GenesisRuntimeDiagnostics>() == null)
                 systems.AddComponent<GenesisRuntimeDiagnostics>();
+
+            if (Object.FindFirstObjectByType<StarterLoadout>() == null)
+                systems.AddComponent<StarterLoadout>();
+
+            if (Object.FindFirstObjectByType<ProgressionBridge>() == null)
+                systems.AddComponent<ProgressionBridge>();
+
+            if (Object.FindFirstObjectByType<GenesisWelcomeUI>() == null)
+                systems.AddComponent<GenesisWelcomeUI>();
         }
     }
 }
