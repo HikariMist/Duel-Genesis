@@ -1,8 +1,10 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using DuelGenesis.Cards;
 using DuelGenesis.Dueling;
+using DuelGenesis.UI;
 using UnityEditor;
 using UnityEngine;
 
@@ -91,9 +93,19 @@ namespace DuelGenesis.EditorTools
                 !System.Enum.IsDefined(typeof(DuelMonsterPosition), DuelMonsterPosition.FaceDownDefense))
                 failures.Add("Monster position states are incomplete.");
 
+            if (typeof(GenesisMainMenu).GetProperty("IsOpen") == null)
+                failures.Add("GenesisMainMenu modal API is missing.");
+            if (typeof(GenesisProfilePanel).GetProperty("IsOpen") == null)
+                failures.Add("GenesisProfilePanel modal API is missing.");
+            if (typeof(DuelPresentationOverlay) == null)
+                failures.Add("DuelPresentationOverlay type is missing.");
+
+            if (!File.Exists("Assets/Scenes/GenesisPrototype.unity"))
+                failures.Add("GenesisPrototype.unity is missing from Assets/Scenes.");
+
             bool passed = failures.Count == 0;
             string report = passed
-                ? "Duel: Genesis automated smoke tests PASS — v0.5 database, pack, deck and duel-controller API are valid."
+                ? "Duel: Genesis automated smoke tests PASS — v0.6 scene, database, pack, deck, duel and presentation APIs are valid."
                 : "Duel: Genesis automated smoke tests FAILED:\n- " + string.Join("\n- ", failures);
 
             if (passed)
