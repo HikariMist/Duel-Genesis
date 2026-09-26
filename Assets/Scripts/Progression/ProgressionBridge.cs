@@ -20,11 +20,6 @@ namespace DuelGenesis.Progression
         private void Start()
         {
             Resolve();
-            if (_wallet != null)
-            {
-                _lastBalance = _wallet.GenesisCredits;
-                _wallet.BalanceChanged += OnBalanceChanged;
-            }
         }
 
         private void OnDestroy()
