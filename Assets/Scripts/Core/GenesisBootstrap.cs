@@ -50,6 +50,12 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
 
+            if (Object.FindFirstObjectByType<GenesisMainMenu>() == null)
+                systems.AddComponent<GenesisMainMenu>();
+
+            if (Object.FindFirstObjectByType<GenesisProfilePanel>() == null)
+                systems.AddComponent<GenesisProfilePanel>();
+
             if (Object.FindFirstObjectByType<GenesisPauseMenu>() == null)
                 systems.AddComponent<GenesisPauseMenu>();
 
@@ -70,6 +76,9 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<DuelPileVisualizer>() == null)
                 systems.AddComponent<DuelPileVisualizer>();
+
+            if (Object.FindFirstObjectByType<DuelPresentationOverlay>() == null)
+                systems.AddComponent<DuelPresentationOverlay>();
 
             if (Object.FindFirstObjectByType<GenesisRuntimeDiagnostics>() == null)
                 systems.AddComponent<GenesisRuntimeDiagnostics>();
