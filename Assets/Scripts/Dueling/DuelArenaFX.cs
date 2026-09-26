@@ -8,10 +8,11 @@ namespace DuelGenesis.Dueling
         private Transform _innerCore;
         private Transform _outerCore;
         private Light _centerLight;
-        private DuelPrototype _duel;
+        private DuelGameController _duel;
 
         private static readonly Color Cyan = new Color(0.08f, 0.78f, 1f, 1f);
         private static readonly Color Purple = new Color(0.62f, 0.20f, 1f, 1f);
+        private static readonly Color Magenta = new Color(1f, 0.16f, 0.58f, 1f);
 
         private void Start()
         {
@@ -26,9 +27,10 @@ namespace DuelGenesis.Dueling
                 return;
 
             if (_duel == null)
-                _duel = Object.FindFirstObjectByType<DuelPrototype>();
+                _duel = Object.FindFirstObjectByType<DuelGameController>();
 
             bool active = _duel != null && _duel.IsActive;
+            bool cpuTurn = active && _duel.Phase == DuelTurnPhase.Opponent;
             float speed = active ? 65f : 14f;
             float pulse = active ? 1f + Mathf.Sin(Time.time * 4f) * 0.10f : 0.82f;
 
@@ -46,7 +48,10 @@ namespace DuelGenesis.Dueling
             }
 
             if (_centerLight != null)
+            {
+                _centerLight.color = cpuTurn ? Magenta : Cyan;
                 _centerLight.intensity = active ? 3.2f + Mathf.Sin(Time.time * 5f) * 0.8f : 0.8f;
+            }
         }
 
         private void BuildIfNeeded()
@@ -118,8 +123,9 @@ namespace DuelGenesis.Dueling
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null) shader = Shader.Find("Standard");
-            Material material = new Material(shader);
+            if (shader == null) return null;
 
+            Material material = new Material(shader);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
             if (material.HasProperty("_Color")) material.SetColor("_Color", color);
             material.EnableKeyword("_EMISSION");
