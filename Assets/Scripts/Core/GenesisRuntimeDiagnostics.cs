@@ -85,6 +85,12 @@ namespace DuelGenesis.Core
                 failures.Add("DuelBackrowVisualizer is missing.");
             if (Object.FindFirstObjectByType<DuelPileVisualizer>() == null)
                 failures.Add("DuelPileVisualizer is missing.");
+            if (Object.FindFirstObjectByType<DuelPresentationOverlay>() == null)
+                failures.Add("DuelPresentationOverlay is missing.");
+            if (Object.FindFirstObjectByType<GenesisMainMenu>() == null)
+                failures.Add("GenesisMainMenu is missing.");
+            if (Object.FindFirstObjectByType<GenesisProfilePanel>() == null)
+                failures.Add("GenesisProfilePanel is missing.");
             if (Object.FindFirstObjectByType<GenesisPauseMenu>() == null)
                 failures.Add("GenesisPauseMenu is missing.");
 
@@ -107,7 +113,7 @@ namespace DuelGenesis.Core
             LastReport = LastPassed ? "PASS" : string.Join(" | ", failures);
 
             if (LastPassed)
-                Debug.Log("Duel: Genesis runtime diagnostics PASS — v0.5 duel engine and vertical-slice systems are present.");
+                Debug.Log("Duel: Genesis runtime diagnostics PASS — v0.6 playable shell, duel engine and presentation systems are present.");
             else
                 Debug.LogError("Duel: Genesis runtime diagnostics FAILED: " + LastReport);
         }
