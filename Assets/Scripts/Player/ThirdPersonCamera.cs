@@ -15,6 +15,7 @@ namespace DuelGenesis.Player
 
         private float _yaw;
         private float _pitch = 20f;
+        private bool _lookEnabled = true;
 
         private void Start()
         {
@@ -32,24 +33,27 @@ namespace DuelGenesis.Player
             Keyboard keyboard = Keyboard.current;
             Mouse mouse = Mouse.current;
 
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            if (_lookEnabled)
             {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
+                if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+                {
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                }
 
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-            }
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked)
+                {
+                    Cursor.lockState = CursorLockMode.Locked;
+                    Cursor.visible = false;
+                }
 
-            if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
-            {
-                Vector2 delta = mouse.delta.ReadValue();
-                _yaw += delta.x * sensitivity;
-                _pitch -= delta.y * sensitivity;
-                _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
+                if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
+                {
+                    Vector2 delta = mouse.delta.ReadValue();
+                    _yaw += delta.x * sensitivity;
+                    _pitch -= delta.y * sensitivity;
+                    _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
+                }
             }
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
@@ -57,6 +61,22 @@ namespace DuelGenesis.Player
 
             transform.position = Vector3.Lerp(transform.position, desiredPosition, 1f - Mathf.Exp(-followSmooth * Time.deltaTime));
             transform.rotation = rotation;
+        }
+
+        public void SetLookEnabled(bool enabled)
+        {
+            _lookEnabled = enabled;
+
+            if (!enabled)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            else
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
     }
 }
