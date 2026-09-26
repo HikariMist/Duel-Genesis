@@ -20,6 +20,9 @@ namespace DuelGenesis.Core
             if (playerObject.GetComponent<PlayerCollection>() == null)
                 playerObject.AddComponent<PlayerCollection>();
 
+            if (playerObject.GetComponent<PlayerDeck>() == null)
+                playerObject.AddComponent<PlayerDeck>();
+
             if (playerObject.GetComponent<GenesisWallet>() == null)
                 playerObject.AddComponent<GenesisWallet>();
 
@@ -29,6 +32,9 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
                 systems.AddComponent<PackOpeningUI>();
+
+            if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
+                systems.AddComponent<DeckBuilderUI>();
 
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
