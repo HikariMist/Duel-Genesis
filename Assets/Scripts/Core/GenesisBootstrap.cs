@@ -35,6 +35,11 @@ namespace DuelGenesis.Core
             if (systems == null)
                 systems = new GameObject("Genesis Runtime Systems");
 
+            // Awake loads optional StreamingAssets/duel_genesis_cards.json immediately,
+            // before first-frame starter/deck systems run.
+            if (Object.FindFirstObjectByType<ExternalCardCatalogLoader>() == null)
+                systems.AddComponent<ExternalCardCatalogLoader>();
+
             if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
                 systems.AddComponent<PackOpeningUI>();
 
