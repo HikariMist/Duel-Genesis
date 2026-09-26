@@ -13,7 +13,7 @@ namespace DuelGenesis.Dueling
         public string seatLabel = "Start Duel";
 
         private ThirdPersonPlayerController _seatedPlayer;
-        private DuelPrototype _duel;
+        private DuelGameController _duel;
 
         public string InteractionPrompt
         {
@@ -62,7 +62,7 @@ namespace DuelGenesis.Dueling
                     return;
                 }
 
-                Debug.Log("Player sat at the Duel Table and started a prototype duel.");
+                Debug.Log("Player sat at the Duel Table and started a DuelGameController duel.");
             }
             else if (_seatedPlayer == player && (_duel == null || !_duel.IsActive))
             {
@@ -73,7 +73,7 @@ namespace DuelGenesis.Dueling
         private void ResolveDuel()
         {
             if (_duel == null)
-                _duel = Object.FindFirstObjectByType<DuelPrototype>();
+                _duel = Object.FindFirstObjectByType<DuelGameController>();
         }
 
         private void Update()
