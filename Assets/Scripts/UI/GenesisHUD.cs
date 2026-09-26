@@ -1,4 +1,5 @@
 using DuelGenesis.Cards;
+using DuelGenesis.Core;
 using DuelGenesis.Economy;
 using DuelGenesis.Shops;
 using UnityEngine;
@@ -30,7 +31,6 @@ namespace DuelGenesis.UI
             }
 
 #if UNITY_EDITOR
-            // Prototype-only testing shortcut so development is never blocked by the economy.
             if (keyboard != null && keyboard.f9Key.wasPressedThisFrame && _wallet != null)
             {
                 _wallet.Add(50000);
@@ -60,11 +60,12 @@ namespace DuelGenesis.UI
         {
             ResolvePlayerSystems();
 
-            GUIStyle hud = new GUIStyle(GUI.skin.box)
+            GUIStyle hud = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 16,
                 alignment = TextAnchor.UpperLeft,
-                padding = new RectOffset(12, 12, 10, 10)
+                padding = new RectOffset(12, 12, 10, 10),
+                normal = { textColor = Color.white }
             };
 
             int gc = _wallet != null ? _wallet.GenesisCredits : 0;
@@ -74,39 +75,46 @@ namespace DuelGenesis.UI
             bool deckLegal = _deck != null && _deck.Validate(_collection, out _);
 
             string deckState = deckLegal ? "LEGAL" : "INCOMPLETE";
+            string systemState = GenesisRuntimeDiagnostics.LastPassed ? "PASS" : GenesisRuntimeDiagnostics.LastReport;
 
 #if UNITY_EDITOR
-            const float hudHeight = 142f;
+            const float hudHeight = 178f;
             string devLine = "\n[F9] DEV: +50,000 GC";
 #else
-            const float hudHeight = 118f;
+            const float hudHeight = 154f;
             string devLine = string.Empty;
 #endif
 
-            GUI.Box(new Rect(18f, 18f, 300f, hudHeight),
+            Rect hudRect = new Rect(18f, 18f, 340f, hudHeight);
+            GenesisTheme.Box(hudRect, GenesisTheme.Background);
+            GUI.Label(hudRect,
+                $"DUEL: GENESIS\n" +
                 $"GENESIS CREDITS: {gc:N0} GC\n" +
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
+                $"SYSTEM CHECK: {systemState}\n" +
                 "[C] Collection   [B] Deck Builder" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
-            float width = Mathf.Min(620f, Screen.width * 0.44f);
-            float height = Mathf.Min(720f, Screen.height - 80f);
+            float width = Mathf.Min(650f, Screen.width * 0.46f);
+            float height = Mathf.Min(740f, Screen.height - 80f);
             Rect panel = new Rect(Screen.width - width - 24f, 24f, width, height);
-            GUI.Box(panel, string.Empty);
+            GenesisTheme.Box(panel, GenesisTheme.Panel);
 
             GUIStyle title = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 26,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = GenesisTheme.Cyan }
             };
 
             GUIStyle row = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 15,
-                wordWrap = true
+                wordWrap = true,
+                normal = { textColor = Color.white }
             };
 
             GUI.Label(new Rect(panel.x + 16f, panel.y + 12f, width - 32f, 38f), "CARD COLLECTION", title);
@@ -114,19 +122,26 @@ namespace DuelGenesis.UI
 
             var owned = _collection.GetOwnedCardsSorted();
             Rect scrollRect = new Rect(panel.x + 18f, panel.y + 80f, width - 36f, height - 100f);
-            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, owned.Count * 76f));
+            Rect content = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, owned.Count * 82f));
             _scroll = GUI.BeginScrollView(scrollRect, _scroll, content);
 
             for (int i = 0; i < owned.Count; i++)
             {
                 var entry = owned[i];
-                float y = i * 76f;
+                float y = i * 82f;
                 int inDeck = _deck != null ? _deck.GetQuantity(entry.card.id) : 0;
-                GUI.Box(new Rect(0f, y, content.width, 68f), string.Empty);
+
+                Rect cardRect = new Rect(0f, y, content.width, 74f);
+                GenesisTheme.Box(cardRect, GenesisTheme.CardColor(entry.card));
+
+                Color oldContent = GUI.contentColor;
+                GUI.contentColor = GenesisTheme.RarityColor(entry.card.rarity);
                 GUI.Label(new Rect(10f, y + 6f, content.width - 20f, 24f),
                     $"x{entry.quantity}  {entry.card.cardName}  [{entry.card.RarityLabel}]  • Deck x{inDeck}", row);
-                GUI.Label(new Rect(10f, y + 31f, content.width - 20f, 34f),
+                GUI.contentColor = Color.white;
+                GUI.Label(new Rect(10f, y + 31f, content.width - 20f, 38f),
                     $"{entry.card.kind} • {entry.card.attribute} • {entry.card.ShortStats}", row);
+                GUI.contentColor = oldContent;
             }
 
             GUI.EndScrollView();
