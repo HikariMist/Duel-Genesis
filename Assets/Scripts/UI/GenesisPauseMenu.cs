@@ -14,6 +14,7 @@ namespace DuelGenesis.UI
         private DeckBuilderUI _deckBuilder;
         private PackOpeningUI _packOpening;
         private DuelPrototype _duel;
+        private GenesisWelcomeUI _help;
 
         public bool IsOpen => _open;
 
@@ -46,6 +47,7 @@ namespace DuelGenesis.UI
             if (_deckBuilder == null) _deckBuilder = Object.FindFirstObjectByType<DeckBuilderUI>();
             if (_packOpening == null) _packOpening = Object.FindFirstObjectByType<PackOpeningUI>();
             if (_duel == null) _duel = Object.FindFirstObjectByType<DuelPrototype>();
+            if (_help == null) _help = Object.FindFirstObjectByType<GenesisWelcomeUI>();
         }
 
         private void Pause()
@@ -65,6 +67,12 @@ namespace DuelGenesis.UI
             Time.timeScale = 1f;
             _player?.SetMovementEnabled(true);
             _camera?.SetLookEnabled(true);
+        }
+
+        private void ShowHelp()
+        {
+            Resume();
+            _help?.ShowPersistent();
         }
 
         private void OnDisable()
@@ -105,10 +113,8 @@ namespace DuelGenesis.UI
             if (GenesisTheme.Button(new Rect(panel.x + 100f, panel.y + 140f, 280f, 42f), "RESUME", GenesisTheme.Cyan))
                 Resume();
 
-            if (GenesisTheme.Button(new Rect(panel.x + 100f, panel.y + 194f, 280f, 42f), "CONTROLS / HELP: F1", GenesisTheme.Purple))
-            {
-                Resume();
-            }
+            if (GenesisTheme.Button(new Rect(panel.x + 100f, panel.y + 194f, 280f, 42f), "CONTROLS / CURRENT OBJECTIVE", GenesisTheme.Purple))
+                ShowHelp();
 
             if (GenesisTheme.Button(new Rect(panel.x + 100f, panel.y + 248f, 280f, 42f), "QUIT GAME", GenesisTheme.Danger))
             {
