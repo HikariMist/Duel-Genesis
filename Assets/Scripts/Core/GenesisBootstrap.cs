@@ -67,6 +67,9 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<DuelFieldVisualizer>() == null)
                 systems.AddComponent<DuelFieldVisualizer>();
 
+            if (Object.FindFirstObjectByType<DuelBackrowVisualizer>() == null)
+                systems.AddComponent<DuelBackrowVisualizer>();
+
             if (Object.FindFirstObjectByType<GenesisRuntimeDiagnostics>() == null)
                 systems.AddComponent<GenesisRuntimeDiagnostics>();
 
