@@ -18,6 +18,8 @@ namespace DuelGenesis.UI
         private DeckBuilderUI _deckBuilder;
         private PackOpeningUI _packOpening;
         private DuelGameController _duel;
+        private GenesisMainMenu _mainMenu;
+        private GenesisProfilePanel _profilePanel;
         private bool _showCollection;
         private Vector2 _scroll;
 
@@ -28,7 +30,9 @@ namespace DuelGenesis.UI
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.cKey.wasPressedThisFrame)
             {
-                bool blocked = (_deckBuilder != null && _deckBuilder.IsOpen) ||
+                bool blocked = (_mainMenu != null && _mainMenu.IsOpen) ||
+                               (_profilePanel != null && _profilePanel.IsOpen) ||
+                               (_deckBuilder != null && _deckBuilder.IsOpen) ||
                                (_packOpening != null && _packOpening.IsOpen) ||
                                (_duel != null && _duel.IsActive);
                 if (!blocked)
@@ -36,14 +40,18 @@ namespace DuelGenesis.UI
             }
 
 #if UNITY_EDITOR
-            if (keyboard != null && keyboard.f9Key.wasPressedThisFrame && _wallet != null)
+            if (keyboard != null && keyboard.f9Key.wasPressedThisFrame && _wallet != null &&
+                (_mainMenu == null || !_mainMenu.IsOpen))
             {
                 _wallet.Add(50000);
                 Debug.Log("DEV TEST: Added 50,000 GC.");
             }
 #endif
 
-            if ((_deckBuilder != null && _deckBuilder.IsOpen) || (_duel != null && _duel.IsActive))
+            if ((_mainMenu != null && _mainMenu.IsOpen) ||
+                (_profilePanel != null && _profilePanel.IsOpen) ||
+                (_deckBuilder != null && _deckBuilder.IsOpen) ||
+                (_duel != null && _duel.IsActive))
                 _showCollection = false;
         }
 
@@ -63,12 +71,18 @@ namespace DuelGenesis.UI
                 _packOpening = Object.FindFirstObjectByType<PackOpeningUI>();
             if (_duel == null)
                 _duel = Object.FindFirstObjectByType<DuelGameController>();
+            if (_mainMenu == null)
+                _mainMenu = Object.FindFirstObjectByType<GenesisMainMenu>();
+            if (_profilePanel == null)
+                _profilePanel = Object.FindFirstObjectByType<GenesisProfilePanel>();
         }
 
         private void OnGUI()
         {
             ResolvePlayerSystems();
-            if (_duel != null && _duel.IsActive)
+            if ((_mainMenu != null && _mainMenu.IsOpen) ||
+                (_profilePanel != null && _profilePanel.IsOpen) ||
+                (_duel != null && _duel.IsActive))
                 return;
 
             GUIStyle hud = new GUIStyle(GUI.skin.label)
@@ -99,7 +113,7 @@ namespace DuelGenesis.UI
             string devLine = string.Empty;
 #endif
 
-            Rect hudRect = new Rect(18f, 18f, 390f, hudHeight);
+            Rect hudRect = new Rect(18f, 18f, 430f, hudHeight);
             GenesisTheme.Box(hudRect, GenesisTheme.Background);
             GUI.Label(hudRect,
                 $"DUEL: GENESIS\n" +
@@ -108,7 +122,7 @@ namespace DuelGenesis.UI
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
                 $"SYSTEM CHECK: {systemState}\n" +
-                "[C] Collection   [B] Deck Builder   [F1] Help" + devLine, hud);
+                "[C] Collection   [B] Deck Builder   [P] Profile   [F1] Help" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
