@@ -1,5 +1,6 @@
 using DuelGenesis.Cards;
 using DuelGenesis.Core;
+using DuelGenesis.Dueling;
 using DuelGenesis.Economy;
 using DuelGenesis.Progression;
 using DuelGenesis.Shops;
@@ -16,6 +17,7 @@ namespace DuelGenesis.UI
         private DuelistProfile _profile;
         private DeckBuilderUI _deckBuilder;
         private PackOpeningUI _packOpening;
+        private DuelGameController _duel;
         private bool _showCollection;
         private Vector2 _scroll;
 
@@ -27,7 +29,8 @@ namespace DuelGenesis.UI
             if (keyboard != null && keyboard.cKey.wasPressedThisFrame)
             {
                 bool blocked = (_deckBuilder != null && _deckBuilder.IsOpen) ||
-                               (_packOpening != null && _packOpening.IsOpen);
+                               (_packOpening != null && _packOpening.IsOpen) ||
+                               (_duel != null && _duel.IsActive);
                 if (!blocked)
                     _showCollection = !_showCollection;
             }
@@ -40,7 +43,7 @@ namespace DuelGenesis.UI
             }
 #endif
 
-            if (_deckBuilder != null && _deckBuilder.IsOpen)
+            if ((_deckBuilder != null && _deckBuilder.IsOpen) || (_duel != null && _duel.IsActive))
                 _showCollection = false;
         }
 
@@ -58,11 +61,15 @@ namespace DuelGenesis.UI
                 _deckBuilder = Object.FindFirstObjectByType<DeckBuilderUI>();
             if (_packOpening == null)
                 _packOpening = Object.FindFirstObjectByType<PackOpeningUI>();
+            if (_duel == null)
+                _duel = Object.FindFirstObjectByType<DuelGameController>();
         }
 
         private void OnGUI()
         {
             ResolvePlayerSystems();
+            if (_duel != null && _duel.IsActive)
+                return;
 
             GUIStyle hud = new GUIStyle(GUI.skin.label)
             {
