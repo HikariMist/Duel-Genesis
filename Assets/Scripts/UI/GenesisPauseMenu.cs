@@ -16,6 +16,8 @@ namespace DuelGenesis.UI
         private PackOpeningUI _packOpening;
         private DuelGameController _duel;
         private GenesisWelcomeUI _help;
+        private GenesisMainMenu _mainMenu;
+        private GenesisProfilePanel _profilePanel;
 
         public bool IsOpen => _open;
 
@@ -33,7 +35,9 @@ namespace DuelGenesis.UI
                 return;
             }
 
-            bool modalOpen = (_deckBuilder != null && _deckBuilder.IsOpen) ||
+            bool modalOpen = (_mainMenu != null && _mainMenu.IsOpen) ||
+                             (_profilePanel != null && _profilePanel.IsOpen) ||
+                             (_deckBuilder != null && _deckBuilder.IsOpen) ||
                              (_packOpening != null && _packOpening.IsOpen) ||
                              (_duel != null && _duel.IsActive);
 
@@ -49,6 +53,8 @@ namespace DuelGenesis.UI
             if (_packOpening == null) _packOpening = Object.FindFirstObjectByType<PackOpeningUI>();
             if (_duel == null) _duel = Object.FindFirstObjectByType<DuelGameController>();
             if (_help == null) _help = Object.FindFirstObjectByType<GenesisWelcomeUI>();
+            if (_mainMenu == null) _mainMenu = Object.FindFirstObjectByType<GenesisMainMenu>();
+            if (_profilePanel == null) _profilePanel = Object.FindFirstObjectByType<GenesisProfilePanel>();
         }
 
         private void Pause()
