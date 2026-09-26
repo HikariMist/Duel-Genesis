@@ -1,0 +1,80 @@
+using System.Collections.Generic;
+using System.Linq;
+using DuelGenesis.Cards;
+using DuelGenesis.Dueling;
+using DuelGenesis.Shops;
+using DuelGenesis.UI;
+using UnityEngine;
+
+namespace DuelGenesis.Core
+{
+    public class GenesisRuntimeDiagnostics : MonoBehaviour
+    {
+        public static bool LastPassed { get; private set; }
+        public static string LastReport { get; private set; } = "Not run";
+
+        private void Start()
+        {
+            RunChecks();
+        }
+
+        public static void RunChecks()
+        {
+            List<string> failures = new();
+            IReadOnlyList<CardData> cards = CardDatabase.All;
+
+            if (cards == null || cards.Count == 0)
+                failures.Add("Card database is empty.");
+            else
+            {
+                if (cards.Any(card => card == null))
+                    failures.Add("Card database contains a null card.");
+
+                if (cards.Where(card => card != null).Select(card => card.id).Distinct().Count() != cards.Count)
+                    failures.Add("Card database contains duplicate IDs.");
+
+                foreach (CardData card in cards.Where(card => card != null))
+                {
+                    if (string.IsNullOrWhiteSpace(card.id) || string.IsNullOrWhiteSpace(card.cardName))
+                        failures.Add("A card is missing an ID or name.");
+                    if (card.kind == CardKind.Monster && (card.attack < 0 || card.defense < 0 || card.level < 0))
+                        failures.Add($"{card.cardName} has invalid monster stats.");
+                }
+
+                if (!cards.Any(card => card.kind == CardKind.Monster)) failures.Add("No Monster cards found.");
+                if (!cards.Any(card => card.kind == CardKind.Spell)) failures.Add("No Spell cards found.");
+                if (!cards.Any(card => card.kind == CardKind.Trap)) failures.Add("No Trap cards found.");
+            }
+
+            if (PlayerDeck.MinimumDeckSize != 40 || PlayerDeck.MaximumDeckSize != 60 || PlayerDeck.MaximumCopiesPerCard != 3)
+                failures.Add("Deck rule constants are incorrect.");
+
+            if (Object.FindFirstObjectByType<DuelPrototype>() == null)
+                failures.Add("DuelPrototype runtime system is missing.");
+            if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
+                failures.Add("PackOpeningUI runtime system is missing.");
+            if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
+                failures.Add("DeckBuilderUI runtime system is missing.");
+
+            PlayerDeck deck = Object.FindFirstObjectByType<PlayerDeck>();
+            if (deck != null)
+            {
+                foreach (DeckEntry entry in deck.Entries)
+                {
+                    if (CardDatabase.GetById(entry.cardId) == null)
+                        failures.Add($"Deck references missing card ID {entry.cardId}.");
+                    if (entry.quantity < 0 || entry.quantity > PlayerDeck.MaximumCopiesPerCard)
+                        failures.Add($"Deck contains invalid copy count for {entry.cardId}.");
+                }
+            }
+
+            LastPassed = failures.Count == 0;
+            LastReport = LastPassed ? "PASS" : string.Join(" | ", failures);
+
+            if (LastPassed)
+                Debug.Log("Duel: Genesis runtime diagnostics PASS.");
+            else
+                Debug.LogError("Duel: Genesis runtime diagnostics FAILED: " + LastReport);
+        }
+    }
+}
