@@ -36,6 +36,9 @@ namespace DuelGenesis.Core
                 return;
             }
 
+            if (PlayerPrefs.GetInt(ClaimedKey, 0) == 1)
+                return;
+
             if (deck.Validate(collection, out _))
             {
                 MarkClaimed();
@@ -75,8 +78,6 @@ namespace DuelGenesis.Core
                 }
             }
 
-            // If the catalog has fewer than 20 suitable unique cards, fill the
-            // remainder without ever exceeding the three-copy deck rule.
             if (deck.MainDeckCount < StarterDeckSize)
             {
                 foreach (CardData card in CardDatabase.All.Where(IsMainDeckCard).OrderBy(card => card.cardName))
