@@ -51,9 +51,15 @@ namespace DuelGenesis.EditorTools
             if (CardDatabase.All.Count < 24)
                 failures.Add("Prototype card pool is unexpectedly small.");
 
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scenes/GenesisPrototype.unity") == null)
+                failures.Add("GenesisPrototype.unity is missing. Build or restore the playable prototype scene.");
+
+            if (AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/StreamingAssets/duel_genesis_cards.example.json") == null)
+                failures.Add("External card catalog example JSON is missing.");
+
             bool passed = failures.Count == 0;
             string report = passed
-                ? "Duel: Genesis vertical-slice validation PASS — starter deck, progression formulas and prototype card pool are valid."
+                ? "Duel: Genesis vertical-slice validation PASS — scene, starter deck, progression formulas, card pool and import template are valid."
                 : "Duel: Genesis vertical-slice validation FAILED:\n- " + string.Join("\n- ", failures);
 
             if (passed) Debug.Log(report);
