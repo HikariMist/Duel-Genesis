@@ -85,8 +85,8 @@ namespace DuelGenesis.Shops
         {
             if (!_open) return;
 
-            float width = Mathf.Min(920f, Screen.width - 40f);
-            float height = Mathf.Min(680f, Screen.height - 40f);
+            float width = Mathf.Min(960f, Screen.width - 40f);
+            float height = Mathf.Min(720f, Screen.height - 40f);
             Rect windowRect = new Rect(
                 (Screen.width - width) * 0.5f,
                 (Screen.height - height) * 0.5f,
@@ -125,34 +125,38 @@ namespace DuelGenesis.Shops
             };
 
             GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 18f, width - 40f, 42f), "GENESIS BOOSTER OPENING", title);
-            GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f), $"Card {_revealedCount} of {_lastPack.Count}", subtitle);
+
+            string poolLabel = CardDatabase.HasProductionCards
+                ? $"Card {_revealedCount} of {_lastPack.Count}  •  {CardDatabase.ProductionCardCount:N0} real cards loaded"
+                : $"Card {_revealedCount} of {_lastPack.Count}  •  PROTOTYPE CARD POOL";
+            GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f), poolLabel, subtitle);
 
             Rect scrollRect = new Rect(windowRect.x + 30f, windowRect.y + 100f, width - 60f, height - 170f);
-            Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 160f));
+            Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 184f));
             _scroll = GUI.BeginScrollView(scrollRect, _scroll, contentRect);
 
             for (int i = 0; i < _revealedCount && i < _lastPack.Count; i++)
             {
                 CardData card = _lastPack[i];
-                float y = i * 160f;
-                Rect cardRect = new Rect(0f, y, contentRect.width, 150f);
+                float y = i * 184f;
+                Rect cardRect = new Rect(0f, y, contentRect.width, 174f);
                 GenesisTheme.Box(cardRect, GenesisTheme.CardColor(card));
 
-                Texture2D face = ProductionCardArtRegistry.LoadDisplayTexture(card);
-                Rect imageRect = new Rect(12f, y + 8f, 92f, 134f);
-                if (face != null)
-                    GUI.DrawTexture(imageRect, face, ScaleMode.ScaleToFit, true);
-                else
-                    GenesisTheme.Box(imageRect, GenesisTheme.PanelAlt);
+                Rect imageRect = new Rect(12f, y + 6f, 112f, 162f);
+                ProductionCardVisualDrawer.DrawCard(imageRect, card);
 
-                float textX = 118f;
+                float textX = 140f;
                 float textWidth = contentRect.width - textX - 16f;
                 Color old = GUI.contentColor;
                 GUI.contentColor = GenesisTheme.RarityColor(card.rarity);
-                GUI.Label(new Rect(textX, y + 10f, textWidth, 28f), $"{card.cardName}  •  {card.RarityLabel}", cardName);
+                GUI.Label(new Rect(textX, y + 12f, textWidth, 28f), $"{card.cardName}  •  {card.RarityLabel}", cardName);
                 GUI.contentColor = Color.white;
-                GUI.Label(new Rect(textX, y + 42f, textWidth, 22f), $"{card.kind}  |  {card.attribute}  |  {card.ShortStats}", body);
-                GUI.Label(new Rect(textX, y + 69f, textWidth, 66f), card.effectText, body);
+
+                string levelText = card.kind == CardKind.Monster && card.level > 0
+                    ? $"  |  LEVEL/RANK {card.level}"
+                    : string.Empty;
+                GUI.Label(new Rect(textX, y + 44f, textWidth, 22f), $"{card.kind}  |  {card.attribute}{levelText}  |  {card.ShortStats}", body);
+                GUI.Label(new Rect(textX, y + 72f, textWidth, 86f), card.effectText, body);
                 GUI.contentColor = old;
             }
 
