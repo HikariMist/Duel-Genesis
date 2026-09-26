@@ -128,22 +128,31 @@ namespace DuelGenesis.Shops
             GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f), $"Card {_revealedCount} of {_lastPack.Count}", subtitle);
 
             Rect scrollRect = new Rect(windowRect.x + 30f, windowRect.y + 100f, width - 60f, height - 170f);
-            Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 120f));
+            Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 160f));
             _scroll = GUI.BeginScrollView(scrollRect, _scroll, contentRect);
 
             for (int i = 0; i < _revealedCount && i < _lastPack.Count; i++)
             {
                 CardData card = _lastPack[i];
-                float y = i * 120f;
-                Rect cardRect = new Rect(0f, y, contentRect.width, 110f);
+                float y = i * 160f;
+                Rect cardRect = new Rect(0f, y, contentRect.width, 150f);
                 GenesisTheme.Box(cardRect, GenesisTheme.CardColor(card));
 
+                Texture2D face = ProductionCardArtRegistry.LoadDisplayTexture(card);
+                Rect imageRect = new Rect(12f, y + 8f, 92f, 134f);
+                if (face != null)
+                    GUI.DrawTexture(imageRect, face, ScaleMode.ScaleToFit, true);
+                else
+                    GenesisTheme.Box(imageRect, GenesisTheme.PanelAlt);
+
+                float textX = 118f;
+                float textWidth = contentRect.width - textX - 16f;
                 Color old = GUI.contentColor;
                 GUI.contentColor = GenesisTheme.RarityColor(card.rarity);
-                GUI.Label(new Rect(16f, y + 8f, contentRect.width - 32f, 28f), $"{card.cardName}  •  {card.RarityLabel}", cardName);
+                GUI.Label(new Rect(textX, y + 10f, textWidth, 28f), $"{card.cardName}  •  {card.RarityLabel}", cardName);
                 GUI.contentColor = Color.white;
-                GUI.Label(new Rect(16f, y + 38f, contentRect.width - 32f, 22f), $"{card.kind}  |  {card.attribute}  |  {card.ShortStats}", body);
-                GUI.Label(new Rect(16f, y + 63f, contentRect.width - 32f, 42f), card.effectText, body);
+                GUI.Label(new Rect(textX, y + 42f, textWidth, 22f), $"{card.kind}  |  {card.attribute}  |  {card.ShortStats}", body);
+                GUI.Label(new Rect(textX, y + 69f, textWidth, 66f), card.effectText, body);
                 GUI.contentColor = old;
             }
 
