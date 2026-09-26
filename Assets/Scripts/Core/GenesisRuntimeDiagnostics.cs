@@ -67,6 +67,10 @@ namespace DuelGenesis.Core
                 failures.Add("ExternalCardCatalogLoader is missing.");
             if (Object.FindFirstObjectByType<DuelArenaFX>() == null)
                 failures.Add("DuelArenaFX is missing.");
+            if (Object.FindFirstObjectByType<DuelFieldVisualizer>() == null)
+                failures.Add("DuelFieldVisualizer is missing.");
+            if (Object.FindFirstObjectByType<GenesisPauseMenu>() == null)
+                failures.Add("GenesisPauseMenu is missing.");
 
             PlayerDeck deck = Object.FindFirstObjectByType<PlayerDeck>();
             PlayerCollection collection = Object.FindFirstObjectByType<PlayerCollection>();
