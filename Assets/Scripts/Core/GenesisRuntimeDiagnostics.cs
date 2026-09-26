@@ -69,6 +69,8 @@ namespace DuelGenesis.Core
                 failures.Add("DuelArenaFX is missing.");
             if (Object.FindFirstObjectByType<DuelFieldVisualizer>() == null)
                 failures.Add("DuelFieldVisualizer is missing.");
+            if (Object.FindFirstObjectByType<DuelBackrowVisualizer>() == null)
+                failures.Add("DuelBackrowVisualizer is missing.");
             if (Object.FindFirstObjectByType<GenesisPauseMenu>() == null)
                 failures.Add("GenesisPauseMenu is missing.");
 
