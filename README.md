@@ -1,6 +1,6 @@
 # Duel: Genesis
 
-Duel: Genesis is a 3D card-dueling game set in Genesis City. The current goal is a complete single-player vertical slice using original prototype cards and placeholder geometry. Production card files, artwork and 3D monster models can be connected later without rebuilding the core game loop.
+Duel: Genesis is a 3D card-dueling game set in Genesis City. The current goal is a complete single-player vertical slice with a production-asset pipeline that can connect the supplied DMO card faces, monster prefabs and animations without rebuilding the core game loop.
 
 ## Current playable loop
 
@@ -29,6 +29,9 @@ The project currently supports:
 - Five Monster Zones and five Spell/Trap Zones
 - Graveyard and Banished tracking
 - Physical tabletop monster, backrow, Deck, Graveyard and Banished presentation
+- Supplied DMO card-face PNG loading with exact-name matching
+- Correct frame metadata for Normal, Effect, Fusion, Ritual, Synchro, Xyz, Spell, Trap and Token cards
+- Supplied DMO monster prefab and animation lookup by normalized card name
 - Battle against ATK or DEF with direct attacks and battle damage
 - Multiple working prototype monster effects
 - Working prototype Spells and reactive Traps
@@ -45,12 +48,13 @@ The project currently supports:
 After pulling the latest GitHub changes:
 
 1. Open the project in Unity 6.6.
-2. Wait for script compilation and import to finish.
-3. Open `Assets/Scenes/GenesisPrototype.unity`.
-4. Press Play.
-5. Choose `ENTER GENESIS` on the runtime title screen.
-6. A brand-new save receives a legal 40-card starter deck automatically.
-7. Walk to the Duel Table and press `E` to duel, or visit the Card Shop to open more packs.
+2. Allow Unity to resolve/import the local DMO character package. The first import is large and can take a while.
+3. Wait for script compilation and import to finish.
+4. Open `Assets/Scenes/GenesisPrototype.unity`.
+5. Press Play.
+6. Choose `ENTER GENESIS` on the runtime title screen.
+7. A brand-new save receives a legal 40-card starter deck automatically.
+8. Walk to the Duel Table and press `E` to duel, or visit the Card Shop to open more packs.
 
 The existing scene does not need to be rebuilt for runtime-system updates. Use `Duel Genesis > Build First Playable Prototype` only if you intentionally want to regenerate the blockout scene.
 
@@ -70,6 +74,53 @@ The existing scene does not need to be rebuilt for runtime-system updates. Use `
 - Left click in Game view — capture cursor again
 - `F9` — Editor-only +50,000 GC testing shortcut
 
+## DMO production asset integration
+
+The repository-level `Cards` and `Characters` folders are now connected to the main game without duplicating the source libraries.
+
+### First-time asset check
+
+Use:
+
+`Duel Genesis > Production Assets > Scan DMO Libraries`
+
+This counts card faces, character prefabs and animation clips, reports card/model name matches, and verifies the supported card-frame source images.
+
+### Build the real card-data catalog
+
+Use:
+
+`Duel Genesis > Production Assets > Build Real Card Catalog from DMO Art`
+
+The editor downloads current public card metadata once, matches it only against PNG names that exist in `Cards/DMO_card_art/cards`, and writes:
+
+`Assets/StreamingAssets/duel_genesis_cards.json`
+
+It also writes an unmatched-name report beside the catalog so old/renamed cards can be handled explicitly later.
+
+**Card-frame rule:** a complete supplied DMO card PNG is authoritative and is always displayed first. Duel: Genesis does not rebuild or recolor that image, so a Fusion card cannot accidentally be shown with an Effect frame, a Trap cannot receive a Spell frame, etc. The `frameKind` field is used only as metadata and as a fallback when a complete face image is unavailable.
+
+Supported fallback `frameKind` values are:
+
+- `NormalMonster`
+- `EffectMonster`
+- `FusionMonster`
+- `RitualMonster`
+- `SynchroMonster`
+- `XyzMonster`
+- `Spell`
+- `Trap`
+- `Token`
+- `Auto`
+
+### Monster models and animations
+
+`Characters` is mounted as the local Unity package `com.hikarimist.dmo-characters`.
+
+The game reads `dmo_manifest.txt`, normalizes the card and character names, then resolves matching prefabs from the supplied `Resources/Models` library. For example, a card name with spaces/apostrophes can still match a prefab name that uses underscores. Matching animation clips are loaded from that character's own `Resources/Animations/<Character>` folder so clips stay on the rig they were authored for.
+
+An explicit `modelResource` in the JSON catalog still takes priority when a card needs a manual override.
+
 ## Make a Windows playable build
 
 Use one of:
@@ -82,32 +133,24 @@ The executable is generated at:
 
 `Builds/DuelGenesis/DuelGenesis.exe`
 
-The build tool saves open scenes/assets first, adds `GenesisPrototype.unity` to Build Settings, applies the v0.6 product settings and refuses to start while Unity is compiling scripts.
+The v0.7 build tool saves open scenes/assets first, builds the Windows player, then copies the supplied DMO card faces and frame/back images into the built player's StreamingAssets folder. Build-and-Run launches only after that copy finishes, so the standalone game can use the same authoritative card PNGs as the Unity Editor.
 
 ## Production card-data pipeline
 
-The built-in 24-card Genesis set is only placeholder content. The game supports an external JSON catalog so a larger authorized card dataset can be connected later.
+The built-in 24-card Genesis set remains useful as a controlled rules-engine test set. The external JSON catalog can replace/extend it with real production card records.
 
-1. Copy `Assets/StreamingAssets/duel_genesis_cards.example.json` to:
-   `Assets/StreamingAssets/duel_genesis_cards.json`
-2. Replace the example records with the production card records.
-3. On startup, matching IDs replace prototype definitions and new IDs are appended to the database.
+Each JSON record supports:
 
-Each JSON record supports ID, name, card kind, rarity, attribute, type line, level, ATK, DEF, effect text and an optional model resource path.
+- ID and card name
+- Monster / Spell / Trap kind
+- explicit/fallback frame kind
+- rarity
+- attribute and type line
+- level, ATK and DEF
+- effect text
+- optional explicit model resource path
 
-## Production 3D model pipeline
-
-The default model convention is:
-
-`Assets/Resources/CardModels/<CARD_ID>.prefab`
-
-For example:
-
-`Assets/Resources/CardModels/EXAMPLE001.prefab`
-
-`CardModelRegistry.LoadPrefab(cardId)` resolves that prefab automatically. The JSON catalog can also specify a custom `modelResource` path.
-
-Only import card art, models, audio or other content you have the rights or permission to use.
+On startup, matching IDs replace existing definitions and new IDs are appended to the database.
 
 ## Validation tools
 
@@ -115,23 +158,24 @@ Unity automatically runs lightweight Editor validation after scripts reload. Man
 
 - `Run Automated Smoke Tests`
 - `Run Vertical Slice Validation`
+- `Production Assets > Scan DMO Libraries`
+- `Production Assets > Verify Card Frame Sources`
+- `Production Assets > Build Real Card Catalog from DMO Art`
 - `DEV > Reset All Local Prototype Progress`
 - `DEV > Add 50,000 GC In Play Mode`
 - `DEV > Re-run Runtime Diagnostics In Play Mode`
 
-Runtime diagnostics now verify the duel engine, title screen, profile panel, tabletop presentation systems and external-card loader are present.
+## What is intentionally still in progress
 
-## What is intentionally deferred
+The production libraries are now connected, but having the image/model does not by itself implement every printed card rule. Remaining production work includes:
 
-The vertical slice is being built so external production content can drop in later. These are not required to prove the current core game loop:
-
-- Final authorized card database and artwork
-- Production 3D monster models, animation, VFX and audio
-- Exact full rules coverage for every future card interaction
-- Full chain-window/rules interpreter for arbitrary future card text
-- Extra Deck summon families that need real card data
+- Expanding the rules/effect engine for the real card catalog
+- Full chain-window and response timing rules
+- Extra Deck summon families and their rules
+- Better material/VFX/animation selection for DMO models
+- More advanced CPU strategy for the full card pool
 - Online accounts, multiplayer networking, matchmaking and server persistence
 - Trading and player marketplace
 - Expanded Genesis City MMO zones
 
-The next production passes can focus on deeper targeting/chain UX, generic effect execution, improved CPU strategy, final assets and multiplayer architecture after the standalone vertical slice is packaged successfully.
+Only use/distribute card art, models, audio or other content where you have the necessary rights or permission.
