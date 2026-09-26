@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DuelGenesis.Cards;
 using DuelGenesis.Dueling;
+using DuelGenesis.Progression;
 using DuelGenesis.Shops;
 using DuelGenesis.UI;
 using UnityEngine;
@@ -49,14 +50,26 @@ namespace DuelGenesis.Core
             if (PlayerDeck.MinimumDeckSize != 40 || PlayerDeck.MaximumDeckSize != 60 || PlayerDeck.MaximumCopiesPerCard != 3)
                 failures.Add("Deck rule constants are incorrect.");
 
+            if (StarterLoadout.StarterDeckSize != 40)
+                failures.Add("Starter loadout is not exactly 40 cards.");
+
             if (Object.FindFirstObjectByType<DuelPrototype>() == null)
                 failures.Add("DuelPrototype runtime system is missing.");
             if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
                 failures.Add("PackOpeningUI runtime system is missing.");
             if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
                 failures.Add("DeckBuilderUI runtime system is missing.");
+            if (Object.FindFirstObjectByType<DuelistProfile>() == null)
+                failures.Add("DuelistProfile progression system is missing.");
+            if (Object.FindFirstObjectByType<ProgressionBridge>() == null)
+                failures.Add("ProgressionBridge is missing.");
+            if (Object.FindFirstObjectByType<ExternalCardCatalogLoader>() == null)
+                failures.Add("ExternalCardCatalogLoader is missing.");
+            if (Object.FindFirstObjectByType<DuelArenaFX>() == null)
+                failures.Add("DuelArenaFX is missing.");
 
             PlayerDeck deck = Object.FindFirstObjectByType<PlayerDeck>();
+            PlayerCollection collection = Object.FindFirstObjectByType<PlayerCollection>();
             if (deck != null)
             {
                 foreach (DeckEntry entry in deck.Entries)
@@ -65,6 +78,8 @@ namespace DuelGenesis.Core
                         failures.Add($"Deck references missing card ID {entry.cardId}.");
                     if (entry.quantity < 0 || entry.quantity > PlayerDeck.MaximumCopiesPerCard)
                         failures.Add($"Deck contains invalid copy count for {entry.cardId}.");
+                    if (collection != null && entry.quantity > collection.GetQuantity(entry.cardId))
+                        failures.Add($"Deck uses more copies of {entry.cardId} than the player owns.");
                 }
             }
 
@@ -72,7 +87,7 @@ namespace DuelGenesis.Core
             LastReport = LastPassed ? "PASS" : string.Join(" | ", failures);
 
             if (LastPassed)
-                Debug.Log("Duel: Genesis runtime diagnostics PASS.");
+                Debug.Log("Duel: Genesis runtime diagnostics PASS — playable vertical slice systems are present.");
             else
                 Debug.LogError("Duel: Genesis runtime diagnostics FAILED: " + LastReport);
         }
