@@ -18,22 +18,31 @@ namespace DuelGenesis.Shops
 
         public bool IsOpen => _open;
 
-        public void OpenPack(GameObject player)
+        public bool OpenPack(GameObject player)
         {
-            if (_open || player == null) return;
+            if (_open || player == null || !CardDatabase.IsReady)
+                return false;
 
             PlayerCollection collection = player.GetComponent<PlayerCollection>();
             if (collection == null)
                 collection = player.AddComponent<PlayerCollection>();
 
-            _lastPack.Clear();
-
+            List<CardData> generatedPack = new List<CardData>(5);
             for (int i = 0; i < 5; i++)
             {
                 CardData card = CardDatabase.GetRandomCard(i == 4);
-                _lastPack.Add(card);
-                collection.AddCard(card);
+                if (card == null || CardDatabase.IsPrototypeId(card.id))
+                {
+                    Debug.LogError("Duel: Genesis refused to open a booster because the production card pool returned an invalid card.");
+                    return false;
+                }
+                generatedPack.Add(card);
             }
+
+            _lastPack.Clear();
+            _lastPack.AddRange(generatedPack);
+            foreach (CardData card in _lastPack)
+                collection.AddCard(card);
 
             _revealedCount = 1;
             _open = true;
@@ -43,6 +52,7 @@ namespace DuelGenesis.Shops
 
             _playerController?.SetMovementEnabled(false);
             _thirdPersonCamera?.SetLookEnabled(false);
+            return true;
         }
 
         private void Update()
@@ -125,11 +135,10 @@ namespace DuelGenesis.Shops
             };
 
             GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 18f, width - 40f, 42f), "GENESIS BOOSTER OPENING", title);
-
-            string poolLabel = CardDatabase.HasProductionCards
-                ? $"Card {_revealedCount} of {_lastPack.Count}  •  {CardDatabase.ProductionCardCount:N0} real cards loaded"
-                : $"Card {_revealedCount} of {_lastPack.Count}  •  PROTOTYPE CARD POOL";
-            GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f), poolLabel, subtitle);
+            GUI.Label(
+                new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f),
+                $"Card {_revealedCount} of {_lastPack.Count}  •  {CardDatabase.ProductionCardCount:N0} real cards loaded",
+                subtitle);
 
             Rect scrollRect = new Rect(windowRect.x + 30f, windowRect.y + 100f, width - 60f, height - 170f);
             Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 184f));
