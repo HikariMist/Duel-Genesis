@@ -16,6 +16,8 @@ namespace DuelGenesis.Player
         private float _verticalVelocity;
         private bool _movementEnabled = true;
 
+        public bool MovementEnabled => _movementEnabled;
+
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();
