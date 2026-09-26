@@ -14,7 +14,7 @@ namespace DuelGenesis.UI
         private ThirdPersonCamera _camera;
         private DeckBuilderUI _deckBuilder;
         private PackOpeningUI _packOpening;
-        private DuelPrototype _duel;
+        private DuelGameController _duel;
         private GenesisWelcomeUI _help;
 
         public bool IsOpen => _open;
@@ -47,7 +47,7 @@ namespace DuelGenesis.UI
             if (_camera == null) _camera = Object.FindFirstObjectByType<ThirdPersonCamera>();
             if (_deckBuilder == null) _deckBuilder = Object.FindFirstObjectByType<DeckBuilderUI>();
             if (_packOpening == null) _packOpening = Object.FindFirstObjectByType<PackOpeningUI>();
-            if (_duel == null) _duel = Object.FindFirstObjectByType<DuelPrototype>();
+            if (_duel == null) _duel = Object.FindFirstObjectByType<DuelGameController>();
             if (_help == null) _help = Object.FindFirstObjectByType<GenesisWelcomeUI>();
         }
 
