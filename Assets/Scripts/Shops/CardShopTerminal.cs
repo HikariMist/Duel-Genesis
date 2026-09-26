@@ -9,7 +9,7 @@ namespace DuelGenesis.Shops
         public string shopName = "Genesis Card Shop";
         public int boosterPackCost = 1000;
 
-        public string InteractionPrompt => $"Open {shopName}";
+        public string InteractionPrompt => $"Buy Genesis Pack ({boosterPackCost:N0} GC)";
 
         public void Interact(GameObject interactor)
         {
@@ -20,14 +20,27 @@ namespace DuelGenesis.Shops
                 return;
             }
 
-            if (wallet.Spend(boosterPackCost))
+            PackOpeningUI packUI = Object.FindFirstObjectByType<PackOpeningUI>();
+            if (packUI != null && packUI.IsOpen)
+                return;
+
+            if (!wallet.Spend(boosterPackCost))
             {
-                Debug.Log($"Purchased 1 booster pack for {boosterPackCost} GC. Pack opening UI will be connected next.");
+                Debug.Log($"Not enough GC. Pack costs {boosterPackCost} GC and player has {wallet.GenesisCredits} GC.");
+                return;
             }
-            else
+
+            if (packUI == null)
             {
-                Debug.Log($"Not enough GC. Pack costs {boosterPackCost} GC and player has {wallet.genesisCredits} GC.");
+                GameObject systems = GameObject.Find("Genesis Runtime Systems");
+                if (systems == null)
+                    systems = new GameObject("Genesis Runtime Systems");
+
+                packUI = systems.AddComponent<PackOpeningUI>();
             }
+
+            Debug.Log($"Purchased Genesis booster pack for {boosterPackCost} GC.");
+            packUI.OpenPack(interactor);
         }
     }
 }
