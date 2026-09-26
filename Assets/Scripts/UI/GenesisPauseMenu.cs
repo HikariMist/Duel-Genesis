@@ -9,6 +9,7 @@ namespace DuelGenesis.UI
     public class GenesisPauseMenu : MonoBehaviour
     {
         private bool _open;
+        private bool _movementWasEnabled = true;
         private ThirdPersonPlayerController _player;
         private ThirdPersonCamera _camera;
         private DeckBuilderUI _deckBuilder;
@@ -54,6 +55,7 @@ namespace DuelGenesis.UI
         {
             Resolve();
             _open = true;
+            _movementWasEnabled = _player == null || _player.MovementEnabled;
             Time.timeScale = 0f;
             _player?.SetMovementEnabled(false);
             _camera?.SetLookEnabled(false);
@@ -65,7 +67,7 @@ namespace DuelGenesis.UI
         {
             _open = false;
             Time.timeScale = 1f;
-            _player?.SetMovementEnabled(true);
+            _player?.SetMovementEnabled(_movementWasEnabled);
             _camera?.SetLookEnabled(true);
         }
 
@@ -80,6 +82,7 @@ namespace DuelGenesis.UI
             if (_open)
             {
                 Time.timeScale = 1f;
+                _player?.SetMovementEnabled(_movementWasEnabled);
                 _open = false;
             }
         }
