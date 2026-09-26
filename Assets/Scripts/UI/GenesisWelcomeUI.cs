@@ -24,13 +24,23 @@ namespace DuelGenesis.UI
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.f1Key.wasPressedThisFrame)
             {
-                _visible = !_visible;
-                if (_visible)
-                    _hideAt = float.PositiveInfinity;
+                if (_visible) Hide();
+                else ShowPersistent();
             }
 
             if (_visible && Time.unscaledTime >= _hideAt)
                 _visible = false;
+        }
+
+        public void ShowPersistent()
+        {
+            _visible = true;
+            _hideAt = float.PositiveInfinity;
+        }
+
+        public void Hide()
+        {
+            _visible = false;
         }
 
         private void Resolve()
