@@ -1,0 +1,149 @@
+using System.Collections.Generic;
+using DuelGenesis.Cards;
+using DuelGenesis.Player;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace DuelGenesis.Shops
+{
+    public class PackOpeningUI : MonoBehaviour
+    {
+        private readonly List<CardData> _lastPack = new();
+        private bool _open;
+        private int _revealedCount;
+        private ThirdPersonPlayerController _playerController;
+        private Vector2 _scroll;
+
+        public bool IsOpen => _open;
+
+        public void OpenPack(GameObject player)
+        {
+            if (_open || player == null) return;
+
+            PlayerCollection collection = player.GetComponent<PlayerCollection>();
+            if (collection == null)
+                collection = player.AddComponent<PlayerCollection>();
+
+            _lastPack.Clear();
+
+            // Five-card Genesis City booster. The final slot is guaranteed Rare or better.
+            for (int i = 0; i < 5; i++)
+            {
+                CardData card = CardDatabase.GetRandomCard(i == 4);
+                _lastPack.Add(card);
+                collection.AddCard(card);
+            }
+
+            _revealedCount = 1;
+            _open = true;
+            _scroll = Vector2.zero;
+            _playerController = player.GetComponent<ThirdPersonPlayerController>();
+            _playerController?.SetMovementEnabled(false);
+
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        private void Update()
+        {
+            if (!_open) return;
+
+            Keyboard keyboard = Keyboard.current;
+            Mouse mouse = Mouse.current;
+
+            bool revealPressed =
+                (keyboard != null && (keyboard.spaceKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame)) ||
+                (mouse != null && mouse.leftButton.wasPressedThisFrame);
+
+            if (revealPressed && _revealedCount < _lastPack.Count)
+            {
+                _revealedCount++;
+                return;
+            }
+
+            bool closePressed = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+            if (_revealedCount >= _lastPack.Count && keyboard != null && keyboard.enterKey.wasPressedThisFrame)
+                closePressed = true;
+
+            if (closePressed)
+                Close();
+        }
+
+        public void Close()
+        {
+            if (!_open) return;
+
+            _open = false;
+            _playerController?.SetMovementEnabled(true);
+            _playerController = null;
+
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        private void OnGUI()
+        {
+            if (!_open) return;
+
+            float width = Mathf.Min(900f, Screen.width - 40f);
+            float height = Mathf.Min(650f, Screen.height - 40f);
+            Rect windowRect = new Rect(
+                (Screen.width - width) * 0.5f,
+                (Screen.height - height) * 0.5f,
+                width,
+                height);
+
+            GUI.Box(windowRect, string.Empty);
+
+            GUIStyle title = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 30,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+
+            GUIStyle subtitle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 16,
+                alignment = TextAnchor.MiddleCenter
+            };
+
+            GUIStyle cardName = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 20,
+                fontStyle = FontStyle.Bold
+            };
+
+            GUIStyle body = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 15,
+                wordWrap = true
+            };
+
+            GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 18f, width - 40f, 42f), "GENESIS BOOSTER OPENING", title);
+            GUI.Label(new Rect(windowRect.x + 20f, windowRect.y + 58f, width - 40f, 28f), $"Card {_revealedCount} of {_lastPack.Count}", subtitle);
+
+            Rect scrollRect = new Rect(windowRect.x + 30f, windowRect.y + 100f, width - 60f, height - 170f);
+            Rect contentRect = new Rect(0f, 0f, scrollRect.width - 20f, Mathf.Max(scrollRect.height, _revealedCount * 112f));
+            _scroll = GUI.BeginScrollView(scrollRect, _scroll, contentRect);
+
+            for (int i = 0; i < _revealedCount && i < _lastPack.Count; i++)
+            {
+                CardData card = _lastPack[i];
+                float y = i * 112f;
+                GUI.Box(new Rect(0f, y, contentRect.width, 102f), string.Empty);
+                GUI.Label(new Rect(16f, y + 8f, contentRect.width - 32f, 28f), $"{card.cardName}  •  {card.RarityLabel}", cardName);
+                GUI.Label(new Rect(16f, y + 36f, contentRect.width - 32f, 22f), $"{card.kind}  |  {card.attribute}  |  {card.ShortStats}", body);
+                GUI.Label(new Rect(16f, y + 60f, contentRect.width - 32f, 38f), card.effectText, body);
+            }
+
+            GUI.EndScrollView();
+
+            string instructions = _revealedCount < _lastPack.Count
+                ? "SPACE / ENTER / LEFT CLICK — Reveal next card"
+                : "ENTER or ESC — Close pack   •   Cards were saved to your collection";
+
+            GUI.Label(new Rect(windowRect.x + 20f, windowRect.yMax - 54f, width - 40f, 30f), instructions, subtitle);
+        }
+    }
+}
