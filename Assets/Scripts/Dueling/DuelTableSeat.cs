@@ -37,7 +37,13 @@ namespace DuelGenesis.Dueling
                 PlayerDeck deck = interactor.GetComponent<PlayerDeck>();
                 PlayerCollection collection = interactor.GetComponent<PlayerCollection>();
 
-                if (deck == null || !deck.Validate(collection, out string validation))
+                if (deck == null)
+                {
+                    Debug.LogWarning("Cannot duel yet: player deck system is missing.");
+                    return;
+                }
+
+                if (!deck.Validate(collection, out string validation))
                 {
                     Debug.LogWarning("Cannot duel yet: " + validation);
                     return;
