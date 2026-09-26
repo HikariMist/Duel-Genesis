@@ -34,6 +34,15 @@ namespace DuelGenesis.EditorTools
 
         private static void Build(bool development, bool runAfterBuild)
         {
+            if (System.Diagnostics.Process.GetProcessesByName("DuelGenesis").Length > 0)
+            {
+                EditorUtility.DisplayDialog(
+                    "Duel: Genesis Build",
+                    "DuelGenesis.exe is still running. Close the standalone game first, then run the build command again. This prevents Windows from locking the old build files.",
+                    "OK");
+                return;
+            }
+
             if (EditorApplication.isCompiling)
             {
                 EditorUtility.DisplayDialog(
