@@ -29,6 +29,15 @@ namespace DuelGenesis.UI
                     _showCollection = !_showCollection;
             }
 
+#if UNITY_EDITOR
+            // Prototype-only testing shortcut so development is never blocked by the economy.
+            if (keyboard != null && keyboard.f9Key.wasPressedThisFrame && _wallet != null)
+            {
+                _wallet.Add(50000);
+                Debug.Log("DEV TEST: Added 50,000 GC.");
+            }
+#endif
+
             if (_deckBuilder != null && _deckBuilder.IsOpen)
                 _showCollection = false;
         }
@@ -65,11 +74,20 @@ namespace DuelGenesis.UI
             bool deckLegal = _deck != null && _deck.Validate(_collection, out _);
 
             string deckState = deckLegal ? "LEGAL" : "INCOMPLETE";
-            GUI.Box(new Rect(18f, 18f, 300f, 118f),
+
+#if UNITY_EDITOR
+            const float hudHeight = 142f;
+            string devLine = "\n[F9] DEV: +50,000 GC";
+#else
+            const float hudHeight = 118f;
+            string devLine = string.Empty;
+#endif
+
+            GUI.Box(new Rect(18f, 18f, 300f, hudHeight),
                 $"GENESIS CREDITS: {gc:N0} GC\n" +
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
-                "[C] Collection   [B] Deck Builder", hud);
+                "[C] Collection   [B] Deck Builder" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
