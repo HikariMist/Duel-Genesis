@@ -1,6 +1,6 @@
-using DuelGenesis.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace DuelGenesis.Interaction
 {
@@ -9,7 +9,7 @@ namespace DuelGenesis.Interaction
         public float interactionDistance = 3f;
         public LayerMask interactionMask = ~0;
         public CanvasGroup promptCanvas;
-        public TMPro.TMP_Text promptText;
+        public Text promptText;
 
         private IInteractable _current;
 
@@ -34,9 +34,7 @@ namespace DuelGenesis.Interaction
 
             Ray ray = new Ray(cam.transform.position, cam.transform.forward);
             if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactionMask, QueryTriggerInteraction.Collide))
-            {
                 _current = hit.collider.GetComponentInParent<IInteractable>();
-            }
 
             if (_current != null)
                 SetPrompt(true, $"[E] {_current.InteractionPrompt}");
