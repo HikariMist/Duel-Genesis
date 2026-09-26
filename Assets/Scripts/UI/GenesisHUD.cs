@@ -1,6 +1,7 @@
 using DuelGenesis.Cards;
 using DuelGenesis.Core;
 using DuelGenesis.Economy;
+using DuelGenesis.Progression;
 using DuelGenesis.Shops;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -12,6 +13,7 @@ namespace DuelGenesis.UI
         private GenesisWallet _wallet;
         private PlayerCollection _collection;
         private PlayerDeck _deck;
+        private DuelistProfile _profile;
         private DeckBuilderUI _deckBuilder;
         private PackOpeningUI _packOpening;
         private bool _showCollection;
@@ -50,6 +52,8 @@ namespace DuelGenesis.UI
                 _collection = Object.FindFirstObjectByType<PlayerCollection>();
             if (_deck == null)
                 _deck = Object.FindFirstObjectByType<PlayerDeck>();
+            if (_profile == null)
+                _profile = Object.FindFirstObjectByType<DuelistProfile>();
             if (_deckBuilder == null)
                 _deckBuilder = Object.FindFirstObjectByType<DeckBuilderUI>();
             if (_packOpening == null)
@@ -76,24 +80,28 @@ namespace DuelGenesis.UI
 
             string deckState = deckLegal ? "LEGAL" : "INCOMPLETE";
             string systemState = GenesisRuntimeDiagnostics.LastPassed ? "PASS" : GenesisRuntimeDiagnostics.LastReport;
+            string profileLine = _profile == null
+                ? "DUELIST: Loading..."
+                : $"DUELIST: Lv.{_profile.Level} {_profile.Title}  XP {_profile.XP}/{_profile.XPToNextLevel}  W/L {_profile.Wins}/{_profile.Losses}";
 
 #if UNITY_EDITOR
-            const float hudHeight = 178f;
+            const float hudHeight = 204f;
             string devLine = "\n[F9] DEV: +50,000 GC";
 #else
-            const float hudHeight = 154f;
+            const float hudHeight = 180f;
             string devLine = string.Empty;
 #endif
 
-            Rect hudRect = new Rect(18f, 18f, 340f, hudHeight);
+            Rect hudRect = new Rect(18f, 18f, 390f, hudHeight);
             GenesisTheme.Box(hudRect, GenesisTheme.Background);
             GUI.Label(hudRect,
                 $"DUEL: GENESIS\n" +
+                profileLine + "\n" +
                 $"GENESIS CREDITS: {gc:N0} GC\n" +
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
                 $"SYSTEM CHECK: {systemState}\n" +
-                "[C] Collection   [B] Deck Builder" + devLine, hud);
+                "[C] Collection   [B] Deck Builder   [F1] Help" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
