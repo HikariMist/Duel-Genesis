@@ -178,13 +178,14 @@ namespace DuelGenesis.Cards
                     if (record == null || string.IsNullOrWhiteSpace(record.id))
                         continue;
 
-                    CardDatabase.RegisterOrReplace(record.ToCardData());
+                    CardData card = record.ToCardData();
+                    CardDatabase.RegisterProductionCard(card);
                     CardModelRegistry.Register(record.id, record.modelResource);
                     registered++;
                 }
 
                 LoadedCardCount = registered;
-                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} external card records from {CatalogFileName}.");
+                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production card records from {CatalogFileName}. Booster packs now use the production card pool.");
             }
             catch (Exception exception)
             {
