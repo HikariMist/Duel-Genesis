@@ -41,7 +41,11 @@ namespace DuelGenesis.Cards
             new CardData("DG024", "Genesis Leviathan", CardKind.Monster, CardRarity.UltraRare, "WATER", "Sea Serpent / Effect", 8, 3000, 2400, "If this card is Tribute Summoned: return up to 2 other cards on the field to the hand. This card cannot attack the turn you use this effect.")
         };
 
+        private static readonly HashSet<string> ProductionCardIds = new();
+
         public static IReadOnlyList<CardData> All => Cards;
+        public static bool HasProductionCards => ProductionCardIds.Count > 0;
+        public static int ProductionCardCount => ProductionCardIds.Count;
 
         public static CardData GetById(string id)
         {
@@ -60,6 +64,15 @@ namespace DuelGenesis.Cards
                 Cards.Add(card);
         }
 
+        public static void RegisterProductionCard(CardData card)
+        {
+            if (card == null || string.IsNullOrWhiteSpace(card.id))
+                return;
+
+            RegisterOrReplace(card);
+            ProductionCardIds.Add(card.id);
+        }
+
         public static int RegisterOrReplace(IEnumerable<CardData> cards)
         {
             if (cards == null) return 0;
@@ -76,11 +89,18 @@ namespace DuelGenesis.Cards
 
         public static CardData GetRandomCard(bool guaranteedRareOrBetter = false)
         {
+            List<CardData> available = HasProductionCards
+                ? Cards.Where(c => ProductionCardIds.Contains(c.id)).ToList()
+                : Cards.ToList();
+
+            if (available.Count == 0)
+                available = Cards.ToList();
+
             CardRarity rarity = RollRarity(guaranteedRareOrBetter);
-            List<CardData> pool = Cards.Where(c => c.rarity == rarity).ToList();
+            List<CardData> pool = available.Where(c => c.rarity == rarity).ToList();
 
             if (pool.Count == 0)
-                pool = Cards.ToList();
+                pool = available;
 
             return pool[Random.Range(0, pool.Count)];
         }
