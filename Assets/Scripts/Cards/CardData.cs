@@ -9,6 +9,21 @@ namespace DuelGenesis.Cards
         Trap
     }
 
+    public enum CardFrameKind
+    {
+        Auto = 0,
+        NormalMonster,
+        EffectMonster,
+        FusionMonster,
+        RitualMonster,
+        SynchroMonster,
+        XyzMonster,
+        Spell,
+        Trap,
+        Token,
+        Unknown
+    }
+
     public enum CardRarity
     {
         Common = 0,
@@ -30,6 +45,7 @@ namespace DuelGenesis.Cards
         public int attack;
         public int defense;
         public string effectText;
+        public CardFrameKind frameKind = CardFrameKind.Auto;
 
         public CardData(
             string id,
@@ -41,7 +57,8 @@ namespace DuelGenesis.Cards
             int level,
             int attack,
             int defense,
-            string effectText)
+            string effectText,
+            CardFrameKind frameKind = CardFrameKind.Auto)
         {
             this.id = id;
             this.cardName = cardName;
@@ -53,6 +70,31 @@ namespace DuelGenesis.Cards
             this.attack = attack;
             this.defense = defense;
             this.effectText = effectText;
+            this.frameKind = frameKind;
+        }
+
+        public CardFrameKind ResolvedFrameKind
+        {
+            get
+            {
+                if (frameKind != CardFrameKind.Auto && frameKind != CardFrameKind.Unknown)
+                    return frameKind;
+
+                if (kind == CardKind.Spell) return CardFrameKind.Spell;
+                if (kind == CardKind.Trap) return CardFrameKind.Trap;
+
+                string line = typeLine ?? string.Empty;
+                if (line.IndexOf("Token", StringComparison.OrdinalIgnoreCase) >= 0) return CardFrameKind.Token;
+                if (line.IndexOf("Fusion", StringComparison.OrdinalIgnoreCase) >= 0) return CardFrameKind.FusionMonster;
+                if (line.IndexOf("Ritual", StringComparison.OrdinalIgnoreCase) >= 0) return CardFrameKind.RitualMonster;
+                if (line.IndexOf("Synchro", StringComparison.OrdinalIgnoreCase) >= 0) return CardFrameKind.SynchroMonster;
+                if (line.IndexOf("Xyz", StringComparison.OrdinalIgnoreCase) >= 0) return CardFrameKind.XyzMonster;
+                if (line.IndexOf("Normal", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    line.IndexOf("Effect", StringComparison.OrdinalIgnoreCase) < 0)
+                    return CardFrameKind.NormalMonster;
+
+                return CardFrameKind.EffectMonster;
+            }
         }
 
         public string RarityLabel => rarity switch
