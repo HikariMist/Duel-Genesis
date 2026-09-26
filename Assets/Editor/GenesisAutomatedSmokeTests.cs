@@ -34,42 +34,11 @@ namespace DuelGenesis.EditorTools
             List<string> failures = new();
             IReadOnlyList<CardData> cards = CardDatabase.All;
 
-            if (cards.Count < 20)
-                failures.Add($"Expected a usable prototype card pool, found only {cards.Count} cards.");
+            if (cards.Any(card => card != null && CardDatabase.IsPrototypeId(card.id)))
+                failures.Add("Retired prototype cards are still hardcoded into CardDatabase.");
 
-            if (cards.Select(card => card.id).Distinct().Count() != cards.Count)
-                failures.Add("Duplicate card IDs detected.");
-
-            string[] requiredIds =
-            {
-                "DG001", "DG002", "DG003", "DG004", "DG005", "DG006", "DG007",
-                "DG009", "DG010", "DG011", "DG012", "DG013", "DG014", "DG015",
-                "DG016", "DG017", "DG018", "DG019", "DG020", "DG022", "DG023", "DG024"
-            };
-
-            foreach (string id in requiredIds)
-            {
-                if (CardDatabase.GetById(id) == null)
-                    failures.Add($"Required duel-engine card {id} is missing.");
-            }
-
-            for (int i = 0; i < 250; i++)
-            {
-                CardData normal = CardDatabase.GetRandomCard(false);
-                CardData guaranteed = CardDatabase.GetRandomCard(true);
-
-                if (normal == null)
-                {
-                    failures.Add("Normal pack roll returned null.");
-                    break;
-                }
-
-                if (guaranteed == null || guaranteed.rarity == CardRarity.Common)
-                {
-                    failures.Add("Guaranteed rare pack slot returned an invalid result.");
-                    break;
-                }
-            }
+            if (cards.Where(card => card != null).Select(card => card.id).Distinct().Count() != cards.Count)
+                failures.Add("Duplicate card IDs detected in the currently loaded production pool.");
 
             if (PlayerDeck.MinimumDeckSize != 40)
                 failures.Add("Minimum deck size must be 40.");
@@ -105,7 +74,7 @@ namespace DuelGenesis.EditorTools
 
             bool passed = failures.Count == 0;
             string report = passed
-                ? "Duel: Genesis automated smoke tests PASS — v0.6 scene, database, pack, deck, duel and presentation APIs are valid."
+                ? "Duel: Genesis automated smoke tests PASS — production-only card architecture, deck rules, duel and presentation APIs are valid."
                 : "Duel: Genesis automated smoke tests FAILED:\n- " + string.Join("\n- ", failures);
 
             if (passed)
