@@ -21,6 +21,9 @@ namespace DuelGenesis.Dueling
         {
             public CardData Card;
             public bool HasAttacked;
+            public int AttackBonus;
+
+            public int CurrentAttack => Mathf.Max(0, Card.attack + AttackBonus);
 
             public FieldMonster(CardData card)
             {
@@ -28,12 +31,30 @@ namespace DuelGenesis.Dueling
             }
         }
 
+        private sealed class SpellTrapCard
+        {
+            public CardData Card;
+            public bool FaceDown;
+            public int SetTurn;
+
+            public SpellTrapCard(CardData card, bool faceDown, int setTurn)
+            {
+                Card = card;
+                FaceDown = faceDown;
+                SetTurn = setTurn;
+            }
+        }
+
         private readonly List<CardData> _playerDeck = new();
         private readonly List<CardData> _opponentDeck = new();
         private readonly List<CardData> _playerHand = new();
         private readonly List<CardData> _opponentHand = new();
+        private readonly List<CardData> _playerGraveyard = new();
+        private readonly List<CardData> _opponentGraveyard = new();
         private readonly List<FieldMonster> _playerField = new();
         private readonly List<FieldMonster> _opponentField = new();
+        private readonly List<SpellTrapCard> _playerSpellTrap = new();
+        private readonly List<SpellTrapCard> _opponentSpellTrap = new();
 
         private GameObject _playerObject;
         private PlayerDeck _savedDeck;
@@ -47,6 +68,8 @@ namespace DuelGenesis.Dueling
         private bool _duelOver;
         private bool _normalSummoned;
         private bool _rewardGranted;
+        private bool _playerMarketUsedThisTurn;
+        private bool _opponentMarketUsedThisTurn;
         private int _turnNumber;
         private int _playerLP;
         private int _opponentLP;
@@ -91,8 +114,12 @@ namespace DuelGenesis.Dueling
 
             _playerHand.Clear();
             _opponentHand.Clear();
+            _playerGraveyard.Clear();
+            _opponentGraveyard.Clear();
             _playerField.Clear();
             _opponentField.Clear();
+            _playerSpellTrap.Clear();
+            _opponentSpellTrap.Clear();
 
             _playerLP = 8000;
             _opponentLP = 8000;
@@ -101,6 +128,8 @@ namespace DuelGenesis.Dueling
             _normalSummoned = false;
             _duelOver = false;
             _rewardGranted = false;
+            _playerMarketUsedThisTurn = false;
+            _opponentMarketUsedThisTurn = false;
             _active = true;
             _handScroll = Vector2.zero;
 
@@ -110,7 +139,7 @@ namespace DuelGenesis.Dueling
             _playerController?.SetMovementEnabled(false);
             _cameraController?.SetLookEnabled(false);
 
-            _message = "Turn 1 — Main Phase. You go first, so there is no Battle Phase this turn.";
+            _message = "Turn 1 — Main Phase. Monsters, Spells and Trap setting are live. You go first, so there is no Battle Phase this turn.";
             Debug.Log("Duel: Genesis prototype duel started. LP 8000 vs 8000.");
             return true;
         }
@@ -162,8 +191,10 @@ namespace DuelGenesis.Dueling
             }
         }
 
-        private bool DrawPlayerCards(int amount)
+        private bool DrawPlayerCards(int amount, bool outsideDrawPhase = false)
         {
+            int drawn = 0;
+
             for (int i = 0; i < amount; i++)
             {
                 if (_playerDeck.Count == 0)
@@ -175,13 +206,23 @@ namespace DuelGenesis.Dueling
                 CardData card = _playerDeck[0];
                 _playerDeck.RemoveAt(0);
                 _playerHand.Add(card);
+                drawn++;
+            }
+
+            if (outsideDrawPhase && drawn > 0 && HasFaceUpCard(_playerSpellTrap, "DG018") && !_playerMarketUsedThisTurn)
+            {
+                _playerLP += 300;
+                _playerMarketUsedThisTurn = true;
+                _message = "Genesis Market triggered: you gained 300 LP for drawing outside the Draw Phase.";
             }
 
             return true;
         }
 
-        private bool DrawOpponentCards(int amount)
+        private bool DrawOpponentCards(int amount, bool outsideDrawPhase = false)
         {
+            int drawn = 0;
+
             for (int i = 0; i < amount; i++)
             {
                 if (_opponentDeck.Count == 0)
@@ -193,9 +234,21 @@ namespace DuelGenesis.Dueling
                 CardData card = _opponentDeck[0];
                 _opponentDeck.RemoveAt(0);
                 _opponentHand.Add(card);
+                drawn++;
+            }
+
+            if (outsideDrawPhase && drawn > 0 && HasFaceUpCard(_opponentSpellTrap, "DG018") && !_opponentMarketUsedThisTurn)
+            {
+                _opponentLP += 300;
+                _opponentMarketUsedThisTurn = true;
             }
 
             return true;
+        }
+
+        private static bool HasFaceUpCard(List<SpellTrapCard> zones, string cardId)
+        {
+            return zones.Any(zone => !zone.FaceDown && zone.Card.id == cardId);
         }
 
         private int RequiredTributes(CardData card)
@@ -223,8 +276,9 @@ namespace DuelGenesis.Dueling
             int tributes = RequiredTributes(card);
             for (int i = 0; i < tributes; i++)
             {
-                FieldMonster tribute = _playerField.OrderBy(monster => monster.Card.attack).First();
+                FieldMonster tribute = _playerField.OrderBy(monster => monster.CurrentAttack).First();
                 _playerField.Remove(tribute);
+                _playerGraveyard.Add(tribute.Card);
             }
 
             _playerHand.Remove(card);
@@ -234,6 +288,157 @@ namespace DuelGenesis.Dueling
             _message = tributes > 0
                 ? $"Tributed {tributes} monster(s) and summoned {card.cardName} in Attack Position."
                 : $"Normal Summoned {card.cardName} in Attack Position.";
+        }
+
+        private bool IsSupportedSpell(CardData card)
+        {
+            if (card == null || card.kind != CardKind.Spell) return false;
+            return card.id == "DG009" || card.id == "DG010" || card.id == "DG016" || card.id == "DG018";
+        }
+
+        private bool CanActivatePlayerSpell(CardData card)
+        {
+            if (_phase != DuelPhase.Main || card == null || card.kind != CardKind.Spell || !IsSupportedSpell(card))
+                return false;
+
+            if (_playerSpellTrap.Count >= 5)
+                return false;
+
+            if (card.id == "DG009")
+                return _playerField.Count > 0;
+
+            if (card.id == "DG010")
+                return _playerGraveyard.Any(c => c.kind == CardKind.Monster);
+
+            if (card.id == "DG016")
+                return _playerDeck.Any(c => c.kind == CardKind.Monster && c.level <= 4 && c.typeLine.Contains("Spellcaster"));
+
+            if (card.id == "DG018")
+                return !HasFaceUpCard(_playerSpellTrap, "DG018");
+
+            return false;
+        }
+
+        private void ActivatePlayerSpell(CardData card)
+        {
+            if (!CanActivatePlayerSpell(card)) return;
+
+            _playerHand.Remove(card);
+
+            if (TryNegateSpell(false, card))
+            {
+                _playerGraveyard.Add(card);
+                _message = $"CPU's Signal Jam negated {card.cardName}.";
+                return;
+            }
+
+            if (card.id == "DG009")
+            {
+                FieldMonster target = _playerField.OrderByDescending(monster => monster.CurrentAttack).First();
+                target.AttackBonus += 500;
+                _playerGraveyard.Add(card);
+                _message = $"Quick Charge activated! {target.Card.cardName} gained 500 ATK until the end of the turn.";
+                return;
+            }
+
+            if (card.id == "DG010")
+            {
+                CardData recycled = _playerGraveyard.Last(c => c.kind == CardKind.Monster);
+                _playerGraveyard.Remove(recycled);
+                _playerDeck.Add(recycled);
+                Shuffle(_playerDeck);
+                _playerGraveyard.Add(card);
+                DrawPlayerCards(1, true);
+                _message = $"Genesis Recycle returned {recycled.cardName} to the Deck and drew 1 card.";
+                return;
+            }
+
+            if (card.id == "DG016")
+            {
+                CardData searched = _playerDeck.First(c => c.kind == CardKind.Monster && c.level <= 4 && c.typeLine.Contains("Spellcaster"));
+                _playerDeck.Remove(searched);
+                _playerHand.Add(searched);
+                _playerGraveyard.Add(card);
+
+                CardData discard = _playerHand.FirstOrDefault(c => c != searched) ?? searched;
+                _playerHand.Remove(discard);
+                _playerGraveyard.Add(discard);
+                _message = $"Arcane Transit added {searched.cardName} to your hand, then discarded {discard.cardName}.";
+                return;
+            }
+
+            if (card.id == "DG018")
+            {
+                _playerSpellTrap.Add(new SpellTrapCard(card, false, _turnNumber));
+                _message = "Genesis Market is active. Your first extra draw each turn restores 300 LP.";
+            }
+        }
+
+        private bool CanSetTrap(CardData card)
+        {
+            return card != null && card.kind == CardKind.Trap && _phase == DuelPhase.Main && _playerSpellTrap.Count < 5;
+        }
+
+        private void SetTrapFromHand(CardData card)
+        {
+            if (!CanSetTrap(card)) return;
+
+            _playerHand.Remove(card);
+            _playerSpellTrap.Add(new SpellTrapCard(card, true, _turnNumber));
+            _message = $"Set {card.cardName} face-down. It can activate starting on the opponent's turn.";
+        }
+
+        private bool TryNegateSpell(bool spellCasterIsPlayer, CardData spell)
+        {
+            List<SpellTrapCard> defenderZones = spellCasterIsPlayer ? _opponentSpellTrap : _playerSpellTrap;
+            List<CardData> defenderGraveyard = spellCasterIsPlayer ? _opponentGraveyard : _playerGraveyard;
+
+            SpellTrapCard signalJam = defenderZones.FirstOrDefault(zone =>
+                zone.FaceDown && zone.Card.id == "DG012" && zone.SetTurn < _turnNumber);
+
+            if (signalJam == null)
+                return false;
+
+            defenderZones.Remove(signalJam);
+            defenderGraveyard.Add(signalJam.Card);
+            return true;
+        }
+
+        private int TriggerBackAlleyAmbush(bool defendingPlayer, string attackerName)
+        {
+            List<SpellTrapCard> zones = defendingPlayer ? _playerSpellTrap : _opponentSpellTrap;
+            List<CardData> graveyard = defendingPlayer ? _playerGraveyard : _opponentGraveyard;
+
+            SpellTrapCard trap = zones.FirstOrDefault(zone =>
+                zone.FaceDown && zone.Card.id == "DG011" && zone.SetTurn < _turnNumber);
+
+            if (trap == null)
+                return 0;
+
+            zones.Remove(trap);
+            graveyard.Add(trap.Card);
+            _message = $"Back Alley Ambush activated! {attackerName} loses 700 ATK for this battle.";
+            return 700;
+        }
+
+        private bool TriggerRankedBarrier(bool defendingPlayer, int battleDamage)
+        {
+            if (battleDamage < 1500)
+                return false;
+
+            List<SpellTrapCard> zones = defendingPlayer ? _playerSpellTrap : _opponentSpellTrap;
+            List<CardData> graveyard = defendingPlayer ? _playerGraveyard : _opponentGraveyard;
+
+            SpellTrapCard trap = zones.FirstOrDefault(zone =>
+                zone.FaceDown && zone.Card.id == "DG017" && zone.SetTurn < _turnNumber);
+
+            if (trap == null)
+                return false;
+
+            zones.Remove(trap);
+            graveyard.Add(trap.Card);
+            _message = $"Ranked Barrier activated and prevented {battleDamage} battle damage!";
+            return true;
         }
 
         private void AdvancePhase()
@@ -263,34 +468,52 @@ namespace DuelGenesis.Dueling
                 return;
 
             attacker.HasAttacked = true;
+            int attackValue = Mathf.Max(0, attacker.CurrentAttack - TriggerBackAlleyAmbush(false, attacker.Card.cardName));
 
             if (_opponentField.Count == 0)
             {
-                _opponentLP -= attacker.Card.attack;
-                _message = $"{attacker.Card.cardName} attacked directly for {attacker.Card.attack} damage!";
+                int damage = attackValue;
+                if (!TriggerRankedBarrier(false, damage))
+                {
+                    _opponentLP -= damage;
+                    _message = $"{attacker.Card.cardName} attacked directly for {damage} damage!";
+                }
                 CheckLifePoints();
                 return;
             }
 
-            FieldMonster defender = _opponentField.OrderBy(monster => monster.Card.attack).First();
-            int difference = attacker.Card.attack - defender.Card.attack;
+            FieldMonster defender = _opponentField.OrderBy(monster => monster.CurrentAttack).First();
+            int difference = attackValue - defender.CurrentAttack;
 
             if (difference > 0)
             {
                 _opponentField.Remove(defender);
-                _opponentLP -= difference;
-                _message = $"{attacker.Card.cardName} destroyed {defender.Card.cardName}. Opponent took {difference} battle damage.";
+                _opponentGraveyard.Add(defender.Card);
+
+                if (!TriggerRankedBarrier(false, difference))
+                {
+                    _opponentLP -= difference;
+                    _message = $"{attacker.Card.cardName} destroyed {defender.Card.cardName}. CPU took {difference} battle damage.";
+                }
             }
             else if (difference < 0)
             {
                 _playerField.Remove(attacker);
-                _playerLP -= -difference;
-                _message = $"{attacker.Card.cardName} was destroyed by {defender.Card.cardName}. You took {-difference} battle damage.";
+                _playerGraveyard.Add(attacker.Card);
+                int damage = -difference;
+
+                if (!TriggerRankedBarrier(true, damage))
+                {
+                    _playerLP -= damage;
+                    _message = $"{attacker.Card.cardName} was destroyed by {defender.Card.cardName}. You took {damage} battle damage.";
+                }
             }
             else
             {
                 _playerField.Remove(attacker);
                 _opponentField.Remove(defender);
+                _playerGraveyard.Add(attacker.Card);
+                _opponentGraveyard.Add(defender.Card);
                 _message = $"{attacker.Card.cardName} and {defender.Card.cardName} destroyed each other.";
             }
 
@@ -301,8 +524,12 @@ namespace DuelGenesis.Dueling
         {
             if (_duelOver) return;
 
+            foreach (FieldMonster monster in _playerField)
+                monster.AttackBonus = 0;
+
             _phase = DuelPhase.OpponentTurn;
             _turnNumber++;
+            _opponentMarketUsedThisTurn = false;
             RunOpponentTurn();
         }
 
@@ -312,7 +539,11 @@ namespace DuelGenesis.Dueling
 
             if (!DrawOpponentCards(1)) return;
 
+            OpponentActivateOneSpell();
+            if (_duelOver) return;
+
             OpponentNormalSummon();
+            OpponentSetOneTrap();
             if (_duelOver) return;
 
             List<FieldMonster> attackers = new List<FieldMonster>(_opponentField);
@@ -323,6 +554,9 @@ namespace DuelGenesis.Dueling
                     OpponentAttack(attacker);
             }
 
+            foreach (FieldMonster monster in _opponentField)
+                monster.AttackBonus = 0;
+
             if (_duelOver) return;
 
             _turnNumber++;
@@ -330,10 +564,80 @@ namespace DuelGenesis.Dueling
                 monster.HasAttacked = false;
 
             _normalSummoned = false;
+            _playerMarketUsedThisTurn = false;
             _phase = DuelPhase.Main;
 
             if (!DrawPlayerCards(1)) return;
             _message = $"Turn {_turnNumber} — your Draw Phase completed. Main Phase begins.";
+        }
+
+        private void OpponentActivateOneSpell()
+        {
+            if (_opponentSpellTrap.Count >= 5) return;
+
+            CardData spell = _opponentHand.FirstOrDefault(card =>
+                card.kind == CardKind.Spell &&
+                card.id != "DG021" &&
+                ((card.id == "DG009" && _opponentField.Count > 0) ||
+                 (card.id == "DG010" && _opponentGraveyard.Any(c => c.kind == CardKind.Monster)) ||
+                 (card.id == "DG016" && _opponentDeck.Any(c => c.kind == CardKind.Monster && c.level <= 4 && c.typeLine.Contains("Spellcaster"))) ||
+                 (card.id == "DG018" && !HasFaceUpCard(_opponentSpellTrap, "DG018"))));
+
+            if (spell == null) return;
+
+            _opponentHand.Remove(spell);
+
+            if (TryNegateSpell(false, spell))
+            {
+                _opponentGraveyard.Add(spell);
+                _message = $"Your Signal Jam negated CPU's {spell.cardName}!";
+                return;
+            }
+
+            if (spell.id == "DG009")
+            {
+                FieldMonster target = _opponentField.OrderByDescending(monster => monster.CurrentAttack).First();
+                target.AttackBonus += 500;
+                _opponentGraveyard.Add(spell);
+                return;
+            }
+
+            if (spell.id == "DG010")
+            {
+                CardData recycled = _opponentGraveyard.Last(c => c.kind == CardKind.Monster);
+                _opponentGraveyard.Remove(recycled);
+                _opponentDeck.Add(recycled);
+                Shuffle(_opponentDeck);
+                _opponentGraveyard.Add(spell);
+                DrawOpponentCards(1, true);
+                return;
+            }
+
+            if (spell.id == "DG016")
+            {
+                CardData searched = _opponentDeck.First(c => c.kind == CardKind.Monster && c.level <= 4 && c.typeLine.Contains("Spellcaster"));
+                _opponentDeck.Remove(searched);
+                _opponentHand.Add(searched);
+                _opponentGraveyard.Add(spell);
+                CardData discard = _opponentHand.FirstOrDefault(c => c != searched) ?? searched;
+                _opponentHand.Remove(discard);
+                _opponentGraveyard.Add(discard);
+                return;
+            }
+
+            if (spell.id == "DG018")
+                _opponentSpellTrap.Add(new SpellTrapCard(spell, false, _turnNumber));
+        }
+
+        private void OpponentSetOneTrap()
+        {
+            if (_opponentSpellTrap.Count >= 5) return;
+
+            CardData trap = _opponentHand.FirstOrDefault(card => card.kind == CardKind.Trap);
+            if (trap == null) return;
+
+            _opponentHand.Remove(trap);
+            _opponentSpellTrap.Add(new SpellTrapCard(trap, true, _turnNumber));
         }
 
         private void OpponentNormalSummon()
@@ -351,8 +655,9 @@ namespace DuelGenesis.Dueling
             int tributes = RequiredTributes(choice);
             for (int i = 0; i < tributes; i++)
             {
-                FieldMonster tribute = _opponentField.OrderBy(monster => monster.Card.attack).First();
+                FieldMonster tribute = _opponentField.OrderBy(monster => monster.CurrentAttack).First();
                 _opponentField.Remove(tribute);
+                _opponentGraveyard.Add(tribute.Card);
             }
 
             _opponentHand.Remove(choice);
@@ -363,30 +668,53 @@ namespace DuelGenesis.Dueling
         {
             if (_duelOver || attacker == null) return;
 
+            int attackValue = Mathf.Max(0, attacker.CurrentAttack - TriggerBackAlleyAmbush(true, attacker.Card.cardName));
+
             if (_playerField.Count == 0)
             {
-                _playerLP -= attacker.Card.attack;
+                int damage = attackValue;
+                if (!TriggerRankedBarrier(true, damage))
+                {
+                    _playerLP -= damage;
+                    _message = $"CPU's {attacker.Card.cardName} attacked directly for {damage} damage.";
+                }
                 CheckLifePoints();
                 return;
             }
 
-            FieldMonster defender = _playerField.OrderBy(monster => monster.Card.attack).First();
-            int difference = attacker.Card.attack - defender.Card.attack;
+            FieldMonster defender = _playerField.OrderBy(monster => monster.CurrentAttack).First();
+            int difference = attackValue - defender.CurrentAttack;
 
             if (difference > 0)
             {
                 _playerField.Remove(defender);
-                _playerLP -= difference;
+                _playerGraveyard.Add(defender.Card);
+
+                if (!TriggerRankedBarrier(true, difference))
+                {
+                    _playerLP -= difference;
+                    _message = $"CPU's {attacker.Card.cardName} destroyed {defender.Card.cardName}. You took {difference} battle damage.";
+                }
             }
             else if (difference < 0)
             {
                 _opponentField.Remove(attacker);
-                _opponentLP -= -difference;
+                _opponentGraveyard.Add(attacker.Card);
+                int damage = -difference;
+
+                if (!TriggerRankedBarrier(false, damage))
+                {
+                    _opponentLP -= damage;
+                    _message = $"CPU's {attacker.Card.cardName} was destroyed. CPU took {damage} battle damage.";
+                }
             }
             else
             {
                 _opponentField.Remove(attacker);
                 _playerField.Remove(defender);
+                _opponentGraveyard.Add(attacker.Card);
+                _playerGraveyard.Add(defender.Card);
+                _message = $"CPU's {attacker.Card.cardName} and your {defender.Card.cardName} destroyed each other.";
             }
 
             CheckLifePoints();
@@ -469,36 +797,43 @@ namespace DuelGenesis.Dueling
 
             GUIStyle title = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 26,
+                fontSize = 25,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter
             };
             GUIStyle header = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 18,
+                fontSize = 17,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter
             };
             GUIStyle body = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
+                fontSize = 13,
                 wordWrap = true,
                 alignment = TextAnchor.MiddleCenter
             };
             GUIStyle small = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 12,
+                fontSize = 11,
                 wordWrap = true,
                 alignment = TextAnchor.MiddleCenter
             };
 
-            GUI.Label(new Rect(screen.x + 20f, screen.y + 8f, screen.width - 40f, 36f), "DUEL: GENESIS — TABLETOP DUEL PROTOTYPE", title);
-            GUI.Label(new Rect(screen.x + 20f, screen.y + 44f, screen.width - 40f, 26f),
+            GUI.Label(new Rect(screen.x + 20f, screen.y + 6f, screen.width - 40f, 34f), "DUEL: GENESIS — TABLETOP DUEL PROTOTYPE", title);
+            GUI.Label(new Rect(screen.x + 20f, screen.y + 40f, screen.width - 40f, 25f),
                 $"YOU  {_playerLP:N0} LP        TURN {_turnNumber} • {PhaseLabel()}        CPU  {_opponentLP:N0} LP", header);
-            GUI.Label(new Rect(screen.x + 30f, screen.y + 72f, screen.width - 60f, 38f), _message, body);
+            GUI.Label(new Rect(screen.x + 30f, screen.y + 66f, screen.width - 60f, 36f), _message, body);
 
-            DrawOpponentArea(new Rect(screen.x + 26f, screen.y + 115f, screen.width - 52f, 135f), small);
-            DrawPlayerField(new Rect(screen.x + 26f, screen.y + 260f, screen.width - 52f, 145f), small);
+            float y = screen.y + 105f;
+            DrawOpponentArea(new Rect(screen.x + 26f, y, screen.width - 52f, 104f), small);
+            y += 110f;
+            DrawSpellTrapArea(new Rect(screen.x + 26f, y, screen.width - 52f, 66f), _opponentSpellTrap, _opponentGraveyard.Count, true, small);
+            y += 72f;
+            DrawPlayerField(new Rect(screen.x + 26f, y, screen.width - 52f, 108f), small);
+            y += 114f;
+            DrawSpellTrapArea(new Rect(screen.x + 26f, y, screen.width - 52f, 72f), _playerSpellTrap, _playerGraveyard.Count, false, small);
+            y += 78f;
 
             if (_duelOver)
             {
@@ -510,24 +845,25 @@ namespace DuelGenesis.Dueling
                 return;
             }
 
-            DrawPhaseControls(new Rect(screen.x + 26f, screen.y + 412f, screen.width - 52f, 52f), body);
-            DrawHand(new Rect(screen.x + 26f, screen.y + 472f, screen.width - 52f, screen.height - 495f), small);
+            DrawPhaseControls(new Rect(screen.x + 26f, y, screen.width - 52f, 48f), body);
+            y += 54f;
+            DrawHand(new Rect(screen.x + 26f, y, screen.width - 52f, Mathf.Max(130f, screen.yMax - y - 15f)), small);
         }
 
         private void DrawOpponentArea(Rect area, GUIStyle style)
         {
             GUI.Box(area, string.Empty);
-            GUI.Label(new Rect(area.x + 8f, area.y + 4f, area.width - 16f, 22f),
-                $"CPU FIELD — Hand: {_opponentHand.Count}   Deck: {_opponentDeck.Count}", style);
-            DrawFieldMonsters(_opponentField, new Rect(area.x + 10f, area.y + 30f, area.width - 20f, area.height - 36f), style, false);
+            GUI.Label(new Rect(area.x + 8f, area.y + 3f, area.width - 16f, 20f),
+                $"CPU MONSTER ZONES — Hand: {_opponentHand.Count}   Deck: {_opponentDeck.Count}", style);
+            DrawFieldMonsters(_opponentField, new Rect(area.x + 10f, area.y + 25f, area.width - 20f, area.height - 30f), style, false);
         }
 
         private void DrawPlayerField(Rect area, GUIStyle style)
         {
             GUI.Box(area, string.Empty);
-            GUI.Label(new Rect(area.x + 8f, area.y + 4f, area.width - 16f, 22f),
+            GUI.Label(new Rect(area.x + 8f, area.y + 3f, area.width - 16f, 20f),
                 $"YOUR MONSTER ZONES — Deck: {_playerDeck.Count}", style);
-            DrawFieldMonsters(_playerField, new Rect(area.x + 10f, area.y + 30f, area.width - 20f, area.height - 36f), style, true);
+            DrawFieldMonsters(_playerField, new Rect(area.x + 10f, area.y + 25f, area.width - 20f, area.height - 30f), style, true);
         }
 
         private void DrawFieldMonsters(List<FieldMonster> monsters, Rect area, GUIStyle style, bool playerSide)
@@ -547,16 +883,51 @@ namespace DuelGenesis.Dueling
                 }
 
                 FieldMonster monster = monsters[i];
-                GUI.Label(new Rect(zone.x + 4f, zone.y + 4f, zone.width - 8f, zone.height - 36f),
-                    $"{monster.Card.cardName}\nATK {monster.Card.attack} / DEF {monster.Card.defense}\nLV {monster.Card.level}", style);
+                string boost = monster.AttackBonus != 0 ? $" ({monster.AttackBonus:+#;-#;0})" : string.Empty;
+                GUI.Label(new Rect(zone.x + 4f, zone.y + 3f, zone.width - 8f, zone.height - 31f),
+                    $"{monster.Card.cardName}\nATK {monster.CurrentAttack}{boost} / DEF {monster.Card.defense}\nLV {monster.Card.level}", style);
 
                 if (playerSide && _phase == DuelPhase.Battle)
                 {
                     GUI.enabled = !monster.HasAttacked;
-                    if (GUI.Button(new Rect(zone.x + 5f, zone.yMax - 30f, zone.width - 10f, 25f), monster.HasAttacked ? "ATTACKED" : "ATTACK"))
+                    if (GUI.Button(new Rect(zone.x + 5f, zone.yMax - 27f, zone.width - 10f, 23f), monster.HasAttacked ? "ATTACKED" : "ATTACK"))
                         PlayerAttack(monster);
                     GUI.enabled = true;
                 }
+            }
+        }
+
+        private void DrawSpellTrapArea(Rect area, List<SpellTrapCard> zones, int graveyardCount, bool opponentSide, GUIStyle style)
+        {
+            GUI.Box(area, string.Empty);
+            GUI.Label(new Rect(area.x + 8f, area.y + 2f, area.width - 16f, 18f),
+                $"{(opponentSide ? "CPU" : "YOUR")} SPELL / TRAP ZONES     GY: {graveyardCount}", style);
+
+            float gap = 8f;
+            Rect zoneArea = new Rect(area.x + 10f, area.y + 21f, area.width - 20f, area.height - 25f);
+            float zoneWidth = (zoneArea.width - gap * 4f) / 5f;
+
+            for (int i = 0; i < 5; i++)
+            {
+                Rect zoneRect = new Rect(zoneArea.x + i * (zoneWidth + gap), zoneArea.y, zoneWidth, zoneArea.height);
+                GUI.Box(zoneRect, string.Empty);
+
+                if (i >= zones.Count)
+                {
+                    GUI.Label(zoneRect, "EMPTY S/T ZONE", style);
+                    continue;
+                }
+
+                SpellTrapCard zone = zones[i];
+                string text;
+                if (opponentSide && zone.FaceDown)
+                    text = "FACE-DOWN CARD";
+                else if (zone.FaceDown)
+                    text = $"{zone.Card.cardName}\nSET TRAP";
+                else
+                    text = $"{zone.Card.cardName}\nFACE-UP SPELL";
+
+                GUI.Label(zoneRect, text, style);
             }
         }
 
@@ -568,25 +939,25 @@ namespace DuelGenesis.Dueling
                 ? (_turnNumber == 1 ? "END TURN" : "GO TO BATTLE PHASE")
                 : "END TURN";
 
-            GUI.Label(new Rect(area.x + 12f, area.y + 8f, area.width - 350f, 32f),
-                "v0.1 rules: Monster summoning, tributes, battle damage, direct attacks, LP and deck-out. Spell/Trap effects are next.", style);
+            GUI.Label(new Rect(area.x + 12f, area.y + 6f, area.width - 350f, 34f),
+                "v0.2: Spell/Trap zones, Graveyards, Quick Charge, Recycle, Arcane Transit, Genesis Market, Ambush, Barrier and Signal Jam are live.", style);
 
-            if (GUI.Button(new Rect(area.xMax - 320f, area.y + 9f, 190f, 32f), buttonLabel))
+            if (GUI.Button(new Rect(area.xMax - 320f, area.y + 8f, 190f, 30f), buttonLabel))
                 AdvancePhase();
 
-            if (GUI.Button(new Rect(area.xMax - 120f, area.y + 9f, 100f, 32f), "FORFEIT"))
+            if (GUI.Button(new Rect(area.xMax - 120f, area.y + 8f, 100f, 30f), "FORFEIT"))
                 Forfeit();
         }
 
         private void DrawHand(Rect area, GUIStyle style)
         {
             GUI.Box(area, string.Empty);
-            GUI.Label(new Rect(area.x + 8f, area.y + 4f, area.width - 16f, 22f),
+            GUI.Label(new Rect(area.x + 8f, area.y + 3f, area.width - 16f, 20f),
                 $"YOUR HAND — {_playerHand.Count} cards", style);
 
-            Rect scrollRect = new Rect(area.x + 8f, area.y + 28f, area.width - 16f, area.height - 36f);
-            const float cardWidth = 180f;
-            const float cardHeight = 122f;
+            Rect scrollRect = new Rect(area.x + 8f, area.y + 24f, area.width - 16f, area.height - 30f);
+            const float cardWidth = 190f;
+            const float cardHeight = 118f;
             const float gap = 8f;
             int perRow = Mathf.Max(1, Mathf.FloorToInt((scrollRect.width - 20f) / (cardWidth + gap)));
             int rows = Mathf.CeilToInt(_playerHand.Count / (float)perRow);
@@ -602,7 +973,7 @@ namespace DuelGenesis.Dueling
                 Rect cardRect = new Rect(column * (cardWidth + gap), row * (cardHeight + gap), cardWidth, cardHeight);
                 GUI.Box(cardRect, string.Empty);
 
-                GUI.Label(new Rect(cardRect.x + 5f, cardRect.y + 5f, cardRect.width - 10f, 70f),
+                GUI.Label(new Rect(cardRect.x + 5f, cardRect.y + 4f, cardRect.width - 10f, 68f),
                     $"{card.cardName}\n{card.kind} • {card.RarityLabel}\n{card.ShortStats}", style);
 
                 if (card.kind == CardKind.Monster)
@@ -611,14 +982,24 @@ namespace DuelGenesis.Dueling
                     bool canSummon = CanSummon(card);
                     GUI.enabled = canSummon;
                     string label = tributes > 0 ? $"SUMMON ({tributes} TRIBUTE)" : "NORMAL SUMMON";
-                    if (GUI.Button(new Rect(cardRect.x + 7f, cardRect.yMax - 38f, cardRect.width - 14f, 30f), label))
+                    if (GUI.Button(new Rect(cardRect.x + 7f, cardRect.yMax - 36f, cardRect.width - 14f, 28f), label))
                         SummonFromHand(card);
+                    GUI.enabled = true;
+                }
+                else if (card.kind == CardKind.Spell)
+                {
+                    bool supported = IsSupportedSpell(card);
+                    GUI.enabled = supported && CanActivatePlayerSpell(card);
+                    string label = supported ? "ACTIVATE SPELL" : "RITUAL ENGINE LATER";
+                    if (GUI.Button(new Rect(cardRect.x + 7f, cardRect.yMax - 36f, cardRect.width - 14f, 28f), label))
+                        ActivatePlayerSpell(card);
                     GUI.enabled = true;
                 }
                 else
                 {
-                    GUI.enabled = false;
-                    GUI.Button(new Rect(cardRect.x + 7f, cardRect.yMax - 38f, cardRect.width - 14f, 30f), "EFFECT ENGINE NEXT");
+                    GUI.enabled = CanSetTrap(card);
+                    if (GUI.Button(new Rect(cardRect.x + 7f, cardRect.yMax - 36f, cardRect.width - 14f, 28f), "SET TRAP"))
+                        SetTrapFromHand(card);
                     GUI.enabled = true;
                 }
             }
