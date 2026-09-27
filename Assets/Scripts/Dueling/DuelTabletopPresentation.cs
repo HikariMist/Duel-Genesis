@@ -6,16 +6,18 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Non-invasive physical presentation layer for the existing duel engine.
-    /// It owns the duel camera, mat, zones and back-row card visuals while leaving
-    /// all gameplay rules/actions inside DuelGameController.
+    /// Physical presentation layer for the duel field. The center field and all utility
+    /// zones are real clickable world objects while gameplay rules remain in DuelGameController.
     /// </summary>
     public sealed class DuelTabletopPresentation : MonoBehaviour
     {
-        private static readonly Color BoardColor = new Color(0.025f, 0.04f, 0.07f, 1f);
-        private static readonly Color PlayerZoneColor = new Color(0.05f, 0.34f, 0.42f, 1f);
-        private static readonly Color CpuZoneColor = new Color(0.38f, 0.06f, 0.23f, 1f);
-        private static readonly Color UtilityZoneColor = new Color(0.18f, 0.16f, 0.26f, 1f);
+        private static readonly Color BoardColor = new Color(0.022f, 0.032f, 0.050f, 1f);
+        private static readonly Color PlayerZoneColor = new Color(0.88f, 0.075f, 0.095f, 1f);
+        private static readonly Color CpuZoneColor = new Color(0.045f, 0.38f, 0.95f, 1f);
+        private static readonly Color UtilityZoneColor = new Color(0.20f, 0.46f, 0.64f, 1f);
+        private static readonly Color FieldZoneColor = new Color(0.14f, 0.76f, 0.46f, 1f);
+        private static readonly Color BanishZoneColor = new Color(0.68f, 0.28f, 0.92f, 1f);
+        private static readonly Color ExtraMonsterColor = new Color(0.88f, 0.64f, 0.18f, 1f);
 
         private readonly List<DuelTabletopZone> _playerMonsterZones = new();
         private readonly List<DuelTabletopZone> _cpuMonsterZones = new();
@@ -23,6 +25,7 @@ namespace DuelGenesis.Dueling
         private readonly List<DuelTabletopZone> _cpuBackrowZones = new();
 
         private DuelGameController _duel;
+        private DuelPhysicalInputController _physicalInput;
         private Transform _table;
         private Transform _root;
         private Transform _backrowCardRoot;
@@ -74,7 +77,7 @@ namespace DuelGenesis.Dueling
             if (!IsTabletopActive || Time.unscaledTime < _nextSync)
                 return;
 
-            _nextSync = Time.unscaledTime + 0.10f;
+            _nextSync = Time.unscaledTime + 0.08f;
             SyncZones();
             SyncBackrowCards();
         }
@@ -103,6 +106,8 @@ namespace DuelGenesis.Dueling
         {
             if (_duel == null)
                 _duel = Object.FindFirstObjectByType<DuelGameController>();
+            if (_physicalInput == null)
+                _physicalInput = Object.FindFirstObjectByType<DuelPhysicalInputController>();
 
             if (_table == null)
             {
@@ -122,9 +127,7 @@ namespace DuelGenesis.Dueling
 
             Transform existing = _table.Find("DG Physical Tabletop");
             if (existing != null)
-            {
                 Object.Destroy(existing.gameObject);
-            }
 
             GameObject rootObject = new GameObject("DG Physical Tabletop");
             rootObject.transform.SetParent(_table, false);
@@ -158,59 +161,84 @@ namespace DuelGenesis.Dueling
         {
             for (int i = 0; i < 5; i++)
             {
-                _playerMonsterZones.Add(CreateZone(
-                    DuelTabletopLayout.MonsterZonePosition(i, true), true, DuelTabletopZoneKind.Monster, i, PlayerZoneColor, "P MONSTER"));
-                _cpuMonsterZones.Add(CreateZone(
-                    DuelTabletopLayout.MonsterZonePosition(i, false), false, DuelTabletopZoneKind.Monster, i, CpuZoneColor, "CPU MONSTER"));
-                _playerBackrowZones.Add(CreateZone(
-                    DuelTabletopLayout.BackrowZonePosition(i, true), true, DuelTabletopZoneKind.SpellTrap, i, PlayerZoneColor, "P S/T"));
-                _cpuBackrowZones.Add(CreateZone(
-                    DuelTabletopLayout.BackrowZonePosition(i, false), false, DuelTabletopZoneKind.SpellTrap, i, CpuZoneColor, "CPU S/T"));
+                _playerMonsterZones.Add(CreateZone(DuelTabletopLayout.MonsterZonePosition(i, true), true, DuelTabletopZoneKind.Monster, i, PlayerZoneColor));
+                _cpuMonsterZones.Add(CreateZone(DuelTabletopLayout.MonsterZonePosition(i, false), false, DuelTabletopZoneKind.Monster, i, CpuZoneColor));
+                _playerBackrowZones.Add(CreateZone(DuelTabletopLayout.BackrowZonePosition(i, true), true, DuelTabletopZoneKind.SpellTrap, i, PlayerZoneColor));
+                _cpuBackrowZones.Add(CreateZone(DuelTabletopLayout.BackrowZonePosition(i, false), false, DuelTabletopZoneKind.SpellTrap, i, CpuZoneColor));
             }
 
-            CreateZone(DuelTabletopLayout.DeckPosition(true), true, DuelTabletopZoneKind.Deck, 0, UtilityZoneColor, "DECK");
-            CreateZone(DuelTabletopLayout.GraveyardPosition(true), true, DuelTabletopZoneKind.Graveyard, 0, UtilityZoneColor, "GY");
-            CreateZone(DuelTabletopLayout.DeckPosition(false), false, DuelTabletopZoneKind.Deck, 0, UtilityZoneColor, "DECK");
-            CreateZone(DuelTabletopLayout.GraveyardPosition(false), false, DuelTabletopZoneKind.Graveyard, 0, UtilityZoneColor, "GY");
+            // Player left wing: Field Spell above Extra Deck.
+            CreateZone(DuelTabletopLayout.FieldZonePosition(true), true, DuelTabletopZoneKind.FieldSpell, 0, FieldZoneColor);
+            CreateZone(DuelTabletopLayout.ExtraDeckPosition(true), true, DuelTabletopZoneKind.ExtraDeck, 0, UtilityZoneColor);
+
+            // Player right wing: Graveyard above Main Deck, Banished beside GY.
+            CreateZone(DuelTabletopLayout.GraveyardPosition(true), true, DuelTabletopZoneKind.Graveyard, 0, UtilityZoneColor);
+            CreateZone(DuelTabletopLayout.DeckPosition(true), true, DuelTabletopZoneKind.Deck, 0, UtilityZoneColor);
+            CreateZone(DuelTabletopLayout.BanishedPosition(true), true, DuelTabletopZoneKind.Banished, 0, BanishZoneColor);
+
+            // CPU side is mirrored from its viewpoint.
+            CreateZone(DuelTabletopLayout.FieldZonePosition(false), false, DuelTabletopZoneKind.FieldSpell, 0, FieldZoneColor);
+            CreateZone(DuelTabletopLayout.ExtraDeckPosition(false), false, DuelTabletopZoneKind.ExtraDeck, 0, UtilityZoneColor);
+            CreateZone(DuelTabletopLayout.GraveyardPosition(false), false, DuelTabletopZoneKind.Graveyard, 0, UtilityZoneColor);
+            CreateZone(DuelTabletopLayout.DeckPosition(false), false, DuelTabletopZoneKind.Deck, 0, UtilityZoneColor);
+            CreateZone(DuelTabletopLayout.BanishedPosition(false), false, DuelTabletopZoneKind.Banished, 0, BanishZoneColor);
+
+            // Shared Extra Monster Zone pads.
+            CreateZone(DuelTabletopLayout.ExtraMonsterZonePosition(0), true, DuelTabletopZoneKind.ExtraMonster, 0, ExtraMonsterColor);
+            CreateZone(DuelTabletopLayout.ExtraMonsterZonePosition(1), true, DuelTabletopZoneKind.ExtraMonster, 1, ExtraMonsterColor);
         }
 
-        private DuelTabletopZone CreateZone(
-            Vector3 localPosition,
-            bool playerSide,
-            DuelTabletopZoneKind kind,
-            int index,
-            Color color,
-            string label)
+        private DuelTabletopZone CreateZone(Vector3 localPosition, bool playerSide, DuelTabletopZoneKind kind, int index, Color color)
         {
+            Vector3 scale = ZoneScaleFor(kind);
+            Color baseColor = Color.Lerp(BoardColor, color, 0.22f);
+
             GameObject zoneObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             zoneObject.name = $"{(playerSide ? "Player" : "CPU")} {kind} Zone {index + 1}";
             zoneObject.transform.SetParent(_root, false);
             zoneObject.transform.localPosition = localPosition;
-            zoneObject.transform.localScale = DuelTabletopLayout.ZoneScale;
-            SetMaterial(zoneObject, color, true);
+            zoneObject.transform.localScale = scale;
+            SetMaterial(zoneObject, baseColor, false);
 
             DuelTabletopZone zone = zoneObject.AddComponent<DuelTabletopZone>();
-            zone.Configure(this, playerSide, kind, index, zoneObject.GetComponent<Renderer>(), color);
+            zone.Configure(this, playerSide, kind, index, zoneObject.GetComponent<Renderer>(), baseColor);
 
-            CreateZoneLabel(zoneObject.transform, label);
+            CreateZoneOutline(localPosition, scale, color, kind + " Outline " + index);
             return zone;
         }
 
-        private static void CreateZoneLabel(Transform parent, string label)
+        private static Vector3 ZoneScaleFor(DuelTabletopZoneKind kind)
         {
-            GameObject labelObject = new GameObject("Zone Label");
-            labelObject.transform.SetParent(parent, false);
-            labelObject.transform.localPosition = new Vector3(0f, 0.62f, 0f);
-            labelObject.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-            labelObject.transform.localScale = new Vector3(1.15f, 1.15f, 1.15f);
+            if (kind == DuelTabletopZoneKind.Monster || kind == DuelTabletopZoneKind.SpellTrap)
+                return DuelTabletopLayout.ZoneScale;
+            if (kind == DuelTabletopZoneKind.ExtraMonster)
+                return new Vector3(1.18f, 0.026f, 0.82f);
+            return DuelTabletopLayout.UtilityZoneScale;
+        }
 
-            TextMesh text = labelObject.AddComponent<TextMesh>();
-            text.text = label;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Center;
-            text.characterSize = 0.12f;
-            text.fontSize = 36;
-            text.color = new Color(0.82f, 0.90f, 1f, 0.72f);
+        private void CreateZoneOutline(Vector3 position, Vector3 scale, Color color, string name)
+        {
+            float y = position.y + 0.026f;
+            float edge = 0.045f;
+            float halfX = scale.x * 0.5f;
+            float halfZ = scale.z * 0.5f;
+
+            CreateEdge(name + " Near", new Vector3(position.x, y, position.z - halfZ), new Vector3(scale.x, 0.018f, edge), color);
+            CreateEdge(name + " Far", new Vector3(position.x, y, position.z + halfZ), new Vector3(scale.x, 0.018f, edge), color);
+            CreateEdge(name + " Left", new Vector3(position.x - halfX, y, position.z), new Vector3(edge, 0.018f, scale.z), color);
+            CreateEdge(name + " Right", new Vector3(position.x + halfX, y, position.z), new Vector3(edge, 0.018f, scale.z), color);
+        }
+
+        private void CreateEdge(string name, Vector3 position, Vector3 scale, Color color)
+        {
+            GameObject edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            edge.name = name;
+            edge.transform.SetParent(_root, false);
+            edge.transform.localPosition = position;
+            edge.transform.localScale = scale;
+            Collider collider = edge.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+            SetMaterial(edge, color, true);
         }
 
         private void EnterTabletop()
@@ -307,10 +335,10 @@ namespace DuelGenesis.Dueling
 
             for (int i = 0; i < 5; i++)
             {
-                _playerMonsterZones[i].SetOccupied(i < _duel.PlayerMonsters.Count);
-                _cpuMonsterZones[i].SetOccupied(i < _duel.CpuMonsters.Count);
-                _playerBackrowZones[i].SetOccupied(i < _duel.PlayerBackrow.Count);
-                _cpuBackrowZones[i].SetOccupied(i < _duel.CpuBackrow.Count);
+                _playerMonsterZones[i].SetOccupied(DuelFieldSlotRegistry.IsMonsterSlotOccupied(_duel.PlayerMonsters, true, i));
+                _cpuMonsterZones[i].SetOccupied(DuelFieldSlotRegistry.IsMonsterSlotOccupied(_duel.CpuMonsters, false, i));
+                _playerBackrowZones[i].SetOccupied(DuelFieldSlotRegistry.IsBackrowSlotOccupied(_duel.PlayerBackrow, true, i));
+                _cpuBackrowZones[i].SetOccupied(DuelFieldSlotRegistry.IsBackrowSlotOccupied(_duel.CpuBackrow, false, i));
             }
         }
 
@@ -333,18 +361,19 @@ namespace DuelGenesis.Dueling
         private string BuildBackrowSignature()
         {
             StringBuilder builder = new StringBuilder();
-            AppendBackrowSignature(builder, _duel.PlayerBackrow, 'P');
-            AppendBackrowSignature(builder, _duel.CpuBackrow, 'C');
+            AppendBackrowSignature(builder, _duel.PlayerBackrow, true, 'P');
+            AppendBackrowSignature(builder, _duel.CpuBackrow, false, 'C');
             return builder.ToString();
         }
 
-        private static void AppendBackrowSignature(StringBuilder builder, IReadOnlyList<DuelBackrowState> cards, char side)
+        private static void AppendBackrowSignature(StringBuilder builder, IReadOnlyList<DuelBackrowState> cards, bool playerSide, char side)
         {
             builder.Append(side).Append(':');
             for (int i = 0; i < cards.Count; i++)
             {
                 DuelBackrowState state = cards[i];
-                builder.Append(state.Card.id).Append(state.FaceDown ? 'D' : 'U').Append('|');
+                int slot = DuelFieldSlotRegistry.GetBackrowSlot(state, playerSide, cards);
+                builder.Append(state.Card.id).Append('@').Append(slot).Append(state.FaceDown ? 'D' : 'U').Append('|');
             }
         }
 
@@ -353,6 +382,7 @@ namespace DuelGenesis.Dueling
             for (int i = 0; i < cards.Count && i < 5; i++)
             {
                 DuelBackrowState state = cards[i];
+                int slot = DuelFieldSlotRegistry.GetBackrowSlot(state, playerSide, cards);
                 bool hidden = state.FaceDown;
                 Texture2D texture = hidden
                     ? ProductionCardArtRegistry.LoadCardBack()
@@ -362,8 +392,8 @@ namespace DuelGenesis.Dueling
                 cardObject.name = hidden ? "Face Down Backrow" : "Card - " + state.Card.cardName;
                 cardObject.transform.SetParent(_backrowCardRoot, false);
 
-                Vector3 position = DuelTabletopLayout.BackrowZonePosition(i, playerSide);
-                position.y += 0.035f;
+                Vector3 position = DuelTabletopLayout.BackrowZonePosition(slot, playerSide);
+                position.y += 0.040f;
                 cardObject.transform.localPosition = position;
                 cardObject.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 cardObject.transform.localScale = DuelTabletopLayout.CardScale;
@@ -384,18 +414,23 @@ namespace DuelGenesis.Dueling
             if (!IsTabletopActive || zone == null)
                 return;
 
+            if (_physicalInput == null)
+                _physicalInput = Object.FindFirstObjectByType<DuelPhysicalInputController>();
+
+            if (_physicalInput != null && _physicalInput.ClickZone(zone))
+            {
+                if (_selectedZone != null)
+                    _selectedZone.SetSelected(false);
+                _selectedZone = null;
+                return;
+            }
+
             if (_selectedZone != null && _selectedZone != zone)
                 _selectedZone.SetSelected(false);
 
             bool selecting = _selectedZone != zone;
             _selectedZone = selecting ? zone : null;
             zone.SetSelected(selecting);
-
-            if (selecting)
-            {
-                string side = zone.PlayerSide ? "Player" : "CPU";
-                Debug.Log($"Duel tabletop selected: {side} {zone.Kind} zone {zone.Index + 1}.");
-            }
         }
 
         private static void SetTexturedMaterial(GameObject obj, Texture2D texture, Color tint)
@@ -435,7 +470,7 @@ namespace DuelGenesis.Dueling
             {
                 material.EnableKeyword("_EMISSION");
                 if (material.HasProperty("_EmissionColor"))
-                    material.SetColor("_EmissionColor", color * 0.55f);
+                    material.SetColor("_EmissionColor", color * 1.10f);
             }
             renderer.material = material;
         }
