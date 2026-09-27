@@ -1,10 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Turns the large physical monster-zone boxes into the primary click targets.
-    /// This makes battle selection much easier than trying to click the small hologram/model itself.
+    /// Turns the large physical monster-zone boxes into easy click targets.
+    /// Occupied-zone clicks resolve through DuelFieldSlotRegistry so a monster stays tied
+    /// to the exact slot the player chose instead of its compact-list index.
     /// </summary>
     public sealed class DuelLargeZoneInput : MonoBehaviour
     {
@@ -17,8 +19,13 @@ namespace DuelGenesis.Dueling
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (Object.FindFirstObjectByType<DuelLargeZoneInput>() != null)
+            DuelLargeZoneInput existing = Object.FindFirstObjectByType<DuelLargeZoneInput>(FindObjectsInactive.Include);
+            if (existing != null)
+            {
+                existing.gameObject.SetActive(true);
+                existing.enabled = true;
                 return;
+            }
 
             GameObject host = new GameObject("Duel Large Zone Input");
             host.AddComponent<DuelLargeZoneInput>();
@@ -35,11 +42,16 @@ namespace DuelGenesis.Dueling
                 _duel = Object.FindFirstObjectByType<DuelGameController>();
             if (_input == null)
                 _input = Object.FindFirstObjectByType<DuelPhysicalInputController>();
-            if (_tabletop == null)
+
+            Transform nextTabletop = null;
+            GameObject table = GameObject.Find("Duel Table Prototype");
+            if (table != null)
+                nextTabletop = table.transform.Find("DG Physical Tabletop");
+
+            if (nextTabletop != _tabletop)
             {
-                GameObject table = GameObject.Find("Duel Table Prototype");
-                if (table != null)
-                    _tabletop = table.transform.Find("DG Physical Tabletop");
+                _tabletop = nextTabletop;
+                _wired = false;
             }
 
             if (!_wired && _tabletop != null)
@@ -120,16 +132,21 @@ namespace DuelGenesis.Dueling
             if (_duel == null || _input == null || !_duel.IsActive)
                 return;
 
-            if (_playerSide)
+            IReadOnlyList<DuelMonsterState> states = _playerSide ? _duel.PlayerMonsters : _duel.CpuMonsters;
+            DuelMonsterState monster = MonsterInSlot(states, _playerSide, _index);
+            if (monster != null)
+                _input.ClickMonster(_playerSide, monster);
+        }
+
+        private static DuelMonsterState MonsterInSlot(IReadOnlyList<DuelMonsterState> states, bool playerSide, int slot)
+        {
+            for (int i = 0; states != null && i < states.Count; i++)
             {
-                if (_index < _duel.PlayerMonsters.Count)
-                    _input.ClickMonster(true, _duel.PlayerMonsters[_index]);
+                DuelMonsterState state = states[i];
+                if (state != null && DuelFieldSlotRegistry.GetMonsterSlot(state, playerSide, states) == slot)
+                    return state;
             }
-            else
-            {
-                if (_index < _duel.CpuMonsters.Count)
-                    _input.ClickMonster(false, _duel.CpuMonsters[_index]);
-            }
+            return null;
         }
 
         private void OnMouseEnter()
@@ -139,8 +156,8 @@ namespace DuelGenesis.Dueling
                 return;
 
             Color hover = _playerSide
-                ? new Color(0.10f, 0.90f, 1.00f, 1f)
-                : new Color(1.00f, 0.20f, 0.38f, 1f);
+                ? new Color(0.72f, 0.78f, 0.80f, 1f)
+                : new Color(0.72f, 0.78f, 0.80f, 1f);
             SetColor(hover);
         }
 
@@ -161,7 +178,7 @@ namespace DuelGenesis.Dueling
             if (material.HasProperty("_Color"))
                 material.SetColor("_Color", color);
             if (material.HasProperty("_EmissionColor"))
-                material.SetColor("_EmissionColor", color * 1.5f);
+                material.SetColor("_EmissionColor", color * 0.55f);
         }
     }
 }
