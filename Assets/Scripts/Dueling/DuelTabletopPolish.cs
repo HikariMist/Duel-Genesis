@@ -4,8 +4,7 @@ namespace DuelGenesis.Dueling
 {
     /// <summary>
     /// Final layout/presentation cleanup for the physical duel table.
-    /// Keeps the mat visually simple, adds a real tabletop frame, and positions
-    /// both hands where the duel camera can actually see them.
+    /// Keeps the mat visually simple and scales the table frame with the active board layout.
     /// </summary>
     public sealed class DuelTabletopPolish : MonoBehaviour
     {
@@ -69,26 +68,33 @@ namespace DuelGenesis.Dueling
 
             Transform existing = _tabletop.Find("DG Table Frame");
             if (existing != null)
-            {
-                _surfaceBuilt = true;
-                return;
-            }
+                Object.Destroy(existing.gameObject);
+
+            float boardWidth = DuelTabletopLayout.BoardScale.x;
+            float boardDepth = DuelTabletopLayout.BoardScale.z;
+            float railOffsetX = boardWidth * 0.5f + 0.08f;
+            float railOffsetZ = boardDepth * 0.5f + 0.08f;
 
             GameObject frame = GameObject.CreatePrimitive(PrimitiveType.Cube);
             frame.name = "DG Table Frame";
             frame.transform.SetParent(_tabletop, false);
-            frame.transform.localPosition = new Vector3(0f, DuelTabletopLayout.BoardSurfaceY - 0.09f, 0f);
-            frame.transform.localScale = new Vector3(
-                DuelTabletopLayout.BoardScale.x + 0.30f,
-                0.14f,
-                DuelTabletopLayout.BoardScale.z + 0.30f);
+            frame.transform.localPosition = new Vector3(0f, DuelTabletopLayout.BoardSurfaceY - 0.10f, 0f);
+            frame.transform.localScale = new Vector3(boardWidth + 0.36f, 0.16f, boardDepth + 0.36f);
             RemoveCollider(frame);
             SetMaterial(frame, new Color(0.055f, 0.048f, 0.060f, 1f));
 
-            CreateRail("Near Rail", new Vector3(0f, DuelTabletopLayout.BoardSurfaceY + 0.025f, -2.58f), new Vector3(6.65f, 0.10f, 0.10f));
-            CreateRail("Far Rail", new Vector3(0f, DuelTabletopLayout.BoardSurfaceY + 0.025f, 2.58f), new Vector3(6.65f, 0.10f, 0.10f));
-            CreateRail("Left Rail", new Vector3(-3.28f, DuelTabletopLayout.BoardSurfaceY + 0.025f, 0f), new Vector3(0.10f, 0.10f, 5.08f));
-            CreateRail("Right Rail", new Vector3(3.28f, DuelTabletopLayout.BoardSurfaceY + 0.025f, 0f), new Vector3(0.10f, 0.10f, 5.08f));
+            CreateRail("Near Rail",
+                new Vector3(0f, DuelTabletopLayout.BoardSurfaceY + 0.028f, -railOffsetZ),
+                new Vector3(boardWidth + 0.34f, 0.11f, 0.12f));
+            CreateRail("Far Rail",
+                new Vector3(0f, DuelTabletopLayout.BoardSurfaceY + 0.028f, railOffsetZ),
+                new Vector3(boardWidth + 0.34f, 0.11f, 0.12f));
+            CreateRail("Left Rail",
+                new Vector3(-railOffsetX, DuelTabletopLayout.BoardSurfaceY + 0.028f, 0f),
+                new Vector3(0.12f, 0.11f, boardDepth + 0.34f));
+            CreateRail("Right Rail",
+                new Vector3(railOffsetX, DuelTabletopLayout.BoardSurfaceY + 0.028f, 0f),
+                new Vector3(0.12f, 0.11f, boardDepth + 0.34f));
 
             _surfaceBuilt = true;
         }
@@ -109,18 +115,16 @@ namespace DuelGenesis.Dueling
             if (_table == null)
                 return;
 
+            // Player hand is rendered in screen-space now; keep the old 3D hand hidden.
             Transform playerHand = _table.Find("DG Physical Player Hand");
             if (playerHand != null)
-            {
-                playerHand.localPosition = new Vector3(0f, 0.30f, -0.48f);
-                playerHand.localScale = Vector3.one * 1.10f;
-            }
+                playerHand.gameObject.SetActive(false);
 
             Transform cpuHand = _table.Find("DG Physical CPU Hand");
             if (cpuHand != null)
             {
-                cpuHand.localPosition = new Vector3(0f, 0.18f, 0.42f);
-                cpuHand.localScale = Vector3.one;
+                cpuHand.localPosition = new Vector3(0f, 0.18f, 1.00f);
+                cpuHand.localScale = Vector3.one * 1.08f;
             }
         }
 
