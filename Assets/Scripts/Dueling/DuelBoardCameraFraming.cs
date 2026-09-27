@@ -3,9 +3,9 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Late-frame camera framing for the solid Master-Duel-style table.
-    /// The angle is intentionally high enough to read the field but low enough
-    /// to show the table body, raised rails and supports as real 3D geometry.
+    /// Late-frame camera framing for the solid duel table.
+    /// The view stays readable for card play while showing enough of the table body
+    /// and front legs that the duel clearly takes place on a real piece of furniture.
     /// </summary>
     [DefaultExecutionOrder(10000)]
     public sealed class DuelBoardCameraFraming : MonoBehaviour
@@ -36,7 +36,7 @@ namespace DuelGenesis.Dueling
 
             _camera.transform.position = position;
             _camera.transform.rotation = Quaternion.LookRotation(target - position, up);
-            _camera.fieldOfView = 42f;
+            _camera.fieldOfView = 45f;
         }
 
         private void Resolve()
