@@ -25,6 +25,12 @@ namespace DuelGenesis.Core
             if (_applied) return;
             _applied = true;
 
+            if (GameObject.Find("DG City") != null)
+            {
+                ApplyCityAtmosphere();
+                return;
+            }
+
             RenderSettings.ambientLight = new Color(0.12f, 0.15f, 0.23f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
@@ -52,6 +58,28 @@ namespace DuelGenesis.Core
 
             BuildGenesisPlazaDecor();
             AddAccentLights();   // the duel table builds its own mat, zones and lighting (DuelBoardView)
+        }
+
+        /// <summary>Genesis City (Akihabara map) is in the scene: dusk sky, long-range haze, neon accents kept.</summary>
+        private static void ApplyCityAtmosphere()
+        {
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.55f, 0.47f, 0.52f, 1f);
+            RenderSettings.fogStartDistance = 70f;
+            RenderSettings.fogEndDistance = 480f;
+
+            Camera camera = Camera.main;
+            if (camera != null)
+            {
+                camera.clearFlags = RenderSettings.skybox != null ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
+                camera.farClipPlane = Mathf.Max(camera.farClipPlane, 900f);
+            }
+
+            Colorize("Pack Terminal - 1000 GC", Purple, true);
+            Colorize("Seat Interaction", new Color(0.10f, 0.16f, 0.22f, 1f));
+            BuildGenesisPlazaDecor(true);
+            AddAccentLights();
         }
 
         private static void Colorize(string objectName, Color color, bool emission = false)
@@ -93,7 +121,7 @@ namespace DuelGenesis.Core
             return material;
         }
 
-        private static void BuildGenesisPlazaDecor()
+        private static void BuildGenesisPlazaDecor(bool city = false)
         {
             if (GameObject.Find("DG Genesis Plaza Decor") != null)
                 return;
@@ -114,9 +142,19 @@ namespace DuelGenesis.Core
             CreatePylon(root.transform, "Arena Pylon A", new Vector3(3.4f, 0f, -1.1f), Cyan);
             CreatePylon(root.transform, "Arena Pylon B", new Vector3(8.8f, 0f, -1.1f), Magenta);
 
-            CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 4.15f, -0.62f), Purple, 0.42f);
-            CreateSign(root.transform, "NEON DUEL TABLE", new Vector3(6f, 3.15f, 0f), Cyan, 0.36f);
-            CreateSign(root.transform, "GENESIS CITY // PROTOTYPE DISTRICT", new Vector3(0f, 0.08f, 7.8f), Mint, 0.31f, new Vector3(90f, 0f, 0f));
+            if (city)
+            {
+                // Real-world sized signage for the Genesis City hub (letters ~25-40 cm tall).
+                CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 2.75f, 0.85f), Purple, 0.06f);
+                CreateSign(root.transform, "DUEL TABLE", new Vector3(6f, 2.55f, 3.6f), Cyan, 0.05f);
+                CreateSign(root.transform, "GENESIS CITY", new Vector3(0f, 0.03f, 7.8f), Mint, 0.07f, new Vector3(90f, 0f, 0f));
+            }
+            else
+            {
+                CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 4.15f, -0.62f), Purple, 0.42f);
+                CreateSign(root.transform, "NEON DUEL TABLE", new Vector3(6f, 3.15f, 0f), Cyan, 0.36f);
+                CreateSign(root.transform, "GENESIS CITY // PROTOTYPE DISTRICT", new Vector3(0f, 0.08f, 7.8f), Mint, 0.31f, new Vector3(90f, 0f, 0f));
+            }
 
             // Small glowing kiosks imply a larger future city without needing external art assets yet.
             CreateKiosk(root.transform, "Collection Kiosk", new Vector3(-2.8f, 0.6f, 5.8f), Cyan);

@@ -31,6 +31,9 @@ namespace DuelGenesis.Core
             if (playerObject.GetComponent<DuelistProfile>() == null)
                 playerObject.AddComponent<DuelistProfile>();
 
+            if (playerObject.GetComponent<GenesisAvatarDriver>() == null)
+                playerObject.AddComponent<GenesisAvatarDriver>();
+
             GameObject systems = GameObject.Find("Genesis Runtime Systems");
             if (systems == null)
                 systems = new GameObject("Genesis Runtime Systems");
