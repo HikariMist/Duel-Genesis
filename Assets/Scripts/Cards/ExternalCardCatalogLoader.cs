@@ -151,6 +151,7 @@ namespace DuelGenesis.Cards
     public class ExternalCardCatalogLoader : MonoBehaviour
     {
         public const string CatalogFileName = "duel_genesis_cards.json";
+        private const string ExcludedCardName = "Tricky Token";
         public int LoadedCardCount { get; private set; }
 
         private void Awake()
@@ -162,6 +163,7 @@ namespace DuelGenesis.Cards
         {
             CardDatabase.Clear();
             CardModelRegistry.ClearRegistrations();
+            ProductionCardArtRegistry.ClearCaches();
             LoadedCardCount = 0;
 
             string path = Path.Combine(Application.streamingAssetsPath, CatalogFileName);
@@ -186,6 +188,8 @@ namespace DuelGenesis.Cards
                 {
                     if (record == null || string.IsNullOrWhiteSpace(record.id))
                         continue;
+                    if (string.Equals(record.cardName?.Trim(), ExcludedCardName, StringComparison.OrdinalIgnoreCase))
+                        continue;
 
                     CardData card = record.ToCardData();
                     CardDatabase.RegisterProductionCard(card);
@@ -194,7 +198,7 @@ namespace DuelGenesis.Cards
                 }
 
                 LoadedCardCount = registered;
-                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production cards. Prototype cards are disabled.");
+                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production cards. Prototype cards and Tricky Token are disabled.");
             }
             catch (Exception exception)
             {
