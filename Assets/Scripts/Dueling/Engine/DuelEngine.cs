@@ -138,10 +138,24 @@ namespace DuelGenesis.Dueling
 
             SetPhase(DuelPhase.Draw);
             bool skipDraw = TurnNumber == 1;   // the player going first does not draw on turn 1
+            if (!skipDraw && Duelists[player].SkipDraws > 0)
+            {
+                Duelists[player].SkipDraws--;
+                skipDraw = true;
+                Raise(DuelEventType.PhaseChanged, player, text: $"{Duelists[player].Name} skips the Draw Phase.");
+            }
             if (!skipDraw && !Draw(player, 1))
                 return;
 
             SetPhase(DuelPhase.Standby);
+            foreach (DuelistState d in Duelists)
+            foreach (DuelBackrowState s in d.AllBackrow.ToList())
+            {
+                if (IsOver) return;
+                if (s.FaceDown || !s.Card.OnField) continue;
+                CardEffects.Get(s.Card.Data)?.OnStandby(this, s, player);
+            }
+            if (IsOver) return;
             SetPhase(DuelPhase.Main1);
         }
 
@@ -236,10 +250,26 @@ namespace DuelGenesis.Dueling
             FinishEndPhase();
         }
 
+        private readonly List<Action> _endPhaseActions = new();
+
+        /// <summary>Schedules something for this turn's End Phase ("destroy it during the End Phase").</summary>
+        public void AtEndPhase(Action action)
+        {
+            if (action != null) _endPhaseActions.Add(action);
+        }
+
         private void FinishEndPhase()
         {
             if (IsOver) return;
             int ending = TurnPlayer;
+
+            List<Action> scheduled = _endPhaseActions.ToList();
+            _endPhaseActions.Clear();
+            foreach (Action action in scheduled)
+            {
+                if (IsOver) return;
+                action();
+            }
 
             // "Until the end of this turn" effects expire.
             foreach (DuelistState d in Duelists)
@@ -478,6 +508,17 @@ namespace DuelGenesis.Dueling
             MoveToList(card, DuelZone.Deck, bottom);
             if (shuffle) ShuffleDeck(card.Owner);
             Raise(DuelEventType.ReturnedToDeck, card.Owner, card, text: $"{card.Name} was returned to the Deck.");
+        }
+
+        /// <summary>Adds a card from the Deck, Graveyard or banishment to its owner's hand (searches, salvages).</summary>
+        public void AddToHand(DuelCard card, DuelCard cause)
+        {
+            if (card == null || card.Zone == DuelZone.Hand) return;
+            if (card.IsExtraDeckCard) { MoveToList(card, DuelZone.ExtraDeck); return; }
+            DuelZone from = card.Zone;
+            MoveToList(card, DuelZone.Hand);
+            string where = from == DuelZone.Deck ? "Deck" : from == DuelZone.Graveyard ? "Graveyard" : from.ToString();
+            Raise(DuelEventType.ReturnedToHand, card.Owner, card, cause, text: $"{Duelists[card.Owner].Name} added {card.Name} from the {where} to the hand.");
         }
 
         public void Discard(DuelCard card)
@@ -1002,7 +1043,19 @@ namespace DuelGenesis.Dueling
         {
             return !IsBusy && player == TurnPlayer && Phase == DuelPhase.Battle && Step == BattleStep.Battle &&
                    m != null && m.Card.Controller == player && m.IsAttackPosition && !m.HasAttacked &&
-                   !m.CannotAttackThisTurn && !OpponentCannotAttack(player) && !IsLockedBySpell(m);
+                   !m.CannotAttackThisTurn && !OpponentCannotAttack(player) && !IsLockedBySpell(m) && !ForbiddenToAttack(m);
+        }
+
+        /// <summary>Face-up cards on either side that stop this particular monster attacking.</summary>
+        public bool ForbiddenToAttack(DuelMonsterState m)
+        {
+            foreach (DuelistState d in Duelists)
+            foreach (DuelBackrowState s in d.AllBackrow)
+            {
+                if (s.FaceDown) continue;
+                if (CardEffects.Get(s.Card.Data)?.ForbidsAttack(this, s, m) == true) return true;
+            }
+            return false;
         }
 
         public bool IsLockedBySpell(DuelMonsterState m)

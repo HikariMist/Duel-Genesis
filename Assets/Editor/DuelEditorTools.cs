@@ -28,6 +28,20 @@ namespace DuelGenesis.EditorTools
             }
         }
 
+        [MenuItem("Duel Genesis/Rules/Test Spell & Trap Library (every card + 100 CPU duels)")]
+        public static void RunCardLibraryTest()
+        {
+            string json = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, DuelGenesis.Cards.ExternalCardCatalogLoader.CatalogFileName));
+            var catalog = JsonUtility.FromJson<DuelGenesis.Cards.ExternalCardCatalog>(json).cards
+                .Select(r => r.ToCardData()).Where(c => c != null).ToList();
+            CardLibrarySelfTest.Report report = CardLibrarySelfTest.Run(catalog, 100);
+            string text = report.ToString() + "\nCards the CPU activated in duels:\n" + string.Join(", ", report.UsedInDuels.OrderBy(n => n));
+            Directory.CreateDirectory("Logs");
+            File.WriteAllText("Logs/DG-CardLibraryTest.txt", text);
+            if (report.Passed) Debug.Log("Duel: Genesis Spell/Trap library test PASS\n" + text);
+            else Debug.LogError("Duel: Genesis Spell/Trap library test FAILED\n" + text);
+        }
+
         /// <summary>Deletes (with their .meta files) scripts that were emptied by the duel rebuild.</summary>
         [MenuItem("Duel Genesis/Maintenance/Remove Legacy Duel Scripts")]
         public static void RemoveLegacyScripts()

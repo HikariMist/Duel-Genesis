@@ -46,6 +46,9 @@ namespace DuelGenesis.UI
                 _wallet.Add(50000);
                 Debug.Log("DEV TEST: Added 50,000 GC.");
             }
+            if (keyboard != null && keyboard.f10Key.wasPressedThisFrame && _collection != null &&
+                (_mainMenu == null || !_mainMenu.IsOpen))
+                _collection.GrantEveryCard(3);
 #endif
 
             if ((_mainMenu != null && _mainMenu.IsOpen) ||
@@ -108,7 +111,7 @@ namespace DuelGenesis.UI
 
 #if UNITY_EDITOR
             const float hudHeight = 204f;
-            string devLine = "\n[F9] DEV: +50,000 GC";
+            string devLine = "\nDEV: [F9] +50,000 GC  [F10] every card x3";
 #else
             const float hudHeight = 180f;
             string devLine = string.Empty;

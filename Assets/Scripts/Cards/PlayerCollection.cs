@@ -59,6 +59,32 @@ namespace DuelGenesis.Cards
             Debug.Log($"Added {amount}x {card.cardName} to collection. Owned: {entry.quantity}");
         }
 
+        /// <summary>Tops every card in the catalog up to <paramref name="copies"/> (Tokens excluded). Returns cards added.</summary>
+        public int GrantEveryCard(int copies = 3)
+        {
+            int added = 0;
+            foreach (CardData card in CardDatabase.All)
+            {
+                if (card == null || card.ResolvedFrameKind == CardFrameKind.Token) continue;
+                CollectionEntry entry = cards.FirstOrDefault(e => e.cardId == card.id);
+                if (entry == null)
+                {
+                    entry = new CollectionEntry(card.id, 0);
+                    cards.Add(entry);
+                }
+                if (entry.quantity >= copies) continue;
+                added += copies - entry.quantity;
+                entry.quantity = copies;
+            }
+            if (added > 0)
+            {
+                Save();
+                CollectionChanged?.Invoke();
+            }
+            Debug.Log($"Duel: Genesis granted {added} cards — the collection now has every card ({CardDatabase.All.Count}) at {copies}+ copies.");
+            return added;
+        }
+
         public int GetQuantity(string cardId)
         {
             CollectionEntry entry = cards.FirstOrDefault(e => e.cardId == cardId);

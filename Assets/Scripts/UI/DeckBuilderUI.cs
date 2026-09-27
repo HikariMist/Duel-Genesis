@@ -80,6 +80,7 @@ namespace DuelGenesis.UI
                     else if ((_packOpening == null || !_packOpening.IsOpen) && (_duel == null || !_duel.IsActive)) Open();
                 }
                 if (_open && keyboard.escapeKey.wasPressedThisFrame) Close();
+                if (_open && !typing && keyboard.f5Key.wasPressedThisFrame) AutoBuild();
             }
 
             if (!_open) return;
@@ -87,6 +88,15 @@ namespace DuelGenesis.UI
             StreamFaces();
             if (_toastText != null)
                 _toastText.color = new Color(1f, 1f, 1f, Mathf.Clamp01((_toastUntil - Time.unscaledTime) * 2f));
+        }
+
+        private void AutoBuild()
+        {
+            if (_deck == null || _collection == null) return;
+            int count = _deck.AutoBuild(_collection);
+            int spells = _deck.Entries.Where(e => e != null).Sum(e => CardDatabase.GetById(e.cardId)?.kind == CardKind.Monster ? 0 : e.quantity);
+            Toast(count >= PlayerDeck.MinimumDeckSize ? $"Auto-built a {count}-card deck ({spells} Spells/Traps)." : $"Only {count} usable cards — open more packs.");
+            _dirty = true;
         }
 
         private void ResolveSystems()
@@ -330,7 +340,7 @@ namespace DuelGenesis.UI
             canvasGo.transform.SetParent(transform, false);
             _canvas = canvasGo.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 90;
+            _canvas.sortingOrder = 500;   // above every other overlay (HUDs, menus)
             CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
@@ -366,12 +376,7 @@ namespace DuelGenesis.UI
             }, 17);
             UiKit.Place((RectTransform)_sortButton.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x + 8f, -24f), new Vector2(170f, 40f));
 
-            Button auto = UiKit.Button(_root, "Auto", "AUTO BUILD", DuelVisualResources.Gold, () =>
-            {
-                int count = _deck.AutoBuild(_collection);
-                Toast(count >= PlayerDeck.MinimumDeckSize ? $"Auto-built a {count}-card deck." : $"Only {count} usable cards — open more packs.");
-                _dirty = true;
-            }, 17);
+            Button auto = UiKit.Button(_root, "Auto", "AUTO BUILD", DuelVisualResources.Gold, AutoBuild, 17);
             UiKit.Place((RectTransform)auto.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-236f, -24f), new Vector2(150f, 40f));
             Button clear = UiKit.Button(_root, "Clear", "CLEAR", DuelVisualResources.Magenta, () => { _deck.Clear(); _dirty = true; }, 17);
             UiKit.Place((RectTransform)clear.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-124f, -24f), new Vector2(104f, 40f));
@@ -394,7 +399,7 @@ namespace DuelGenesis.UI
             grid.constraintCount = 6;
             _collectionContent.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            Text help = UiKit.Label(_root, "Help", "Click a card to add it  •  right-click adds a playset  •  click a deck card to remove it (right-click removes all)  •  hover to inspect  •  B / ESC closes", 15, UiKit.MutedText, TextAnchor.MiddleLeft);
+            Text help = UiKit.Label(_root, "Help", "Click a card to add it  •  right-click adds a playset  •  click a deck card to remove it (right-click removes all)  •  hover to inspect  •  F5 auto-builds  •  B / ESC closes", 15, UiKit.MutedText, TextAnchor.MiddleLeft);
             UiKit.Place(help.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(32f, 22f), new Vector2(1300f, 30f));
 
             // ---------- inspector (middle)

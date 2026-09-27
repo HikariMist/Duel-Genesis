@@ -221,7 +221,23 @@ namespace DuelGenesis.Cards
                 var p = backrow.FirstOrDefault(x => x.card.cardName == name);
                 if (p.card != null) backrowCount += Add(p.card, 1);
             }
-            foreach (var p in backrow.OrderByDescending(x => x.card.rarity).ThenBy(x => x.card.cardName))
+            // Skip support cards whose named monsters aren't in the deck ("Sage's Stone" without Dark Magician
+            // Girl) and Ritual Spells (their Ritual Monsters can't be Normal Summoned, so the deck lacks them).
+            var deckNames = new HashSet<string>(mainDeck.Where(e => e != null && e.quantity > 0)
+                .Select(e => CardDatabase.GetById(e.cardId)?.cardName).Where(n => n != null));
+            bool Playable(CardData c)
+            {
+                if (c.typeLine == "Ritual") return false;
+                foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(c.effectText ?? string.Empty, "\"([^\"]+)\""))
+                {
+                    string named = m.Groups[1].Value;
+                    if (named == c.cardName) continue;
+                    CardData referenced = CardDatabase.All.FirstOrDefault(x => x.cardName == named);
+                    if (referenced != null && referenced.kind == CardKind.Monster && !deckNames.Contains(named)) return false;
+                }
+                return true;
+            }
+            foreach (var p in backrow.Where(x => Playable(x.card)).OrderByDescending(x => x.card.rarity).ThenBy(x => x.card.cardName))
             {
                 if (MainDeckCount >= MinimumDeckSize) break;
                 backrowCount += Add(p.card, Mathf.Min(2, MinimumDeckSize - MainDeckCount));

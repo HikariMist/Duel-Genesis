@@ -145,6 +145,7 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState EquippedTo;
         public DuelMonsterState LinkedMonster;   // Call of the Haunted, Spellbinding Circle, Premature Burial
         public int TurnsRemaining;               // Swords of Revealing Light
+        public int Counter;                      // generic per-card counter (turns passed, stored value...)
         public bool Resolving;                   // a Normal Spell/Trap on the field only while it resolves
 
         public string Name => Card.Name;
@@ -176,6 +177,7 @@ namespace DuelGenesis.Dueling
 
         public bool NormalSummonUsed;
         public bool CannotAttackThisTurn;     // Threatening Roar, Negate Attack
+        public int SkipDraws;                  // Reckless Greed, Time Seal, Offerings to the Doomed
 
         public DuelistState(int index, string name)
         {

@@ -24,6 +24,10 @@ namespace DuelGenesis.Dueling
         public readonly List<DuelCard> Targets = new();
         public DuelBackrowState Source;
         public Action Done;
+        /// <summary>Whatever a cost paid with (the Tributed / discarded card), for effects that depend on it.</summary>
+        public DuelCard Paid;
+        /// <summary>A number chosen or paid as a cost (Life Points paid, option picked...).</summary>
+        public int Value;
 
         public EffectContext(DuelEngine engine, int player, DuelCard card, DuelTrigger trigger)
         {
@@ -62,6 +66,10 @@ namespace DuelGenesis.Dueling
         public virtual int AttackModifier(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster) => 0;
         public virtual int DefenseModifier(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster) => 0;
         public virtual bool PreventsOpponentAttacks(DuelEngine engine, DuelBackrowState source) => false;
+        /// <summary>Face-up card that forbids a specific monster (either side) from attacking (Gravity Bind, Messenger of Peace...).</summary>
+        public virtual bool ForbidsAttack(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster) => false;
+        /// <summary>Called for every face-up Spell/Trap during each Standby Phase (either player's).</summary>
+        public virtual void OnStandby(DuelEngine engine, DuelBackrowState source, int turnPlayer) { }
         public virtual void OnLeaveField(DuelEngine engine, DuelBackrowState source) { }
         public virtual void OnSentToGraveyardFromField(DuelEngine engine, DuelCard card) { }
 
@@ -146,6 +154,7 @@ namespace DuelGenesis.Dueling
         {
             if (card == null || card.kind == CardKind.Monster) return null;
             if (Named.TryGetValue(card.cardName, out CardEffect effect)) return effect;
+            if (CardEffectLibrary.TryGet(card.cardName, out effect)) return effect;
             if (Parsed.TryGetValue(card.cardName, out effect)) return effect;
             if (Unparseable.Contains(card.cardName)) return null;
 
