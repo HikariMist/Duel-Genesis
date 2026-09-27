@@ -4,7 +4,6 @@ namespace DuelGenesis.Dueling
 {
     /// <summary>
     /// Shared local-space measurements for the physical Duel: Genesis tabletop.
-    /// The values intentionally line up with the existing hologram visualizer.
     /// </summary>
     public static class DuelTabletopLayout
     {
@@ -47,7 +46,9 @@ namespace DuelGenesis.Dueling
             return new Vector3(-2.18f, BoardSurfaceY + 0.04f, playerSide ? -1.08f : 1.08f);
         }
 
-        public static Vector3 CameraLocalPosition => new Vector3(0f, 7.10f, -5.30f);
-        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, BoardSurfaceY, 0.05f);
+        // Higher and slightly more overhead so the player's physical hand and the
+        // opponent's complete side of the field are both visible at once.
+        public static Vector3 CameraLocalPosition => new Vector3(0f, 7.80f, -4.40f);
+        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, BoardSurfaceY, 0.12f);
     }
 }
