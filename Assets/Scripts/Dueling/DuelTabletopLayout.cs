@@ -21,6 +21,10 @@ namespace DuelGenesis.Dueling
         public const float PlayerBackrowZ = -2.12f;
         public const float CpuBackrowZ = 2.12f;
 
+        // Utility pads sit a little above their recessed physical trays so their glowing
+        // outlines stay visible and clickable instead of being buried by the bay hardware.
+        private const float UtilitySurfaceY = BoardSurfaceY + 0.135f;
+
         // The center arena is only slightly wider than the version the user approved.
         // Side-wing housings extend beyond this footprint for Deck / Extra Deck / etc.
         public static readonly Vector3 BoardScale = new Vector3(9.70f, 0.045f, 6.90f);
@@ -44,45 +48,42 @@ namespace DuelGenesis.Dueling
                 playerSide ? PlayerBackrowZ : CpuBackrowZ);
         }
 
-        // From the PLAYER'S viewpoint:
-        // left side = Field Zone above Extra Deck.
+        // From the PLAYER'S viewpoint: left side = Field Zone above Extra Deck.
         public static Vector3 FieldZonePosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(-5.35f, BoardSurfaceY + 0.055f, -0.98f)
-                : new Vector3(5.35f, BoardSurfaceY + 0.055f, 0.98f);
+                ? new Vector3(-5.35f, UtilitySurfaceY, -0.98f)
+                : new Vector3(5.35f, UtilitySurfaceY, 0.98f);
         }
 
         public static Vector3 ExtraDeckPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(-5.35f, BoardSurfaceY + 0.055f, -2.38f)
-                : new Vector3(5.35f, BoardSurfaceY + 0.055f, 2.38f);
+                ? new Vector3(-5.35f, UtilitySurfaceY, -2.38f)
+                : new Vector3(5.35f, UtilitySurfaceY, 2.38f);
         }
 
-        // From the PLAYER'S viewpoint:
-        // right side = Graveyard above Main Deck.
+        // From the PLAYER'S viewpoint: right side = Graveyard above Main Deck.
         public static Vector3 GraveyardPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(5.35f, BoardSurfaceY + 0.055f, -0.98f)
-                : new Vector3(-5.35f, BoardSurfaceY + 0.055f, 0.98f);
+                ? new Vector3(5.35f, UtilitySurfaceY, -0.98f)
+                : new Vector3(-5.35f, UtilitySurfaceY, 0.98f);
         }
 
         public static Vector3 DeckPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(5.35f, BoardSurfaceY + 0.055f, -2.38f)
-                : new Vector3(-5.35f, BoardSurfaceY + 0.055f, 2.38f);
+                ? new Vector3(5.35f, UtilitySurfaceY, -2.38f)
+                : new Vector3(-5.35f, UtilitySurfaceY, 2.38f);
         }
 
-        // Banished cards are kept next to the Graveyard. This small outer tray is
-        // intentionally offset farther from the central play surface.
+        // Banished cards sit next to the Graveyard in a smaller outer pocket.
         public static Vector3 BanishedPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(6.52f, BoardSurfaceY + 0.055f, -0.98f)
-                : new Vector3(-6.52f, BoardSurfaceY + 0.055f, 0.98f);
+                ? new Vector3(6.52f, UtilitySurfaceY, -0.98f)
+                : new Vector3(-6.52f, UtilitySurfaceY, 0.98f);
         }
 
         // Shared Extra Monster Zones between the two Main Monster rows.
