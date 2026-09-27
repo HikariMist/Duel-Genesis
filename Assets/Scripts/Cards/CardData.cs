@@ -29,7 +29,8 @@ namespace DuelGenesis.Cards
         Common = 0,
         Rare = 1,
         SuperRare = 2,
-        UltraRare = 3
+        UltraRare = 3,
+        SecretRare = 4
     }
 
     [Serializable]
@@ -103,6 +104,7 @@ namespace DuelGenesis.Cards
             CardRarity.Rare => "RARE",
             CardRarity.SuperRare => "SUPER RARE",
             CardRarity.UltraRare => "ULTRA RARE",
+            CardRarity.SecretRare => "SECRET RARE",
             _ => rarity.ToString().ToUpperInvariant()
         };
 
