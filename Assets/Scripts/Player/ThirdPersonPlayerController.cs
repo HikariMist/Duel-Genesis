@@ -25,13 +25,17 @@ namespace DuelGenesis.Player
 
         private void Update()
         {
-            ApplyGravityAndJump();
-
+            // When movement is disabled (title screen, sitting at the duel table, etc.)
+            // the CharacterController must stay exactly where it was placed. The old
+            // implementation kept applying gravity here and could pull the player down
+            // through a table while the duel camera was active.
             if (!_movementEnabled)
             {
-                _controller.Move(Vector3.up * _verticalVelocity * Time.deltaTime);
+                _verticalVelocity = 0f;
                 return;
             }
+
+            ApplyGravityAndJump();
 
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return;
@@ -69,7 +73,7 @@ namespace DuelGenesis.Player
                 _verticalVelocity = -2f;
 
             Keyboard keyboard = Keyboard.current;
-            if (_movementEnabled && _controller.isGrounded && keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
+            if (_controller.isGrounded && keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
                 _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
             _verticalVelocity += gravity * Time.deltaTime;
@@ -78,6 +82,8 @@ namespace DuelGenesis.Player
         public void SetMovementEnabled(bool enabled)
         {
             _movementEnabled = enabled;
+            if (!enabled)
+                _verticalVelocity = 0f;
         }
 
         public void Teleport(Vector3 position, Quaternion rotation)
