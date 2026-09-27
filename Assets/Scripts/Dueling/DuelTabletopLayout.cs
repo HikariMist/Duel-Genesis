@@ -11,19 +11,20 @@ namespace DuelGenesis.Dueling
         public const float BoardSurfaceY = 1.43f;
         public const float HologramBaseY = 1.54f;
 
-        public const float ZoneStartX = -2.80f;
-        public const float ZoneSpacing = 1.40f;
+        public const float ZoneStartX = -3.10f;
+        public const float ZoneSpacing = 1.55f;
 
-        public const float PlayerMonsterZ = -0.76f;
-        public const float CpuMonsterZ = 0.76f;
-        public const float PlayerBackrowZ = -2.05f;
-        public const float CpuBackrowZ = 2.05f;
+        public const float PlayerMonsterZ = -0.82f;
+        public const float CpuMonsterZ = 0.82f;
+        public const float PlayerBackrowZ = -2.28f;
+        public const float CpuBackrowZ = 2.28f;
 
-        // Large, easy-to-click zones. The board deliberately leaves generous margins
-        // around all ten main zones for deck/GY piles and targeting feedback.
-        public static readonly Vector3 BoardScale = new Vector3(8.50f, 0.045f, 6.35f);
-        public static readonly Vector3 ZoneScale = new Vector3(1.12f, 0.025f, 1.04f);
-        public static readonly Vector3 CardScale = new Vector3(0.68f, 0.96f, 1f);
+        // Large, easy-to-click zones with generous spacing. This is intentionally
+        // much larger than the original prototype table so the board reads clearly
+        // from the overhead duel camera.
+        public static readonly Vector3 BoardScale = new Vector3(9.40f, 0.045f, 6.90f);
+        public static readonly Vector3 ZoneScale = new Vector3(1.25f, 0.028f, 1.12f);
+        public static readonly Vector3 CardScale = new Vector3(0.74f, 1.04f, 1f);
 
         public static Vector3 MonsterZonePosition(int index, bool playerSide)
         {
@@ -43,16 +44,17 @@ namespace DuelGenesis.Dueling
 
         public static Vector3 DeckPosition(bool playerSide)
         {
-            return new Vector3(3.75f, BoardSurfaceY + 0.055f, playerSide ? -2.05f : 2.05f);
+            return new Vector3(4.18f, BoardSurfaceY + 0.055f, playerSide ? -2.28f : 2.28f);
         }
 
         public static Vector3 GraveyardPosition(bool playerSide)
         {
-            return new Vector3(-3.75f, BoardSurfaceY + 0.055f, playerSide ? -2.05f : 2.05f);
+            return new Vector3(-4.18f, BoardSurfaceY + 0.055f, playerSide ? -2.28f : 2.28f);
         }
 
-        // Almost top-down, with a small forward offset so depth and hologram height remain visible.
-        public static Vector3 CameraLocalPosition => new Vector3(0f, 12.80f, -1.15f);
-        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, BoardSurfaceY, 0.12f);
+        // Keep the camera closer than the previous pass so enlarging the board is
+        // actually visible on screen instead of being cancelled by moving the camera away.
+        public static Vector3 CameraLocalPosition => new Vector3(0f, 10.20f, -0.90f);
+        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, BoardSurfaceY, 0.10f);
     }
 }
