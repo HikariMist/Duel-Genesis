@@ -1,4 +1,5 @@
 using System.Reflection;
+using DuelGenesis.Player;
 using DuelGenesis.UI;
 using UnityEngine;
 
@@ -41,10 +42,30 @@ namespace DuelGenesis.Dueling
             if (_duel == null || !_duel.IsActive || _duel.IsDuelOver)
                 return;
 
-            GUI.depth = -650;
+            GUI.depth = -900;
             Rect button = new Rect(18f, 20f, 112f, 34f);
             if (GenesisTheme.Button(button, "FORFEIT", GenesisTheme.Danger))
-                _forfeit?.Invoke(_duel, null);
+                ForfeitAndReturn();
+        }
+
+        private void ForfeitAndReturn()
+        {
+            if (_duel == null)
+                return;
+
+            _forfeit?.Invoke(_duel, null);
+            _duel.CloseDuel();
+
+            ThirdPersonPlayerController player = Object.FindFirstObjectByType<ThirdPersonPlayerController>();
+            if (player != null)
+                player.SetMovementEnabled(true);
+
+            ThirdPersonCamera cameraController = Object.FindFirstObjectByType<ThirdPersonCamera>();
+            if (cameraController != null)
+                cameraController.SetLookEnabled(true);
+
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
     }
 }
