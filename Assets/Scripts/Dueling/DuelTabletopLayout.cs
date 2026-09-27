@@ -3,99 +3,100 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Shared local-space measurements for the physical Duel: Genesis tabletop.
-    /// The center arena stays compact while utility zones live in side wings that
-    /// follow the standard Yu-Gi-Oh field layout from each duelist's perspective.
+    /// Classic two-row Yu-Gi-Oh field layout based on the physical game-mat reference.
+    /// From each duelist's viewpoint:
+    /// top row    = Field Zone, five Monster Zones, Graveyard
+    /// bottom row = Extra Deck, five Spell/Trap Zones, Main Deck
+    /// Banished cards use a small pocket just outside the Graveyard edge.
     /// </summary>
     public static class DuelTabletopLayout
     {
         public const float BoardSurfaceY = 1.43f;
-        public const float HologramBaseY = 1.54f;
+        public const float HologramBaseY = 1.56f;
 
-        // Main five-column play area.
-        public const float ZoneStartX = -2.95f;
-        public const float ZoneSpacing = 1.475f;
+        // Seven equal columns across the mat. The five center columns are the playable rows.
+        public const float ColumnSpacing = 1.40f;
+        public const float ZoneStartX = -2.80f;
+        public const float UtilityX = 4.20f;
 
-        public const float PlayerMonsterZ = -0.76f;
-        public const float CpuMonsterZ = 0.76f;
-        public const float PlayerBackrowZ = -2.12f;
-        public const float CpuBackrowZ = 2.12f;
+        // Player rows are on the near half, CPU rows mirror them on the far half.
+        public const float PlayerMonsterZ = -0.78f;
+        public const float CpuMonsterZ = 0.78f;
+        public const float PlayerBackrowZ = -2.22f;
+        public const float CpuBackrowZ = 2.22f;
 
-        // Utility pads sit a little above their recessed physical trays so their glowing
-        // outlines stay visible and clickable instead of being buried by the bay hardware.
-        private const float UtilitySurfaceY = BoardSurfaceY + 0.135f;
-
-        // The center arena is only slightly wider than the version the user approved.
-        // Side-wing housings extend beyond this footprint for Deck / Extra Deck / etc.
-        public static readonly Vector3 BoardScale = new Vector3(9.70f, 0.045f, 6.90f);
-        public static readonly Vector3 ZoneScale = new Vector3(1.22f, 0.028f, 1.08f);
+        public static readonly Vector3 BoardScale = new Vector3(10.10f, 0.045f, 6.70f);
+        public static readonly Vector3 ZoneScale = new Vector3(1.10f, 0.026f, 1.22f);
+        public static readonly Vector3 UtilityZoneScale = new Vector3(1.10f, 0.026f, 1.22f);
         public static readonly Vector3 CardScale = new Vector3(0.74f, 1.04f, 1f);
-        public static readonly Vector3 UtilityZoneScale = new Vector3(1.14f, 0.030f, 1.34f);
 
         public static Vector3 MonsterZonePosition(int index, bool playerSide)
         {
             return new Vector3(
-                ZoneStartX + ZoneSpacing * Mathf.Clamp(index, 0, 4),
-                BoardSurfaceY + 0.042f,
+                ZoneStartX + ColumnSpacing * Mathf.Clamp(index, 0, 4),
+                BoardSurfaceY + 0.048f,
                 playerSide ? PlayerMonsterZ : CpuMonsterZ);
         }
 
         public static Vector3 BackrowZonePosition(int index, bool playerSide)
         {
             return new Vector3(
-                ZoneStartX + ZoneSpacing * Mathf.Clamp(index, 0, 4),
-                BoardSurfaceY + 0.042f,
+                ZoneStartX + ColumnSpacing * Mathf.Clamp(index, 0, 4),
+                BoardSurfaceY + 0.048f,
                 playerSide ? PlayerBackrowZ : CpuBackrowZ);
         }
 
-        // From the PLAYER'S viewpoint: left side = Field Zone above Extra Deck.
+        // Player: Field left of monsters. CPU is a 180-degree mirror from its viewpoint.
         public static Vector3 FieldZonePosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(-5.35f, UtilitySurfaceY, -0.98f)
-                : new Vector3(5.35f, UtilitySurfaceY, 0.98f);
+                ? new Vector3(-UtilityX, BoardSurfaceY + 0.048f, PlayerMonsterZ)
+                : new Vector3(UtilityX, BoardSurfaceY + 0.048f, CpuMonsterZ);
         }
 
+        // Player: Extra Deck directly below Field Zone.
         public static Vector3 ExtraDeckPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(-5.35f, UtilitySurfaceY, -2.38f)
-                : new Vector3(5.35f, UtilitySurfaceY, 2.38f);
+                ? new Vector3(-UtilityX, BoardSurfaceY + 0.048f, PlayerBackrowZ)
+                : new Vector3(UtilityX, BoardSurfaceY + 0.048f, CpuBackrowZ);
         }
 
-        // From the PLAYER'S viewpoint: right side = Graveyard above Main Deck.
+        // Player: Graveyard right of monsters.
         public static Vector3 GraveyardPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(5.35f, UtilitySurfaceY, -0.98f)
-                : new Vector3(-5.35f, UtilitySurfaceY, 0.98f);
+                ? new Vector3(UtilityX, BoardSurfaceY + 0.048f, PlayerMonsterZ)
+                : new Vector3(-UtilityX, BoardSurfaceY + 0.048f, CpuMonsterZ);
         }
 
+        // Player: Main Deck directly below Graveyard.
         public static Vector3 DeckPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(5.35f, UtilitySurfaceY, -2.38f)
-                : new Vector3(-5.35f, UtilitySurfaceY, 2.38f);
+                ? new Vector3(UtilityX, BoardSurfaceY + 0.048f, PlayerBackrowZ)
+                : new Vector3(-UtilityX, BoardSurfaceY + 0.048f, CpuBackrowZ);
         }
 
-        // Banished cards sit next to the Graveyard in a smaller outer pocket.
+        // The reference mat has no printed banished zone, so this is a small external pocket
+        // attached beside the Graveyard rather than another full-size field column.
         public static Vector3 BanishedPosition(bool playerSide)
         {
             return playerSide
-                ? new Vector3(6.52f, UtilitySurfaceY, -0.98f)
-                : new Vector3(-6.52f, UtilitySurfaceY, 0.98f);
+                ? new Vector3(5.35f, BoardSurfaceY + 0.055f, PlayerMonsterZ)
+                : new Vector3(-5.35f, BoardSurfaceY + 0.055f, CpuMonsterZ);
         }
 
-        // Shared Extra Monster Zones between the two Main Monster rows.
+        // Retained for rules compatibility, but the classic reference presentation hides
+        // these pads until modern Extra Monster Zone rules are intentionally enabled later.
         public static Vector3 ExtraMonsterZonePosition(int index)
         {
-            float x = index <= 0 ? -0.78f : 0.78f;
+            float x = index <= 0 ? -0.70f : 0.70f;
             return new Vector3(x, BoardSurfaceY + 0.044f, 0f);
         }
 
-        // Slightly wider framing to include the new side pods without making the arena
-        // feel smaller on screen.
-        public static Vector3 CameraLocalPosition => new Vector3(0f, 5.85f, -5.00f);
-        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, 1.35f, 0.10f);
+        // Keep the arena size the user approved while showing all seven field columns.
+        public static Vector3 CameraLocalPosition => new Vector3(0f, 5.75f, -5.05f);
+        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, 1.34f, 0.05f);
     }
 }
