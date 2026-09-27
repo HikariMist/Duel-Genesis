@@ -3,9 +3,9 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Final late-frame camera framing for the enlarged Master-Duel-style board.
-    /// Runs after the older tabletop camera so the larger board actually fills
-    /// the screen instead of appearing the same size from farther away.
+    /// Late-frame camera framing for the solid Master-Duel-style table.
+    /// The angle is intentionally high enough to read the field but low enough
+    /// to show the table body, raised rails and supports as real 3D geometry.
     /// </summary>
     [DefaultExecutionOrder(10000)]
     public sealed class DuelBoardCameraFraming : MonoBehaviour
@@ -36,7 +36,7 @@ namespace DuelGenesis.Dueling
 
             _camera.transform.position = position;
             _camera.transform.rotation = Quaternion.LookRotation(target - position, up);
-            _camera.fieldOfView = 36f;
+            _camera.fieldOfView = 42f;
         }
 
         private void Resolve()
