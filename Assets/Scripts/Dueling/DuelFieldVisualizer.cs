@@ -10,17 +10,29 @@ namespace DuelGenesis.Dueling
 {
     public class DuelFieldVisualizer : MonoBehaviour
     {
-        private static readonly Color PlayerColor = new Color(0.08f, 0.78f, 1f, 1f);
-        private static readonly Color CpuColor = new Color(1.00f, 0.16f, 0.58f, 1f);
+        private static readonly Color PlayerColor = new Color(0.90f, 0.10f, 0.12f, 1f);
+        private static readonly Color CpuColor = new Color(0.08f, 0.48f, 1f, 1f);
         private static readonly Color NegatedColor = new Color(0.52f, 0.52f, 0.58f, 1f);
 
         private DuelGameController _duel;
         private Transform _table;
+        private Transform _physicalRoot;
         private Transform _playerRoot;
         private Transform _cpuRoot;
         private string _playerSignature = string.Empty;
         private string _cpuSignature = string.Empty;
         private float _nextSync;
+        private bool _wasActive;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Object.FindFirstObjectByType<DuelFieldVisualizer>() != null)
+                return;
+
+            GameObject host = new GameObject("Duel Field Visualizer");
+            host.AddComponent<DuelFieldVisualizer>();
+        }
 
         private void Start()
         {
@@ -35,16 +47,22 @@ namespace DuelGenesis.Dueling
             if (_duel == null || _table == null || Time.unscaledTime < _nextSync)
                 return;
 
-            _nextSync = Time.unscaledTime + 0.12f;
-            if (!_duel.IsActive)
+            _nextSync = Time.unscaledTime + 0.10f;
+            bool active = _duel.IsActive;
+
+            if (!active)
             {
                 ClearRoot(_playerRoot);
                 ClearRoot(_cpuRoot);
                 _playerSignature = string.Empty;
                 _cpuSignature = string.Empty;
+                if (_wasActive)
+                    DuelFieldSlotRegistry.Reset();
+                _wasActive = false;
                 return;
             }
 
+            _wasActive = true;
             SyncSide(true);
             SyncSide(false);
         }
@@ -60,21 +78,30 @@ namespace DuelGenesis.Dueling
                 if (tableObject != null)
                     _table = tableObject.transform;
             }
+
+            if (_table != null && _physicalRoot == null)
+                _physicalRoot = _table.Find("DG Physical Tabletop");
         }
 
         private void EnsureRoots()
         {
-            if (_table == null) return;
-            if (_playerRoot == null) _playerRoot = FindOrCreateRoot("DG Live Player Monsters");
-            if (_cpuRoot == null) _cpuRoot = FindOrCreateRoot("DG Live CPU Monsters");
+            if (_physicalRoot == null)
+                return;
+
+            if (_playerRoot == null)
+                _playerRoot = FindOrCreateRoot("Live Player Monsters");
+            if (_cpuRoot == null)
+                _cpuRoot = FindOrCreateRoot("Live CPU Monsters");
         }
 
         private Transform FindOrCreateRoot(string name)
         {
-            Transform existing = _table.Find(name);
-            if (existing != null) return existing;
+            Transform existing = _physicalRoot.Find(name);
+            if (existing != null)
+                return existing;
+
             GameObject root = new GameObject(name);
-            root.transform.SetParent(_table, false);
+            root.transform.SetParent(_physicalRoot, false);
             return root.transform;
         }
 
@@ -84,7 +111,7 @@ namespace DuelGenesis.Dueling
             Transform root = playerSide ? _playerRoot : _cpuRoot;
             if (root == null) return;
 
-            string signature = BuildSignature(states, _duel.TurnNumber);
+            string signature = BuildSignature(states, playerSide, _duel.TurnNumber);
             string old = playerSide ? _playerSignature : _cpuSignature;
             if (signature == old) return;
 
@@ -94,14 +121,16 @@ namespace DuelGenesis.Dueling
             else _cpuSignature = signature;
         }
 
-        private static string BuildSignature(IReadOnlyList<DuelMonsterState> states, int turn)
+        private string BuildSignature(IReadOnlyList<DuelMonsterState> states, bool playerSide, int turn)
         {
             if (states == null || states.Count == 0) return "EMPTY";
             StringBuilder builder = new StringBuilder();
             for (int i = 0; i < states.Count; i++)
             {
                 DuelMonsterState state = states[i];
+                int slot = DuelFieldSlotRegistry.GetMonsterSlot(state, playerSide, states);
                 builder.Append(state.Card.id).Append(':')
+                    .Append(slot).Append(':')
                     .Append((int)state.Position).Append(':')
                     .Append(state.AttackBonus).Append(':')
                     .Append(state.IsNegated(turn) ? 'N' : 'A').Append('|');
@@ -111,18 +140,17 @@ namespace DuelGenesis.Dueling
 
         private void BuildSide(Transform root, IReadOnlyList<DuelMonsterState> states, bool playerSide)
         {
-            float z = playerSide ? DuelTabletopLayout.PlayerMonsterZ : DuelTabletopLayout.CpuMonsterZ;
             Color sideColor = playerSide ? PlayerColor : CpuColor;
 
             for (int i = 0; i < states.Count && i < 5; i++)
             {
                 DuelMonsterState state = states[i];
+                int slot = DuelFieldSlotRegistry.GetMonsterSlot(state, playerSide, states);
+                Vector3 zonePosition = DuelTabletopLayout.MonsterZonePosition(slot, playerSide);
+
                 GameObject actor = new GameObject("Hologram " + state.Card.id);
                 actor.transform.SetParent(root, false);
-                actor.transform.localPosition = new Vector3(
-                    DuelTabletopLayout.ZoneStartX + DuelTabletopLayout.ZoneSpacing * i,
-                    DuelTabletopLayout.HologramBaseY,
-                    z);
+                actor.transform.localPosition = new Vector3(zonePosition.x, DuelTabletopLayout.HologramBaseY, zonePosition.z);
 
                 bool negated = state.IsNegated(_duel.TurnNumber);
                 Color color = negated ? NegatedColor : sideColor;
@@ -152,7 +180,6 @@ namespace DuelGenesis.Dueling
                     BuildFallbackMonster(actor.transform, state.Card, color);
                 }
 
-                CreateLabel(actor.transform, state, color, negated);
                 AddClickTarget(actor, playerSide, state, true);
                 actor.AddComponent<HologramBob>().Configure(false, state.Position == DuelMonsterPosition.FaceUpDefense, playerSide);
             }
@@ -162,7 +189,7 @@ namespace DuelGenesis.Dueling
         {
             BoxCollider hitbox = actor.AddComponent<BoxCollider>();
             hitbox.center = raised ? new Vector3(0f, 0.36f, 0f) : new Vector3(0f, 0.08f, 0f);
-            hitbox.size = raised ? new Vector3(0.62f, 0.92f, 0.62f) : new Vector3(0.58f, 0.20f, 0.72f);
+            hitbox.size = raised ? new Vector3(0.72f, 1.02f, 0.72f) : new Vector3(0.68f, 0.22f, 0.82f);
 
             DuelMonsterClickTarget target = actor.AddComponent<DuelMonsterClickTarget>();
             target.Configure(playerSide, state);
@@ -176,14 +203,14 @@ namespace DuelGenesis.Dueling
                 "Face Down Monster Card",
                 cardBack,
                 new Vector3(0f, 0.055f, 0f),
-                new Vector3(0.38f, 0.54f, 1f),
+                new Vector3(0.44f, 0.62f, 1f),
                 cardBack == null ? new Color(0.035f, 0.045f, 0.10f, 1f) : Color.white);
 
             GameObject stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
             stripe.name = "Card Back Accent";
             stripe.transform.SetParent(parent, false);
             stripe.transform.localPosition = new Vector3(0f, 0.035f, 0f);
-            stripe.transform.localScale = new Vector3(0.28f, 0.012f, 0.05f);
+            stripe.transform.localScale = new Vector3(0.32f, 0.012f, 0.05f);
             RemoveCollider(stripe);
             SetMaterial(stripe, playerSide ? PlayerColor : CpuColor, true);
         }
@@ -191,13 +218,13 @@ namespace DuelGenesis.Dueling
         private static void CreateFaceUpCard(Transform parent, CardData card, bool playerSide)
         {
             Texture2D texture = ProductionCardArtRegistry.LoadDisplayTexture(card);
-            Color fallback = playerSide ? new Color(0.05f, 0.16f, 0.22f, 1f) : new Color(0.20f, 0.05f, 0.15f, 1f);
+            Color fallback = playerSide ? new Color(0.22f, 0.05f, 0.06f, 1f) : new Color(0.05f, 0.12f, 0.26f, 1f);
             CreateCardPlane(
                 parent,
                 "Card Face - " + card.cardName,
                 texture,
                 new Vector3(0f, 0.052f, 0f),
-                new Vector3(0.36f, 0.51f, 1f),
+                new Vector3(0.42f, 0.59f, 1f),
                 texture == null ? fallback : Color.white);
         }
 
@@ -228,26 +255,6 @@ namespace DuelGenesis.Dueling
             proxy.transform.localScale = new Vector3(0.28f, 0.40f, 0.28f);
             RemoveCollider(proxy);
             SetMaterial(proxy, color, true);
-        }
-
-        private static void CreateLabel(Transform parent, DuelMonsterState state, Color color, bool negated)
-        {
-            GameObject labelObject = new GameObject("Monster Label");
-            labelObject.transform.SetParent(parent, false);
-            labelObject.transform.localPosition = new Vector3(0f, 0.72f, 0f);
-            labelObject.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
-
-            TextMesh text = labelObject.AddComponent<TextMesh>();
-            int attack = Mathf.Max(0, state.Card.attack + state.AttackBonus);
-            string stat = state.Position == DuelMonsterPosition.FaceUpDefense
-                ? "DEF " + state.Card.defense
-                : "ATK " + attack;
-            text.text = state.Card.cardName + "\n" + stat + (negated ? "\nNEGATED" : string.Empty);
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Center;
-            text.characterSize = 0.06f;
-            text.fontSize = 48;
-            text.color = color;
         }
 
         private static void NormalizeModel(Transform model, float targetSize)
