@@ -67,6 +67,8 @@ namespace DuelGenesis.Dueling
 
     public class DuelGameController : MonoBehaviour
     {
+        private const int EndPhaseHandLimit = 5;
+
         private readonly List<CardData> _playerDeck = new();
         private readonly List<CardData> _cpuDeck = new();
         private readonly List<CardData> _playerHand = new();
@@ -96,6 +98,7 @@ namespace DuelGenesis.Dueling
         private bool _cpuMarketUsed;
         private bool _playerActivatedSpell;
         private bool _cpuActivatedSpell;
+        private bool _playerDiscardingForHandLimit;
         private int _turnNumber;
         private int _playerLP;
         private int _cpuLP;
@@ -170,6 +173,7 @@ namespace DuelGenesis.Dueling
             _cpuMarketUsed = false;
             _playerActivatedSpell = false;
             _cpuActivatedSpell = false;
+            _playerDiscardingForHandLimit = false;
             _duelOver = false;
             _active = true;
             _handScroll = Vector2.zero;
@@ -307,7 +311,7 @@ namespace DuelGenesis.Dueling
 
         private bool CanNormalSummon(CardData card)
         {
-            if (card == null || card.kind != CardKind.Monster || _phase != DuelTurnPhase.Main || _normalSummoned)
+            if (card == null || card.kind != CardKind.Monster || _phase != DuelTurnPhase.Main || _normalSummoned || _playerDiscardingForHandLimit)
                 return false;
             if (_playerMonsters.Count >= 5)
                 return false;
@@ -349,7 +353,7 @@ namespace DuelGenesis.Dueling
         {
             if (card == null || card.id != "DG020") return false;
             if (playerSide)
-                return _phase == DuelTurnPhase.Main && _playerMonsters.Count == 0 && _playerMonsters.Count < 5;
+                return !_playerDiscardingForHandLimit && _phase == DuelTurnPhase.Main && _playerMonsters.Count == 0 && _playerMonsters.Count < 5;
             return _phase == DuelTurnPhase.Opponent && _cpuMonsters.Count == 0 && _cpuMonsters.Count < 5;
         }
 
@@ -465,7 +469,7 @@ namespace DuelGenesis.Dueling
 
         private bool CanChangePosition(DuelMonsterState monster)
         {
-            return monster != null &&
+            return !_playerDiscardingForHandLimit && monster != null &&
                    _phase == DuelTurnPhase.Main &&
                    !monster.HasChangedPosition &&
                    !monster.HasAttacked &&
@@ -496,7 +500,7 @@ namespace DuelGenesis.Dueling
             if (monster == null || monster.IsFaceDown || monster.EffectUsed || monster.IsNegated(_turnNumber))
                 return false;
 
-            if (playerSide && _phase != DuelTurnPhase.Main) return false;
+            if (playerSide && (_phase != DuelTurnPhase.Main || _playerDiscardingForHandLimit)) return false;
             if (!playerSide && _phase != DuelTurnPhase.Opponent) return false;
 
             if (monster.Card.id == "DG005")
@@ -624,7 +628,7 @@ namespace DuelGenesis.Dueling
 
         private bool CanActivateSpell(CardData card)
         {
-            if (_phase != DuelTurnPhase.Main || !IsSupportedSpell(card)) return false;
+            if (_playerDiscardingForHandLimit || _phase != DuelTurnPhase.Main || !IsSupportedSpell(card)) return false;
             if (card.id == "DG009") return _playerMonsters.Count > 0;
             if (card.id == "DG010") return _playerGraveyard.Any(c => c.kind == CardKind.Monster);
             if (card.id == "DG016") return _playerDeck.Any(c => c.kind == CardKind.Monster && c.level <= 4 && c.typeLine.Contains("Spellcaster"));
@@ -739,7 +743,7 @@ namespace DuelGenesis.Dueling
 
         private bool CanSetTrap(CardData card)
         {
-            return card != null && card.kind == CardKind.Trap && _phase == DuelTurnPhase.Main && _playerBackrow.Count < 5;
+            return card != null && card.kind == CardKind.Trap && !_playerDiscardingForHandLimit && _phase == DuelTurnPhase.Main && _playerBackrow.Count < 5;
         }
 
         private void PlayerSetTrap(CardData card)
@@ -795,7 +799,7 @@ namespace DuelGenesis.Dueling
 
         private bool CanAttack(DuelMonsterState attacker)
         {
-            return !_duelOver && _phase == DuelTurnPhase.Battle && attacker != null &&
+            return !_duelOver && !_playerDiscardingForHandLimit && _phase == DuelTurnPhase.Battle && attacker != null &&
                    _playerMonsters.Contains(attacker) && attacker.IsAttackPosition &&
                    !attacker.HasAttacked && !attacker.CannotAttackThisTurn;
         }
@@ -1002,7 +1006,7 @@ namespace DuelGenesis.Dueling
 
         private void AdvancePhase()
         {
-            if (_duelOver) return;
+            if (_duelOver || _playerDiscardingForHandLimit) return;
             ClearPending();
 
             if (_phase == DuelTurnPhase.Main)
@@ -1024,12 +1028,46 @@ namespace DuelGenesis.Dueling
 
         private void EndPlayerTurn()
         {
-            if (_duelOver) return;
+            if (_duelOver || _playerDiscardingForHandLimit) return;
             ClearPending();
 
             foreach (DuelMonsterState monster in _playerMonsters)
                 monster.AttackBonus = 0;
 
+            if (_playerHand.Count > EndPhaseHandLimit)
+            {
+                _playerDiscardingForHandLimit = true;
+                int excess = _playerHand.Count - EndPhaseHandLimit;
+                _message = $"End Phase — discard {excess} card{(excess == 1 ? string.Empty : "s")} to the Graveyard to return your hand to {EndPhaseHandLimit}.";
+                return;
+            }
+
+            CompletePlayerEndTurn();
+        }
+
+        private void PlayerDiscardForHandLimit(CardData card)
+        {
+            if (!_playerDiscardingForHandLimit || card == null || !_playerHand.Remove(card))
+                return;
+
+            _playerGraveyard.Add(card);
+            int excess = _playerHand.Count - EndPhaseHandLimit;
+            if (excess > 0)
+            {
+                _message = $"End Phase — discarded {card.cardName}. Choose {excess} more card{(excess == 1 ? string.Empty : "s")} to discard.";
+                return;
+            }
+
+            _playerDiscardingForHandLimit = false;
+            _message = $"End Phase — discarded {card.cardName}. Hand returned to {EndPhaseHandLimit}.";
+            CompletePlayerEndTurn();
+        }
+
+        private void CompletePlayerEndTurn()
+        {
+            if (_duelOver) return;
+
+            _playerDiscardingForHandLimit = false;
             _phase = DuelTurnPhase.Opponent;
             _turnNumber++;
             _cpuMarketUsed = false;
@@ -1092,6 +1130,8 @@ namespace DuelGenesis.Dueling
 
             if (_duelOver) return;
 
+            int cpuDiscarded = DiscardCpuToHandLimit();
+
             _turnNumber++;
             _normalSummoned = false;
             _playerMarketUsed = false;
@@ -1099,7 +1139,24 @@ namespace DuelGenesis.Dueling
             PrepareField(_playerMonsters);
             _phase = DuelTurnPhase.Main;
             if (!DrawPlayer(1)) return;
-            _message = $"Turn {_turnNumber} — Main Phase.";
+            _message = cpuDiscarded > 0
+                ? $"CPU discarded {cpuDiscarded} card{(cpuDiscarded == 1 ? string.Empty : "s")} at End Phase. Turn {_turnNumber} — Main Phase."
+                : $"Turn {_turnNumber} — Main Phase.";
+        }
+
+        private int DiscardCpuToHandLimit()
+        {
+            int discarded = 0;
+            while (_cpuHand.Count > EndPhaseHandLimit)
+            {
+                int index = _cpuHand.Count - 1;
+                CardData card = _cpuHand[index];
+                _cpuHand.RemoveAt(index);
+                _cpuGraveyard.Add(card);
+                discarded++;
+            }
+
+            return discarded;
         }
 
         private void CpuActivateSpell()
@@ -1250,6 +1307,7 @@ namespace DuelGenesis.Dueling
             if (_duelOver) return;
 
             _duelOver = true;
+            _playerDiscardingForHandLimit = false;
             _phase = DuelTurnPhase.Finished;
             ClearPending();
             _message = result;
@@ -1269,6 +1327,7 @@ namespace DuelGenesis.Dueling
         {
             if (_duelOver) return;
             _duelOver = true;
+            _playerDiscardingForHandLimit = false;
             _phase = DuelTurnPhase.Finished;
             ClearPending();
             _message = "Duel forfeited. No GC reward granted.";
@@ -1282,6 +1341,7 @@ namespace DuelGenesis.Dueling
 
             _active = false;
             _duelOver = false;
+            _playerDiscardingForHandLimit = false;
             ClearPending();
             _playerController?.SetMovementEnabled(false);
             _cameraController?.SetLookEnabled(true);
@@ -1303,6 +1363,9 @@ namespace DuelGenesis.Dueling
 
         private string PhaseLabel()
         {
+            if (_playerDiscardingForHandLimit)
+                return "END PHASE";
+
             return _phase switch
             {
                 DuelTurnPhase.Main => "MAIN PHASE",
@@ -1426,7 +1489,7 @@ namespace DuelGenesis.Dueling
                     continue;
                 }
 
-                if (_phase == DuelTurnPhase.Battle)
+                if (_phase == DuelTurnPhase.Battle && !_playerDiscardingForHandLimit)
                 {
                     GUI.enabled = CanAttack(monster);
                     string label = monster.HasAttacked ? "ATTACKED" : monster.CannotAttackThisTurn ? "NO ATTACK" : "ATTACK";
@@ -1434,7 +1497,7 @@ namespace DuelGenesis.Dueling
                         BeginAttack(monster);
                     GUI.enabled = true;
                 }
-                else if (_phase == DuelTurnPhase.Main)
+                else if (_phase == DuelTurnPhase.Main && !_playerDiscardingForHandLimit)
                 {
                     float buttonWidth = (zone.width - 12f) * 0.5f;
                     GUI.enabled = CanChangePosition(monster);
@@ -1497,6 +1560,16 @@ namespace DuelGenesis.Dueling
         {
             GenesisTheme.Box(area, GenesisTheme.PanelAlt);
 
+            if (_playerDiscardingForHandLimit)
+            {
+                int excess = Mathf.Max(0, _playerHand.Count - EndPhaseHandLimit);
+                GUI.Label(new Rect(area.x + 12f, area.y + 5f, area.width - 150f, 34f),
+                    $"END PHASE — choose {excess} card{(excess == 1 ? string.Empty : "s")} from your hand to discard.", style);
+                if (GenesisTheme.Button(new Rect(area.xMax - 120f, area.y + 7f, 100f, 30f), "FORFEIT", GenesisTheme.Danger))
+                    Forfeit();
+                return;
+            }
+
             if (_pendingAttacker != null || _pendingQuickCharge != null || _pendingArchmage != null)
             {
                 GUI.Label(new Rect(area.x + 12f, area.y + 5f, area.width - 150f, 34f), "TARGET SELECTION ACTIVE", style);
@@ -1521,7 +1594,10 @@ namespace DuelGenesis.Dueling
         private void DrawHand(Rect area, GUIStyle style)
         {
             GenesisTheme.Box(area, GenesisTheme.Panel);
-            GUI.Label(new Rect(area.x + 8f, area.y + 2f, area.width - 16f, 20f), $"YOUR HAND — {_playerHand.Count} cards", style);
+            string handTitle = _playerDiscardingForHandLimit
+                ? $"YOUR HAND — {_playerHand.Count} cards • DISCARD {_playerHand.Count - EndPhaseHandLimit}"
+                : $"YOUR HAND — {_playerHand.Count} cards";
+            GUI.Label(new Rect(area.x + 8f, area.y + 2f, area.width - 16f, 20f), handTitle, style);
 
             if (_pendingAttacker != null || _pendingQuickCharge != null || _pendingArchmage != null)
             {
@@ -1553,6 +1629,13 @@ namespace DuelGenesis.Dueling
                 GUI.Label(new Rect(rect.x + 5f, rect.y + 3f, rect.width - 10f, 70f),
                     $"{card.cardName}\n{card.kind} • {card.RarityLabel}\n{card.ShortStats}", style);
                 GUI.contentColor = old;
+
+                if (_playerDiscardingForHandLimit)
+                {
+                    if (GenesisTheme.Button(new Rect(rect.x + 6f, rect.yMax - 36f, rect.width - 12f, 29f), "DISCARD", GenesisTheme.Danger))
+                        PlayerDiscardForHandLimit(card);
+                    continue;
+                }
 
                 if (card.kind == CardKind.Monster)
                 {
