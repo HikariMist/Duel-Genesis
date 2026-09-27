@@ -111,9 +111,7 @@ namespace DuelGenesis.Dueling
 
         private void BuildSide(Transform root, IReadOnlyList<DuelMonsterState> states, bool playerSide)
         {
-            const float startX = -1.68f;
-            const float spacing = 0.84f;
-            float z = playerSide ? -0.34f : 0.34f;
+            float z = playerSide ? DuelTabletopLayout.PlayerMonsterZ : DuelTabletopLayout.CpuMonsterZ;
             Color sideColor = playerSide ? PlayerColor : CpuColor;
 
             for (int i = 0; i < states.Count && i < 5; i++)
@@ -121,15 +119,18 @@ namespace DuelGenesis.Dueling
                 DuelMonsterState state = states[i];
                 GameObject actor = new GameObject("Hologram " + state.Card.id);
                 actor.transform.SetParent(root, false);
-                actor.transform.localPosition = new Vector3(startX + spacing * i, 1.50f, z);
+                actor.transform.localPosition = new Vector3(
+                    DuelTabletopLayout.ZoneStartX + DuelTabletopLayout.ZoneSpacing * i,
+                    DuelTabletopLayout.HologramBaseY,
+                    z);
 
                 bool negated = state.IsNegated(_duel.TurnNumber);
                 Color color = negated ? NegatedColor : sideColor;
-                CreatePedestal(actor.transform, color);
 
                 if (state.IsFaceDown)
                 {
                     BuildFaceDownCard(actor.transform, playerSide);
+                    AddClickTarget(actor, playerSide, state, false);
                     actor.AddComponent<HologramBob>().Configure(false, true, playerSide);
                     continue;
                 }
@@ -141,6 +142,7 @@ namespace DuelGenesis.Dueling
                 {
                     GameObject model = Object.Instantiate(prefab, actor.transform);
                     model.name = "Monster Model - " + state.Card.cardName;
+                    RemoveColliders(model);
                     NormalizeModel(model.transform, 0.52f);
                     model.transform.localPosition = new Vector3(0f, 0.30f, 0f);
                     model.AddComponent<DmoMonsterAnimationPlayer>().Configure(state.Card);
@@ -151,8 +153,19 @@ namespace DuelGenesis.Dueling
                 }
 
                 CreateLabel(actor.transform, state, color, negated);
-                actor.AddComponent<HologramBob>().Configure(true, state.Position == DuelMonsterPosition.FaceUpDefense, playerSide);
+                AddClickTarget(actor, playerSide, state, true);
+                actor.AddComponent<HologramBob>().Configure(false, state.Position == DuelMonsterPosition.FaceUpDefense, playerSide);
             }
+        }
+
+        private static void AddClickTarget(GameObject actor, bool playerSide, DuelMonsterState state, bool raised)
+        {
+            BoxCollider hitbox = actor.AddComponent<BoxCollider>();
+            hitbox.center = raised ? new Vector3(0f, 0.36f, 0f) : new Vector3(0f, 0.08f, 0f);
+            hitbox.size = raised ? new Vector3(0.62f, 0.92f, 0.62f) : new Vector3(0.58f, 0.20f, 0.72f);
+
+            DuelMonsterClickTarget target = actor.AddComponent<DuelMonsterClickTarget>();
+            target.Configure(playerSide, state);
         }
 
         private static void BuildFaceDownCard(Transform parent, bool playerSide)
@@ -198,16 +211,6 @@ namespace DuelGenesis.Dueling
             card.transform.localScale = localScale;
             RemoveCollider(card);
             SetTexturedMaterial(card, texture, tint);
-        }
-
-        private static void CreatePedestal(Transform parent, Color color)
-        {
-            GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pedestal.name = "Hologram Pedestal";
-            pedestal.transform.SetParent(parent, false);
-            pedestal.transform.localScale = new Vector3(0.30f, 0.018f, 0.30f);
-            RemoveCollider(pedestal);
-            SetMaterial(pedestal, color, true);
         }
 
         private static void BuildFallbackMonster(Transform parent, CardData card, Color color)
@@ -263,6 +266,13 @@ namespace DuelGenesis.Dueling
             float largest = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
             if (largest <= 0.001f) return;
             model.localScale *= targetSize / largest;
+        }
+
+        private static void RemoveColliders(GameObject root)
+        {
+            Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                Object.Destroy(colliders[i]);
         }
 
         private static void SetTexturedMaterial(GameObject obj, Texture2D texture, Color tint)
@@ -379,23 +389,21 @@ namespace DuelGenesis.Dueling
     public class HologramBob : MonoBehaviour
     {
         private Vector3 _basePosition;
-        private bool _rotate;
-        private bool _defense;
-        private float _direction = 1f;
+        private Quaternion _baseRotation;
 
         public void Configure(bool rotate, bool defense, bool playerSide)
         {
-            _rotate = rotate;
-            _defense = defense;
-            _direction = playerSide ? 1f : -1f;
             _basePosition = transform.localPosition;
-            if (_defense)
-                transform.localRotation = Quaternion.Euler(0f, 0f, 12f * _direction);
+            float yaw = playerSide ? 0f : 180f;
+            float defenseTilt = defense ? (playerSide ? -10f : 10f) : 0f;
+            _baseRotation = Quaternion.Euler(0f, yaw, defenseTilt);
+            transform.localRotation = _baseRotation;
         }
 
         private void Start()
         {
             _basePosition = transform.localPosition;
+            _baseRotation = transform.localRotation;
         }
 
         private void Update()
@@ -403,9 +411,7 @@ namespace DuelGenesis.Dueling
             Vector3 position = _basePosition;
             position.y += Mathf.Sin(Time.time * 2.4f + transform.GetSiblingIndex()) * 0.025f;
             transform.localPosition = position;
-
-            if (_rotate && !_defense)
-                transform.Rotate(Vector3.up, 18f * _direction * Time.deltaTime, Space.Self);
+            transform.localRotation = _baseRotation;
         }
     }
 }
