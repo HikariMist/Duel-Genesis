@@ -7,7 +7,11 @@ namespace DuelGenesis.Dueling
         Monster,
         SpellTrap,
         Deck,
-        Graveyard
+        Graveyard,
+        ExtraDeck,
+        FieldSpell,
+        Banished,
+        ExtraMonster
     }
 
     /// <summary>
