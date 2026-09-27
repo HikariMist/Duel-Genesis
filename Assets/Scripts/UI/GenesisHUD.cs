@@ -82,6 +82,7 @@ namespace DuelGenesis.UI
             ResolvePlayerSystems();
             if ((_mainMenu != null && _mainMenu.IsOpen) ||
                 (_profilePanel != null && _profilePanel.IsOpen) ||
+                (_deckBuilder != null && _deckBuilder.IsOpen) ||
                 (_duel != null && _duel.IsActive))
                 return;
 

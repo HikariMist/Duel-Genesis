@@ -159,35 +159,92 @@ namespace DuelGenesis.Cards
             SaveAndNotify();
         }
 
+        // Staples the rules engine fully supports, in the order Auto Build values them.
+        private static readonly string[] StapleSpellsAndTraps =
+        {
+            "Pot of Greed", "Graceful Charity", "Dark Hole", "Raigeki", "Monster Reborn", "Heavy Storm",
+            "Mystical Space Typhoon", "Swords of Revealing Light", "Book of Moon", "Mirror Force", "Torrential Tribute",
+            "Magic Cylinder", "Sakuretsu Armor", "Trap Hole", "Bottomless Trap Hole", "Negate Attack", "Call of the Haunted",
+            "Premature Burial", "Rush Recklessly", "Shrink", "Fissure", "Soul Exchange", "Solemn Judgment"
+        };
+
+        /// <summary>
+        /// Builds a balanced 40-card Main Deck from owned cards, the way a player would:
+        /// ~22 monsters (a Level 1-4 core, a couple of Tribute Summons), ~18 Spells/Traps whose effects
+        /// the duel engine actually runs (staples first), and any owned Fusion monsters in the Extra Deck.
+        /// </summary>
         public int AutoBuild(PlayerCollection collection)
         {
             if (collection == null) return 0;
-
             mainDeck.Clear();
 
             List<(CardData card, int quantity)> owned = collection.GetOwnedCardsSorted()
-                .Where(pair => !IsExtraDeckCard(pair.card) && pair.card.ResolvedFrameKind != CardFrameKind.Token)
-                .OrderBy(pair => pair.card.kind)
-                .ThenByDescending(pair => pair.card.rarity)
-                .ThenBy(pair => pair.card.cardName)
+                .Where(pair => pair.card != null && pair.card.ResolvedFrameKind != CardFrameKind.Token)
                 .ToList();
 
-            foreach (var entry in owned)
+            int Add(CardData card, int copies)
             {
-                int copies = Mathf.Min(MaximumCopiesPerCard, entry.quantity);
-                for (int i = 0; i < copies && MainDeckCount < MinimumDeckSize; i++)
+                int added = 0;
+                for (int i = 0; i < copies; i++)
                 {
-                    DeckEntry deckEntry = mainDeck.FirstOrDefault(e => e != null && e.cardId == entry.card.id);
-                    if (deckEntry == null)
-                    {
-                        deckEntry = new DeckEntry(entry.card.id, 0);
-                        mainDeck.Add(deckEntry);
-                    }
-                    deckEntry.quantity++;
+                    if (!CanAdd(card, collection, out _)) break;
+                    DeckEntry entry = mainDeck.FirstOrDefault(e => e != null && e.cardId == card.id);
+                    if (entry == null) { entry = new DeckEntry(card.id, 0); mainDeck.Add(entry); }
+                    entry.quantity++;
+                    added++;
                 }
+                return added;
+            }
 
-                if (MainDeckCount >= MinimumDeckSize)
-                    break;
+            float MonsterScore(CardData c) =>
+                Mathf.Max(c.attack, c.defense * 0.85f) +
+                (DuelGenesis.Dueling.CardEffects.GetMonster(c) != null ? 350f : 0f) +
+                (c.rarity >= CardRarity.SuperRare ? 60f : 0f);
+
+            var monsters = owned.Where(p => p.card.kind == CardKind.Monster && !IsExtraDeckCard(p.card) &&
+                                            DuelGenesis.Dueling.DuelRules.CanEverBeNormalSummoned(p.card)).ToList();
+            var low = monsters.Where(p => p.card.level <= 4).OrderByDescending(p => MonsterScore(p.card)).ToList();
+            var mid = monsters.Where(p => p.card.level == 5 || p.card.level == 6).OrderByDescending(p => MonsterScore(p.card)).ToList();
+            var high = monsters.Where(p => p.card.level >= 7).OrderByDescending(p => MonsterScore(p.card)).ToList();
+
+            int monsterCount = 0;
+            foreach (var p in low) { if (monsterCount >= 17) break; monsterCount += Add(p.card, Mathf.Min(3, 17 - monsterCount)); }
+            foreach (var p in mid) { if (monsterCount >= 20) break; monsterCount += Add(p.card, 1); }
+            foreach (var p in high) { if (monsterCount >= 22) break; monsterCount += Add(p.card, 1); }
+
+            // Spells and Traps the engine can resolve: staples first, then anything else it supports.
+            var backrow = owned.Where(p => p.card.kind != CardKind.Monster && DuelGenesis.Dueling.CardEffects.Get(p.card) != null).ToList();
+            int backrowCount = 0;
+            foreach (string name in StapleSpellsAndTraps)
+            {
+                if (MainDeckCount >= MinimumDeckSize) break;
+                var p = backrow.FirstOrDefault(x => x.card.cardName == name);
+                if (p.card != null) backrowCount += Add(p.card, 1);
+            }
+            foreach (var p in backrow.OrderByDescending(x => x.card.rarity).ThenBy(x => x.card.cardName))
+            {
+                if (MainDeckCount >= MinimumDeckSize) break;
+                backrowCount += Add(p.card, Mathf.Min(2, MinimumDeckSize - MainDeckCount));
+            }
+
+            // Top up to 40 with the best remaining monsters.
+            foreach (var p in low.Concat(mid).Concat(high))
+            {
+                if (MainDeckCount >= MinimumDeckSize) break;
+                Add(p.card, MinimumDeckSize - MainDeckCount);
+            }
+            // Last resort: anything legal.
+            foreach (var p in owned.Where(x => !IsExtraDeckCard(x.card)))
+            {
+                if (MainDeckCount >= MinimumDeckSize) break;
+                Add(p.card, MinimumDeckSize - MainDeckCount);
+            }
+
+            // Extra Deck: one of each owned Fusion (etc.) monster, strongest first.
+            foreach (var p in owned.Where(x => IsExtraDeckCard(x.card)).OrderByDescending(x => x.card.attack))
+            {
+                if (ExtraDeckCount >= MaximumExtraDeckSize) break;
+                Add(p.card, 1);
             }
 
             SaveAndNotify();
