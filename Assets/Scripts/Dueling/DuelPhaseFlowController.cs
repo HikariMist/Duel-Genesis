@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using DuelGenesis.UI;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace DuelGenesis.Dueling
 {
