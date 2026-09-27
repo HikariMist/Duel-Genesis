@@ -264,12 +264,22 @@ namespace DuelGenesis.EditorTools
         private static void HideBlockouts()
         {
             // The prototype's grey ground and shop box give way to the real city (colliders stay as safety nets).
-            foreach (string name in new[] { "Genesis_City_Test_Ground", "Shop Building" })
+            foreach (string name in new[] { "Genesis_City_Test_Ground", "Shop Building", "Pack Terminal - 1000 GC", "Seat Interaction" })
             {
-                GameObject go = GameObject.Find(name);
+                GameObject go = FindIncludingInactive(name);
                 if (go != null && go.TryGetComponent(out Renderer r)) r.enabled = false;
             }
+            // The 4.8 m prototype slab and its rails: the real table is built on this root at runtime.
+            foreach (string name in new[] { "Tabletop Arena Blockout", "Blue Rail", "Red Rail", "Back Rail", "Front Rail" })
+            {
+                GameObject go = FindIncludingInactive(name);
+                if (go != null) go.SetActive(false);
+            }
         }
+
+        private static GameObject FindIncludingInactive(string name) =>
+            Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Select(t => t.gameObject).FirstOrDefault(g => g.name == name && g.scene.IsValid());
 
         private static void DressCardShop(Transform hub)
         {
@@ -279,6 +289,14 @@ namespace DuelGenesis.EditorTools
             GameObject front = SpawnSized(Polygon + "Buildings/Shop_A_prefab.prefab", hub, shopPos + new Vector3(0f, 0f, 3.2f), 180f, width: 8.5f);
             if (front != null) front.name = "Genesis Card Shop (storefront)";
 
+            // The pack terminal becomes a real kiosk machine (the invisible box keeps the interaction collider).
+            GameObject terminal = FindIncludingInactive("Pack Terminal - 1000 GC");
+            if (terminal != null)
+            {
+                Vector3 tp = terminal.transform.position;
+                GameObject kiosk = SpawnSized(Atm + "ATM3.prefab", hub, new Vector3(tp.x, 0f, tp.z), 180f, height: 1.95f);
+                if (kiosk != null) kiosk.name = "Card Pack Kiosk (Pack Terminal)";
+            }
             SpawnSized(Atm + "ATM1.prefab", hub, shopPos + new Vector3(-3.6f, 0f, 0.6f), 180f, height: 1.9f);
             SpawnSized(Atm + "ATM2.prefab", hub, shopPos + new Vector3(-2.9f, 0f, 0.6f), 180f, height: 1.9f);
             SpawnSized(Polygon + "Props/ColaMachine prefab.prefab", hub, shopPos + new Vector3(3.4f, 0f, 0.7f), 180f, height: 1.85f);
@@ -386,13 +404,49 @@ namespace DuelGenesis.EditorTools
                 new[] { "male_jacket_hive_Recipe", "male_sweatpants_black_Recipe", "male_shoes_tall_Recipe", "Hair_PulledBack_Recipe" }, UmaIdle);
             if (clerk != null) clerk.name = "NPC - Card Shop Clerk";
 
-            GameObject fanA = SpawnUma(parent, new Vector3(2.2f, 0f, 4.4f), 160f, "Human Female 3.0",
+            // Two ambient tables where NPCs are mid-duel (same table, mat, arena and holograms as the real one).
+            SpawnAmbientTable(parent, "Ambient Duel Table A", new Vector3(10.6f, 0f, 2.0f), 90f, 1,
+                new[] { "male_hoodie_grey_Recipe", "male_sportpants_alt_black_Recipe", "male_shoes_tall_Recipe", "Hair_MessyPomp_Recipe" },
+                new[] { "sportswear_top_Recipe", "shorts_turquoise_Recipe", "shoes_tall_turquoise.001_Recipe", "Hair_Bun_Recipe" });
+            SpawnAmbientTable(parent, "Ambient Duel Table B", new Vector3(-10.2f, 0f, -1.8f), 90f, 2,
+                new[] { "male_tanktop_yellow_Recipe", "male_shorts_hive_Recipe", "male_shoe_low_white.001_Recipe", "Hair_StraigntPulledBack_Recipe" },
+                new[] { "jacket_hive.001_Recipe", "skirt_turquoise_Recipe", "shoes_tall_white_Recipe", "Hair_Bob_Recipe" });
+
+            // Spectators watch the playable table from its sides.
+            GameObject fanA = SpawnUma(parent, tablePos + new Vector3(-1.35f, 0f, 1.2f), 125f, "Human Female 3.0",
                 new[] { "colors_top_Recipe", "colors_top_bottom_Recipe", "shoe_low_white_Recipe", "Hair_CurveUnder_Recipe" }, UmaIdle);
             if (fanA != null) fanA.name = "NPC - Spectator";
 
-            GameObject fanB = SpawnUma(parent, new Vector3(3.4f, 0f, 4.1f), 200f, "Human Male 3.0",
+            GameObject fanB = SpawnUma(parent, tablePos + new Vector3(1.4f, 0f, 1.25f), 235f, "Human Male 3.0",
                 new[] { "male_tshirt_white_Recipe", "male_sportpants_blueWhite_Recipe", "male_shoes_tall_turquoise_Recipe", "HairMessyUp_Recipe" }, UmaIdle);
             if (fanB != null) fanB.name = "NPC - Spectator";
+        }
+
+        private static void SpawnAmbientTable(Transform parent, string name, Vector3 position, float yaw, int seed, string[] maleOutfit, string[] femaleOutfit)
+        {
+            GameObject table = new GameObject(name);
+            table.transform.SetParent(parent, false);
+            table.transform.position = position;
+            table.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            System.Type type = System.Type.GetType("DuelGenesis.Dueling.AmbientDuelTable, Assembly-CSharp");
+            if (type != null)
+            {
+                Component c = table.AddComponent(type);
+                SerializedObject so = new SerializedObject(c);
+                SerializedProperty seedProp = so.FindProperty("seed");
+                if (seedProp != null) { seedProp.intValue = seed; so.ApplyModifiedPropertiesWithoutUndo(); }
+            }
+            // Invisible collider so the player walks around the table rather than through it.
+            BoxCollider col = table.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 0.38f, 0f);
+            col.size = new Vector3(1.24f, 0.76f, 0.94f);
+
+            Vector3 near = table.transform.TransformPoint(new Vector3(0f, 0f, -0.85f));
+            Vector3 far = table.transform.TransformPoint(new Vector3(0f, 0f, 0.85f));
+            GameObject a = SpawnUma(parent, near, yaw, "Human Male 3.0", maleOutfit, UmaIdle);
+            if (a != null) a.name = "NPC - Duelist (" + name + ")";
+            GameObject b = SpawnUma(parent, far, yaw + 180f, "Human Female 3.0", femaleOutfit, UmaIdle);
+            if (b != null) b.name = "NPC - Duelist (" + name + ")";
         }
 
         private static GameObject SpawnUma(Transform parent, Vector3 position, float yaw, string race, string[] recipes, string controllerPath)

@@ -128,6 +128,9 @@ namespace DuelGenesis.Core
 
             GameObject root = new GameObject("DG Genesis Plaza Decor");
 
+            // Genesis City has real streets, lamps and shops: only the prototype graybox needs the neon set dressing.
+            if (!city)
+            {
             // Main illuminated route from spawn toward the shop and duel table.
             for (int i = 0; i < 8; i++)
             {
@@ -141,6 +144,7 @@ namespace DuelGenesis.Core
             CreatePylon(root.transform, "Shop Pylon B", new Vector3(-2.8f, 0f, -1.2f), Cyan);
             CreatePylon(root.transform, "Arena Pylon A", new Vector3(3.4f, 0f, -1.1f), Cyan);
             CreatePylon(root.transform, "Arena Pylon B", new Vector3(8.8f, 0f, -1.1f), Magenta);
+            }
 
             if (city)
             {
@@ -156,10 +160,13 @@ namespace DuelGenesis.Core
                 CreateSign(root.transform, "GENESIS CITY // PROTOTYPE DISTRICT", new Vector3(0f, 0.08f, 7.8f), Mint, 0.31f, new Vector3(90f, 0f, 0f));
             }
 
+            if (!city)
+            {
             // Small glowing kiosks imply a larger future city without needing external art assets yet.
             CreateKiosk(root.transform, "Collection Kiosk", new Vector3(-2.8f, 0.6f, 5.8f), Cyan);
             CreateKiosk(root.transform, "Deck Workshop Kiosk", new Vector3(0f, 0.6f, 5.8f), Purple);
             CreateKiosk(root.transform, "Ranked Arena Kiosk", new Vector3(2.8f, 0.6f, 5.8f), Magenta);
+            }
         }
 
         private static void CreateWorldTile(Transform parent, string name, Vector3 position, Vector3 scale, Color color)

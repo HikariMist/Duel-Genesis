@@ -262,47 +262,167 @@ namespace DuelGenesis.Dueling
             GameObject root = new GameObject("DG Duel Table");
             root.transform.SetParent(table, false);
 
-            BuildFurniture(root.transform);
+            BuildFurniture(root.transform, withChair: true);
             BuildMat(root.transform);
+            BuildArena(root.transform);
             BuildZones(root.transform, zones);
             BuildLights(root.transform);
             return root.transform;
         }
 
+        /// <summary>A furnished table with the printed mat and arena frame but no duel logic
+        /// (used for the ambient NPC duels around Genesis City).</summary>
+        public static Transform BuildDecorative(Transform parent)
+        {
+            GameObject root = new GameObject("DG Duel Table (ambient)");
+            root.transform.SetParent(parent, false);
+            BuildFurniture(root.transform, withChair: false);
+            BuildMat(root.transform);
+            BuildArena(root.transform);
+            return root.transform;
+        }
+
         // ------------------------------------------------------------------ furniture
 
-        private static void BuildFurniture(Transform root)
+        private static Material _wood, _woodDark, _metal, _cushion, _bezel, _glowCyan, _glowViolet;
+
+        private static void EnsureFurnitureMaterials()
         {
+            if (_wood != null) return;
+            _wood = DuelVisualResources.NewLit(new Color(0.30f, 0.18f, 0.10f), 0.42f);        // walnut top
+            _woodDark = DuelVisualResources.NewLit(new Color(0.16f, 0.10f, 0.06f), 0.35f);    // legs, apron, chair
+            _metal = DuelVisualResources.NewLit(new Color(0.42f, 0.44f, 0.48f), 0.7f, 0.9f);   // edge band, feet
+            _cushion = DuelVisualResources.NewLit(new Color(0.07f, 0.08f, 0.12f), 0.15f);     // chair seat
+            _bezel = DuelVisualResources.NewLit(new Color(0.05f, 0.06f, 0.08f), 0.6f, 0.6f);   // arena frame
+            _glowCyan = DuelVisualResources.NewEmissive(DuelVisualResources.Cyan, 2.4f);
+            _glowViolet = DuelVisualResources.NewEmissive(DuelVisualResources.Violet, 2.4f);
+        }
+
+        /// <summary>
+        /// A real 1200 x 900 mm duel table, 760 mm high: 40 mm walnut top with a metal edge band,
+        /// a 90 mm apron, four square legs with metal feet and a low H stretcher, plus the player's chair.
+        /// </summary>
+        private static void BuildFurniture(Transform root, bool withChair)
+        {
+            EnsureFurnitureMaterials();
             float w = DuelMatLayout.TableWidth;
             float d = DuelMatLayout.TableDepth;
             float h = DuelMatLayout.TableHeight;
             float t = DuelMatLayout.TableTopThickness;
 
-            Material top = DuelVisualResources.NewLit(new Color(0.11f, 0.12f, 0.15f), 0.55f, 0.2f);
-            Material frame = DuelVisualResources.NewLit(new Color(0.55f, 0.58f, 0.64f), 0.75f, 0.85f);
-            Material glowCyan = DuelVisualResources.NewEmissive(DuelVisualResources.Cyan, 2.2f);
-            Material glowViolet = DuelVisualResources.NewEmissive(DuelVisualResources.Violet, 2.2f);
+            Transform table = new GameObject("Table").transform;
+            table.SetParent(root, false);
 
-            Box(root, "Table Top", new Vector3(0f, h - t * 0.5f, 0f), new Vector3(w, t, d), top);
-            // Brushed-metal rim around the top edge.
-            float rim = 0.018f;
-            Box(root, "Rim Near", new Vector3(0f, h - t * 0.5f, -d * 0.5f - rim * 0.5f), new Vector3(w + rim * 2f, t + 0.006f, rim), frame);
-            Box(root, "Rim Far", new Vector3(0f, h - t * 0.5f, d * 0.5f + rim * 0.5f), new Vector3(w + rim * 2f, t + 0.006f, rim), frame);
-            Box(root, "Rim Left", new Vector3(-w * 0.5f - rim * 0.5f, h - t * 0.5f, 0f), new Vector3(rim, t + 0.006f, d), frame);
-            Box(root, "Rim Right", new Vector3(w * 0.5f + rim * 0.5f, h - t * 0.5f, 0f), new Vector3(rim, t + 0.006f, d), frame);
-            // LED strips under the rim: cyan on the player's side, violet on the opponent's.
-            Box(root, "LED Near", new Vector3(0f, h - t - 0.004f, -d * 0.5f - rim * 0.5f), new Vector3(w, 0.004f, 0.006f), glowCyan);
-            Box(root, "LED Far", new Vector3(0f, h - t - 0.004f, d * 0.5f + rim * 0.5f), new Vector3(w, 0.004f, 0.006f), glowViolet);
+            Box(table, "Table Top", new Vector3(0f, h - t * 0.5f, 0f), new Vector3(w, t, d), _wood);
+            float band = 0.012f;
+            Box(table, "Edge Near", new Vector3(0f, h - t * 0.5f, -d * 0.5f - band * 0.5f), new Vector3(w + band * 2f, t, band), _metal);
+            Box(table, "Edge Far", new Vector3(0f, h - t * 0.5f, d * 0.5f + band * 0.5f), new Vector3(w + band * 2f, t, band), _metal);
+            Box(table, "Edge Left", new Vector3(-w * 0.5f - band * 0.5f, h - t * 0.5f, 0f), new Vector3(band, t, d), _metal);
+            Box(table, "Edge Right", new Vector3(w * 0.5f + band * 0.5f, h - t * 0.5f, 0f), new Vector3(band, t, d), _metal);
 
-            // Legs and apron.
-            float legInset = 0.07f;
-            foreach (Vector2 corner in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
+            // Apron (the skirt under the top) on all four sides.
+            float inset = 0.06f, apronH = 0.09f, apronT = 0.022f;
+            float apronY = h - t - apronH * 0.5f;
+            Box(table, "Apron Near", new Vector3(0f, apronY, -d * 0.5f + inset), new Vector3(w - inset * 2f, apronH, apronT), _woodDark);
+            Box(table, "Apron Far", new Vector3(0f, apronY, d * 0.5f - inset), new Vector3(w - inset * 2f, apronH, apronT), _woodDark);
+            Box(table, "Apron Left", new Vector3(-w * 0.5f + inset, apronY, 0f), new Vector3(apronT, apronH, d - inset * 2f), _woodDark);
+            Box(table, "Apron Right", new Vector3(w * 0.5f - inset, apronY, 0f), new Vector3(apronT, apronH, d - inset * 2f), _woodDark);
+            // Accent light line under the near and far apron edges (player cyan, opponent violet).
+            Box(table, "LED Near", new Vector3(0f, h - t - apronH - 0.003f, -d * 0.5f + inset), new Vector3(w - inset * 2f - 0.04f, 0.004f, 0.008f), _glowCyan);
+            Box(table, "LED Far", new Vector3(0f, h - t - apronH - 0.003f, d * 0.5f - inset), new Vector3(w - inset * 2f - 0.04f, 0.004f, 0.008f), _glowViolet);
+
+            // Legs, metal feet and a low H stretcher.
+            float leg = 0.06f, legInset = 0.075f, legH = h - t;
+            float lx = w * 0.5f - legInset, lz = d * 0.5f - legInset;
+            foreach (Vector2 c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
             {
-                Vector3 p = new Vector3(corner.x * (w * 0.5f - legInset), (h - t) * 0.5f, corner.y * (d * 0.5f - legInset));
-                Box(root, "Leg", p, new Vector3(0.05f, h - t, 0.05f), frame);
+                Box(table, "Leg", new Vector3(c.x * lx, legH * 0.5f + 0.015f, c.y * lz), new Vector3(leg, legH - 0.03f, leg), _woodDark);
+                Box(table, "Foot", new Vector3(c.x * lx, 0.0075f, c.y * lz), new Vector3(leg + 0.01f, 0.015f, leg + 0.01f), _metal);
             }
-            Box(root, "Apron Near", new Vector3(0f, h - t - 0.05f, -d * 0.5f + legInset), new Vector3(w - legInset * 2f, 0.08f, 0.02f), top);
-            Box(root, "Apron Far", new Vector3(0f, h - t - 0.05f, d * 0.5f - legInset), new Vector3(w - legInset * 2f, 0.08f, 0.02f), top);
+            Box(table, "Stretcher Left", new Vector3(-lx, 0.14f, 0f), new Vector3(0.03f, 0.04f, lz * 2f), _woodDark);
+            Box(table, "Stretcher Right", new Vector3(lx, 0.14f, 0f), new Vector3(0.03f, 0.04f, lz * 2f), _woodDark);
+            Box(table, "Stretcher Centre", new Vector3(0f, 0.14f, 0f), new Vector3(lx * 2f, 0.04f, 0.03f), _woodDark);
+
+            if (withChair) BuildChair(root, new Vector3(0f, 0f, -d * 0.5f - 0.30f), 0f);
+        }
+
+        /// <summary>Simple upholstered chair: 460 mm seat height, 440 mm square seat, backrest to 900 mm.</summary>
+        private static void BuildChair(Transform root, Vector3 position, float yaw)
+        {
+            Transform chair = new GameObject("Chair").transform;
+            chair.SetParent(root, false);
+            chair.localPosition = position;
+            chair.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            const float seatH = 0.46f, seat = 0.44f, legT = 0.035f;
+            Box(chair, "Seat", new Vector3(0f, seatH - 0.02f, 0f), new Vector3(seat, 0.04f, seat), _woodDark);
+            Box(chair, "Cushion", new Vector3(0f, seatH + 0.015f, 0.005f), new Vector3(seat - 0.03f, 0.03f, seat - 0.04f), _cushion);
+            float o = seat * 0.5f - legT * 0.5f;
+            foreach (Vector2 c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
+                Box(chair, "Chair Leg", new Vector3(c.x * o, (seatH - 0.04f) * 0.5f, c.y * o), new Vector3(legT, seatH - 0.04f, legT), _woodDark);
+            // Backrest on the side away from the table (-Z).
+            Box(chair, "Back Post L", new Vector3(-o, seatH + 0.22f, -o), new Vector3(legT, 0.44f, legT), _woodDark);
+            Box(chair, "Back Post R", new Vector3(o, seatH + 0.22f, -o), new Vector3(legT, 0.44f, legT), _woodDark);
+            Box(chair, "Backrest", new Vector3(0f, seatH + 0.30f, -o), new Vector3(seat - 0.02f, 0.22f, 0.025f), _cushion);
+        }
+
+        /// <summary>
+        /// The duel arena on the table top: a low metal frame around the play mat with a projector
+        /// strip inside it (cyan on the player's half, violet on the opponent's) and four hologram
+        /// emitters on the corners — the "field" the monsters are projected onto.
+        /// </summary>
+        private static void BuildArena(Transform root)
+        {
+            EnsureFurnitureMaterials();
+            float matW = (DuelMatLayout.MatWidthMm + MatMarginMm * 2f) * 0.001f;
+            float matD = (DuelMatLayout.MatDepthMm * 2f + MatMarginMm * 2f) * 0.001f;
+            float y = DuelMatLayout.TableHeight;
+            const float frame = 0.018f, frameH = 0.008f, strip = 0.003f;
+
+            Transform arena = new GameObject("Arena").transform;
+            arena.SetParent(root, false);
+
+            float hx = matW * 0.5f + frame * 0.5f, hz = matD * 0.5f + frame * 0.5f;
+            Box(arena, "Frame Near", new Vector3(0f, y + frameH * 0.5f, -hz), new Vector3(matW + frame * 2f, frameH, frame), _bezel);
+            Box(arena, "Frame Far", new Vector3(0f, y + frameH * 0.5f, hz), new Vector3(matW + frame * 2f, frameH, frame), _bezel);
+            Box(arena, "Frame Left", new Vector3(-hx, y + frameH * 0.5f, 0f), new Vector3(frame, frameH, matD), _bezel);
+            Box(arena, "Frame Right", new Vector3(hx, y + frameH * 0.5f, 0f), new Vector3(frame, frameH, matD), _bezel);
+
+            // Projector strips on the inner lip of the frame, split at the centre line.
+            float sx = matW * 0.5f + strip * 0.5f, sz = matD * 0.5f + strip * 0.5f, sy = y + frameH + 0.0005f;
+            Box(arena, "Strip Near", new Vector3(0f, sy, -sz), new Vector3(matW, 0.001f, strip), _glowCyan);
+            Box(arena, "Strip Far", new Vector3(0f, sy, sz), new Vector3(matW, 0.001f, strip), _glowViolet);
+            Box(arena, "Strip Left Near", new Vector3(-sx, sy, -matD * 0.25f), new Vector3(strip, 0.001f, matD * 0.5f), _glowCyan);
+            Box(arena, "Strip Right Near", new Vector3(sx, sy, -matD * 0.25f), new Vector3(strip, 0.001f, matD * 0.5f), _glowCyan);
+            Box(arena, "Strip Left Far", new Vector3(-sx, sy, matD * 0.25f), new Vector3(strip, 0.001f, matD * 0.5f), _glowViolet);
+            Box(arena, "Strip Right Far", new Vector3(sx, sy, matD * 0.25f), new Vector3(strip, 0.001f, matD * 0.5f), _glowViolet);
+
+            // Hologram emitters on the four corners.
+            foreach (Vector2 c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
+            {
+                Vector3 p = new Vector3(c.x * hx, y, c.y * hz);
+                GameObject post = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                post.name = "Emitter";
+                DestroyCollider(post);
+                post.transform.SetParent(arena, false);
+                post.transform.localPosition = p + new Vector3(0f, 0.016f, 0f);
+                post.transform.localScale = new Vector3(0.03f, 0.016f, 0.03f);
+                post.GetComponent<Renderer>().sharedMaterial = _bezel;
+
+                GameObject lens = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                lens.name = "Emitter Lens";
+                DestroyCollider(lens);
+                lens.transform.SetParent(arena, false);
+                lens.transform.localPosition = p + new Vector3(0f, 0.034f, 0f);
+                lens.transform.localScale = Vector3.one * 0.018f;
+                lens.GetComponent<Renderer>().sharedMaterial = c.y < 0 ? _glowCyan : _glowViolet;
+            }
+        }
+
+        private static void DestroyCollider(GameObject go)
+        {
+            Collider c = go.GetComponent<Collider>();
+            if (c == null) return;
+            if (Application.isPlaying) UnityEngine.Object.Destroy(c); else UnityEngine.Object.DestroyImmediate(c);
         }
 
         private static GameObject Box(Transform parent, string name, Vector3 position, Vector3 scale, Material material)
@@ -313,11 +433,13 @@ namespace DuelGenesis.Dueling
             box.transform.localPosition = position;
             box.transform.localScale = scale;
             box.GetComponent<Renderer>().sharedMaterial = material;
-            if (!name.StartsWith("Table Top")) UnityEngine.Object.Destroy(box.GetComponent<Collider>());
+            if (!name.StartsWith("Table Top")) DestroyCollider(box);
             return box;
         }
 
         // ------------------------------------------------------------------ printed mat
+
+        private static Material _sharedMatMaterial;
 
         private static void BuildMat(Transform root)
         {
@@ -326,25 +448,29 @@ namespace DuelGenesis.Dueling
 
             GameObject mat = GameObject.CreatePrimitive(PrimitiveType.Quad);
             mat.name = "Game Mat";
-            UnityEngine.Object.Destroy(mat.GetComponent<Collider>());
+            DestroyCollider(mat);
             mat.transform.SetParent(root, false);
             mat.transform.localPosition = new Vector3(0f, DuelMatLayout.SurfaceY - 0.0004f, 0f);
             mat.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             mat.transform.localScale = new Vector3(widthMm * 0.001f, depthMm * 0.001f, 1f);
 
-            // The printed mat is rendered a few frames later, once the render pipeline is running
-            // (rendering during scene load silently produces a blank texture).
-            Material material = DuelVisualResources.NewLit(DuelVisualResources.Navy, 0.18f);
-            mat.GetComponent<Renderer>().sharedMaterial = material;
-            _pendingMatMaterial = material;
-            _pendingMatWidthMm = widthMm;
-            _pendingMatDepthMm = depthMm;
-            _matAttempts = 0;
+            // Every table shares one printed-mat material. It is rendered a few frames later, once the
+            // render pipeline is running (rendering during scene load silently produces a blank texture).
+            if (_sharedMatMaterial == null)
+            {
+                _sharedMatMaterial = DuelVisualResources.NewLit(DuelVisualResources.Navy, 0.18f);
+                _sharedMatMaterial.name = "DG Game Mat";
+                _pendingMatMaterial = _sharedMatMaterial;
+                _pendingMatWidthMm = widthMm;
+                _pendingMatDepthMm = depthMm;
+                _matAttempts = 0;
+            }
+            mat.GetComponent<Renderer>().sharedMaterial = _sharedMatMaterial;
 
             // Rubber mat body (slight thickness).
             GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Game Mat Body";
-            UnityEngine.Object.Destroy(body.GetComponent<Collider>());
+            DestroyCollider(body);
             body.transform.SetParent(root, false);
             body.transform.localPosition = new Vector3(0f, DuelMatLayout.TableHeight + DuelMatLayout.MatThickness * 0.5f - 0.0005f, 0f);
             body.transform.localScale = new Vector3(widthMm * 0.001f, DuelMatLayout.MatThickness, depthMm * 0.001f);
@@ -369,10 +495,66 @@ namespace DuelGenesis.Dueling
             Texture texture = RenderMatTexture(_pendingMatWidthMm, _pendingMatDepthMm);
             if (texture == null || !LooksRendered(_matTexture)) return;
 
+#if UNITY_EDITOR
+            DumpForInspection(_matTexture, "Logs/DG-GameMat.png");
+#endif
+            // Bake to a mip-mapped texture on the CPU. The table is always seen at a grazing angle, so the GPU
+            // samples the small mips — and a render request does not reliably regenerate a render texture's
+            // mips, which showed up as a blank/white mat. A baked Texture2D has correct mips on every platform.
+            Texture2D baked = BakeWithMips(_matTexture);
+            int w = _matTexture.width, h = _matTexture.height;
             _pendingMatMaterial.SetColor("_BaseColor", Color.white);
-            _pendingMatMaterial.SetTexture("_BaseMap", texture);
+            _pendingMatMaterial.SetTexture("_BaseMap", baked != null ? baked : texture);
             _pendingMatMaterial = null;
-            Debug.Log($"Duel: Genesis game mat rendered ({_matTexture.width}x{_matTexture.height}) after {_matAttempts} attempt(s).");
+            if (baked != null) { _matTexture.Release(); UnityEngine.Object.Destroy(_matTexture); _matTexture = null; }
+            Debug.Log($"Duel: Genesis game mat rendered ({w}x{h}, mip-mapped) after {_matAttempts} attempt(s).");
+        }
+
+#if UNITY_EDITOR
+        private static void DumpForInspection(RenderTexture rt, string path)
+        {
+            try
+            {
+                RenderTexture previous = RenderTexture.active;
+                RenderTexture.active = rt;
+                Texture2D copy = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+                copy.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0, false);
+                copy.Apply(false);
+                RenderTexture.active = previous;
+                System.IO.File.WriteAllBytes(path, copy.EncodeToPNG());
+                UnityEngine.Object.Destroy(copy);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Duel: Genesis could not dump the game mat: " + e.Message);
+            }
+        }
+#endif
+
+        private static Texture2D BakeWithMips(RenderTexture rt)
+        {
+            try
+            {
+                RenderTexture previous = RenderTexture.active;
+                RenderTexture.active = rt;
+                Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, true)
+                {
+                    name = "DG Game Mat (baked)",
+                    anisoLevel = 8,
+                    filterMode = FilterMode.Trilinear,
+                    wrapMode = TextureWrapMode.Clamp,
+                    mipMapBias = -0.4f
+                };
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0, true);
+                tex.Apply(true, true);
+                RenderTexture.active = previous;
+                return tex;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Duel: Genesis could not bake the game mat mips: " + e.Message);
+                return null;
+            }
         }
 
         private static bool LooksRendered(RenderTexture rt)
@@ -403,8 +585,8 @@ namespace DuelGenesis.Dueling
             _matTexture = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32)
             {
                 name = "DG Game Mat",
-                useMipMap = true,
-                autoGenerateMips = true,
+                useMipMap = false,
+                autoGenerateMips = false,
                 anisoLevel = 8,
                 filterMode = FilterMode.Trilinear,
                 wrapMode = TextureWrapMode.Clamp

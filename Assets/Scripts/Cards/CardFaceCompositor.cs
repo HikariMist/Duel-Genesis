@@ -195,6 +195,23 @@ namespace DuelGenesis.Cards
             return face;
         }
 
+        /// <summary>(Re)creates the capture target. Render textures can be lost (device reset, GPU memory
+        /// pressure, leaving Play Mode with domain reload disabled) while the rig itself survives.</summary>
+        private void EnsureTarget()
+        {
+            if (_target == null)
+            {
+                _target = new RenderTexture(FaceWidth, FaceHeight, 24, RenderTextureFormat.ARGB32)
+                {
+                    name = "DG Card Face Capture",
+                    antiAliasing = 1,
+                    useMipMap = false
+                };
+            }
+            if (!_target.IsCreated()) _target.Create();
+            if (_camera != null) _camera.targetTexture = _target;
+        }
+
         /// <summary>Lays out either a card face (card != null) or the card back and captures it.</summary>
         private Texture2D Capture(CardData card, string textureName, bool compress = true)
         {
@@ -207,7 +224,8 @@ namespace DuelGenesis.Cards
                 Canvas.ForceUpdateCanvases();
 
                 RenderTexture previousActive = RenderTexture.active;
-                _camera.targetTexture = _target;
+                EnsureTarget();
+                if (_target == null || !_target.IsCreated()) return null;
 
                 var request = new RenderPipeline.StandardRequest { destination = _target };
                 if (RenderPipeline.SupportsRenderRequest(_camera, request))
@@ -363,13 +381,7 @@ namespace DuelGenesis.Cards
             _rankStarSprite = MakeSprite(ProceduralArt.LevelStar(64, true), "Rank Star");
             _sheenSprite = MakeSprite(ProceduralArt.FoilSheen(128), "Foil Sheen");
 
-            _target = new RenderTexture(FaceWidth, FaceHeight, 24, RenderTextureFormat.ARGB32)
-            {
-                name = "DG Card Face Capture",
-                antiAliasing = 1,
-                useMipMap = false
-            };
-            _target.Create();
+            EnsureTarget();
 
             GameObject cameraObject = new GameObject("Card Face Camera");
             cameraObject.transform.SetParent(transform, false);

@@ -26,6 +26,7 @@ namespace DuelGenesis.EditorTools
             "Assets/ICONIC - Sports Car FREE Vol.02",
             "Assets/Polytope Studio",
             "Assets/BadDog",
+            "Packages/com.hikarimist.dmo-characters",   // DMO monster models (local package, editable)
         };
 
         private static readonly string[] MainTexNames = { "_MainTex", "_BaseMap", "_MainTexture", "_Texture", "_Albedo", "_AlbedoMap", "_Diffuse", "_BaseColorMap", "_MainTexture0" };
