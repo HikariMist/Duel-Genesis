@@ -49,9 +49,9 @@ namespace DuelGenesis.Dueling
             return new Vector3(-4.18f, BoardSurfaceY + 0.055f, playerSide ? -2.28f : 2.28f);
         }
 
-        // Master-Duel-style angled overhead view. The lower angle deliberately shows the
-        // tabletop thickness, raised rim and legs so the duel visibly happens on furniture.
-        public static Vector3 CameraLocalPosition => new Vector3(0f, 8.55f, -6.15f);
-        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, BoardSurfaceY - 0.02f, 0.30f);
+        // Angled overhead view that deliberately keeps the physical table body and near legs visible.
+        // It is still high enough to read and click the duel zones comfortably.
+        public static Vector3 CameraLocalPosition => new Vector3(0f, 8.35f, -7.25f);
+        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, 1.12f, 0.30f);
     }
 }
