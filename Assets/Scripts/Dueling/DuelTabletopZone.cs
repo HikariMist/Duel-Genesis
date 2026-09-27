@@ -16,8 +16,8 @@ namespace DuelGenesis.Dueling
 
     /// <summary>
     /// Lightweight world-space interaction surface for a tabletop duel zone.
-    /// Gameplay actions are deliberately not owned here; this only reports hover/click state
-    /// to the presentation layer so the existing duel engine remains authoritative.
+    /// Gameplay actions are reported to the presentation/input layer; the duel engine
+    /// remains authoritative.
     /// </summary>
     public sealed class DuelTabletopZone : MonoBehaviour
     {
@@ -52,6 +52,12 @@ namespace DuelGenesis.Dueling
             if (_renderer != null)
                 _material = _renderer.material;
 
+            RefreshColor();
+        }
+
+        public void SetBaseColor(Color color)
+        {
+            _baseColor = color;
             RefreshColor();
         }
 
@@ -93,11 +99,11 @@ namespace DuelGenesis.Dueling
 
             Color color = _baseColor;
             if (_occupied)
-                color = Color.Lerp(color, Color.white, 0.12f);
+                color = Color.Lerp(color, Color.white, 0.10f);
             if (_hovered)
-                color = Color.Lerp(color, Color.white, 0.32f);
+                color = Color.Lerp(color, Color.white, 0.30f);
             if (_selected)
-                color = Color.Lerp(color, new Color(1f, 0.80f, 0.20f, 1f), 0.52f);
+                color = Color.Lerp(color, new Color(1f, 0.78f, 0.18f, 1f), 0.58f);
 
             if (_material.HasProperty("_BaseColor"))
                 _material.SetColor("_BaseColor", color);
@@ -106,7 +112,8 @@ namespace DuelGenesis.Dueling
             if (_material.HasProperty("_EmissionColor"))
             {
                 _material.EnableKeyword("_EMISSION");
-                _material.SetColor("_EmissionColor", color * (_hovered || _selected ? 1.25f : 0.35f));
+                float emission = _hovered || _selected ? 0.95f : 0.12f;
+                _material.SetColor("_EmissionColor", color * emission);
             }
         }
     }
