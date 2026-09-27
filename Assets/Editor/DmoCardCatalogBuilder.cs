@@ -15,6 +15,7 @@ namespace DuelGenesis.EditorTools
     public static class DmoCardCatalogBuilder
     {
         private const string ApiUrl = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
+        private const string ExcludedCardName = "Tricky Token";
         private static string ProjectRoot => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         private static string FaceSource => Path.Combine(ProjectRoot, "Cards", "DMO_card_art", "cards");
         private static string OutputPath => Path.Combine(Application.streamingAssetsPath, ExternalCardCatalogLoader.CatalogFileName);
@@ -23,6 +24,14 @@ namespace DuelGenesis.EditorTools
         private class ApiResponse
         {
             public List<ApiCard> data = new();
+        }
+
+        [Serializable]
+        private class ApiCardSet
+        {
+            public string set_name;
+            public string set_rarity;
+            public string set_rarity_code;
         }
 
         [Serializable]
@@ -38,6 +47,7 @@ namespace DuelGenesis.EditorTools
             public int level;
             public string race;
             public string attribute;
+            public List<ApiCardSet> card_sets = new();
         }
 
         [MenuItem("Duel Genesis/Production Assets/Build Real Card Catalog from DMO Art")]
@@ -54,7 +64,7 @@ namespace DuelGenesis.EditorTools
 
             if (!EditorUtility.DisplayDialog(
                     "Duel: Genesis — Build Real Card Catalog",
-                    "This downloads current public card metadata once, matches it only against the card PNGs already in your DMO library, and writes Assets/StreamingAssets/duel_genesis_cards.json.\n\nThe supplied DMO PNG remains the authoritative visual, so its printed Normal / Effect / Fusion / Ritual / Synchro / Xyz / Spell / Trap frame is never replaced by a guessed frame.\n\nContinue?",
+                    "This downloads current public card metadata once, matches it only against the card PNGs already in your DMO library, imports rarity metadata, and writes Assets/StreamingAssets/duel_genesis_cards.json.\n\nExact names are required before normalized matching, Token cards cannot steal non-Token artwork, and Tricky Token is excluded completely.\n\nContinue?",
                     "Build Catalog",
                     "Cancel"))
                 return;
@@ -69,30 +79,41 @@ namespace DuelGenesis.EditorTools
                 if (response?.data == null || response.data.Count == 0)
                     throw new InvalidOperationException("The card metadata service returned no card records.");
 
-                Dictionary<string, string> localFaces = Directory
+                List<string> localNames = Directory
                     .GetFiles(FaceSource, "*.png", SearchOption.TopDirectoryOnly)
-                    .Select(path => Path.GetFileNameWithoutExtension(path))
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Where(name => !IsExcluded(name))
+                    .ToList();
+
+                Dictionary<string, string> exactFaces = localNames
+                    .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+                Dictionary<string, List<string>> normalizedFaces = localNames
                     .GroupBy(Normalize)
                     .Where(group => !string.IsNullOrWhiteSpace(group.Key))
-                    .ToDictionary(group => group.Key, group => group.First());
+                    .ToDictionary(group => group.Key, group => group.ToList());
 
                 ExternalCardCatalog catalog = new ExternalCardCatalog();
-                HashSet<string> matchedFaceKeys = new HashSet<string>();
+                HashSet<string> matchedLocalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (ApiCard apiCard in response.data)
                 {
-                    if (apiCard == null || string.IsNullOrWhiteSpace(apiCard.name))
+                    if (apiCard == null || string.IsNullOrWhiteSpace(apiCard.name) || IsExcluded(apiCard.name))
                         continue;
 
-                    string key = Normalize(apiCard.name);
-                    if (!localFaces.TryGetValue(key, out string localName))
+                    string localName = ResolveLocalFace(apiCard, exactFaces, normalizedFaces);
+                    if (string.IsNullOrWhiteSpace(localName))
                         continue;
 
-                    matchedFaceKeys.Add(key);
+                    matchedLocalNames.Add(localName);
                     catalog.cards.Add(ToExternalRecord(apiCard, localName));
                 }
 
                 catalog.cards = catalog.cards
+                    .GroupBy(card => card.id)
+                    .Select(group => group.First())
                     .OrderBy(card => card.cardName, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
@@ -101,13 +122,12 @@ namespace DuelGenesis.EditorTools
                 File.WriteAllText(OutputPath, JsonUtility.ToJson(catalog, true), new UTF8Encoding(false));
 
                 string reportPath = Path.Combine(Application.streamingAssetsPath, "dmo_card_catalog_report.txt");
-                List<string> unmatched = localFaces
-                    .Where(pair => !matchedFaceKeys.Contains(pair.Key))
-                    .Select(pair => pair.Value)
+                List<string> unmatched = localNames
+                    .Where(name => !matchedLocalNames.Contains(name))
                     .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                string report = BuildReport(response.data.Count, localFaces.Count, catalog.cards.Count, unmatched);
+                string report = BuildReport(response.data.Count, localNames.Count, catalog.cards.Count, unmatched);
                 File.WriteAllText(reportPath, report, new UTF8Encoding(false));
                 AssetDatabase.Refresh();
 
@@ -116,8 +136,8 @@ namespace DuelGenesis.EditorTools
                     "Duel: Genesis — Real Card Catalog Ready",
                     $"Matched {catalog.cards.Count:N0} real card records to your supplied DMO card images.\n\n" +
                     $"Unmatched image names: {unmatched.Count:N0}\n" +
-                    "A detailed report was saved beside the catalog.\n\n" +
-                    "The complete card PNG is always used first, so card-frame appearance stays exactly as supplied.",
+                    "Tricky Token is excluded. Rarity metadata is now included.\n" +
+                    "A detailed report was saved beside the catalog.",
                     "OK");
             }
             catch (Exception exception)
@@ -138,8 +158,42 @@ namespace DuelGenesis.EditorTools
         {
             using HttpClient client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(2);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Duel-Genesis-Development/0.7");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Duel-Genesis-Development/0.8");
             return await client.GetStringAsync(ApiUrl);
+        }
+
+        private static string ResolveLocalFace(
+            ApiCard apiCard,
+            Dictionary<string, string> exactFaces,
+            Dictionary<string, List<string>> normalizedFaces)
+        {
+            if (exactFaces.TryGetValue(apiCard.name, out string exact))
+                return TokenCompatible(apiCard, exact) ? exact : null;
+
+            string key = Normalize(apiCard.name);
+            if (!normalizedFaces.TryGetValue(key, out List<string> candidates))
+                return null;
+
+            List<string> compatible = candidates.Where(name => TokenCompatible(apiCard, name)).ToList();
+            return compatible.Count == 1 ? compatible[0] : null;
+        }
+
+        private static bool TokenCompatible(ApiCard apiCard, string localName)
+        {
+            bool apiIsToken = IsToken(apiCard.name) || IsToken(apiCard.type) || IsToken(apiCard.frameType);
+            bool localIsToken = IsToken(localName);
+            return apiIsToken == localIsToken;
+        }
+
+        private static bool IsToken(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   value.IndexOf("Token", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsExcluded(string value)
+        {
+            return string.Equals(value?.Trim(), ExcludedCardName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static ExternalCardRecord ToExternalRecord(ApiCard card, string localName)
@@ -154,7 +208,7 @@ namespace DuelGenesis.EditorTools
                 cardName = localName,
                 kind = kind,
                 frameKind = frame,
-                rarity = "Common",
+                rarity = ResolveRarity(card.card_sets),
                 attribute = card.attribute ?? string.Empty,
                 typeLine = typeLine,
                 level = Mathf.Max(0, card.level),
@@ -163,6 +217,32 @@ namespace DuelGenesis.EditorTools
                 effectText = card.desc ?? string.Empty,
                 modelResource = string.Empty
             };
+        }
+
+        private static string ResolveRarity(List<ApiCardSet> sets)
+        {
+            CardRarity best = CardRarity.Common;
+            if (sets == null) return best.ToString();
+
+            foreach (ApiCardSet set in sets)
+            {
+                string text = ((set?.set_rarity ?? string.Empty) + " " + (set?.set_rarity_code ?? string.Empty)).ToLowerInvariant();
+                CardRarity rarity = CardRarity.Common;
+
+                if (text.Contains("secret") || text.Contains("ghost") || text.Contains("starlight") || text.Contains("collector"))
+                    rarity = CardRarity.SecretRare;
+                else if (text.Contains("ultra") || text.Contains("ultimate"))
+                    rarity = CardRarity.UltraRare;
+                else if (text.Contains("super"))
+                    rarity = CardRarity.SuperRare;
+                else if (text.Contains("rare"))
+                    rarity = CardRarity.Rare;
+
+                if ((int)rarity > (int)best)
+                    best = rarity;
+            }
+
+            return best.ToString();
         }
 
         private static string ResolveKind(string type)
@@ -211,11 +291,13 @@ namespace DuelGenesis.EditorTools
             StringBuilder builder = new StringBuilder();
             builder.AppendLine("DUEL: GENESIS — DMO CARD CATALOG REPORT");
             builder.AppendLine($"Metadata records downloaded: {apiCount:N0}");
-            builder.AppendLine($"Local DMO card PNGs: {localCount:N0}");
+            builder.AppendLine($"Local DMO card PNGs considered: {localCount:N0}");
             builder.AppendLine($"Matched production cards: {matchedCount:N0}");
             builder.AppendLine($"Unmatched local image names: {unmatched.Count:N0}");
+            builder.AppendLine("Excluded card: Tricky Token");
             builder.AppendLine();
-            builder.AppendLine("Frame rule: the complete supplied PNG is authoritative. frameKind is metadata/fallback only.");
+            builder.AppendLine("Matching rule: exact name first; normalized fallback only when unambiguous; Token/non-Token art may never cross-match.");
+            builder.AppendLine("Presentation rule: local image is treated as artwork and fitted into the metadata-selected frame.");
 
             if (unmatched.Count > 0)
             {
