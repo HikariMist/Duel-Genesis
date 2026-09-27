@@ -2,7 +2,6 @@ using DuelGenesis.Cards;
 using DuelGenesis.Interaction;
 using DuelGenesis.Player;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace DuelGenesis.Dueling
 {
@@ -14,6 +13,10 @@ namespace DuelGenesis.Dueling
 
         private ThirdPersonPlayerController _seatedPlayer;
         private DuelGameController _duel;
+        private Vector3 _returnPosition;
+        private Quaternion _returnRotation;
+        private bool _hasReturnPoint;
+        private bool _duelWasActive;
 
         public string InteractionPrompt
         {
@@ -49,6 +52,12 @@ namespace DuelGenesis.Dueling
                     return;
                 }
 
+                // Save the real grounded location BEFORE moving the player to the seat.
+                // This is the safest place to return after a forfeit, win or loss.
+                _returnPosition = player.transform.position;
+                _returnRotation = player.transform.rotation;
+                _hasReturnPoint = true;
+
                 _seatedPlayer = player;
                 player.SetMovementEnabled(false);
 
@@ -62,6 +71,7 @@ namespace DuelGenesis.Dueling
                     return;
                 }
 
+                _duelWasActive = true;
                 Debug.Log("Player sat at the Duel Table and started a DuelGameController duel.");
             }
             else if (_seatedPlayer == player && (_duel == null || !_duel.IsActive))
@@ -78,26 +88,48 @@ namespace DuelGenesis.Dueling
 
         private void Update()
         {
-            if (_seatedPlayer == null) return;
-            ResolveDuel();
-
-            if (_duel != null && _duel.IsActive)
+            if (_seatedPlayer == null)
                 return;
 
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.qKey.wasPressedThisFrame)
+            ResolveDuel();
+            bool active = _duel != null && _duel.IsActive;
+
+            // Leaving a duel should immediately put the player back in the world.
+            // Do not leave them parked at the seat waiting for another key press.
+            if (!active && _duelWasActive)
+            {
                 LeaveSeat();
+                return;
+            }
+
+            _duelWasActive = active;
         }
 
         private void LeaveSeat()
         {
-            if (_seatedPlayer == null) return;
+            if (_seatedPlayer == null)
+                return;
 
-            Transform target = standPoint != null ? standPoint : transform;
-            _seatedPlayer.Teleport(target.position, target.rotation);
+            _seatedPlayer.SetMovementEnabled(false);
+
+            if (_hasReturnPoint)
+            {
+                _seatedPlayer.Teleport(_returnPosition, _returnRotation);
+            }
+            else if (standPoint != null)
+            {
+                _seatedPlayer.Teleport(standPoint.position, standPoint.rotation);
+            }
+            else
+            {
+                _seatedPlayer.Teleport(transform.position, transform.rotation);
+            }
+
             _seatedPlayer.SetMovementEnabled(true);
             _seatedPlayer = null;
-            Debug.Log("Player left the Duel Table.");
+            _hasReturnPoint = false;
+            _duelWasActive = false;
+            Debug.Log("Player left the Duel Table and returned to the pre-duel position.");
         }
     }
 }
