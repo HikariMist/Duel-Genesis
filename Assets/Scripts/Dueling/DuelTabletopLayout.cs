@@ -4,7 +4,7 @@ namespace DuelGenesis.Dueling
 {
     /// <summary>
     /// Shared local-space measurements for the physical Duel: Genesis tabletop.
-    /// Built around a wide, readable, Master-Duel-style board mounted inside a real table.
+    /// The arena hardware is scaled as a device mounted on the existing card-shop table.
     /// </summary>
     public static class DuelTabletopLayout
     {
@@ -49,9 +49,9 @@ namespace DuelGenesis.Dueling
             return new Vector3(-4.18f, BoardSurfaceY + 0.055f, playerSide ? -2.28f : 2.28f);
         }
 
-        // Angled overhead view that deliberately keeps the physical table body and near legs visible.
-        // It is still high enough to read and click the duel zones comfortably.
-        public static Vector3 CameraLocalPosition => new Vector3(0f, 8.35f, -7.25f);
-        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, 1.12f, 0.30f);
+        // The arena footprint is now half-size on the real table, so the duel camera
+        // moves closer while keeping the Master-Duel-style angled overhead read.
+        public static Vector3 CameraLocalPosition => new Vector3(0f, 5.60f, -4.80f);
+        public static Vector3 CameraTargetLocalPosition => new Vector3(0f, 1.35f, 0.15f);
     }
 }
