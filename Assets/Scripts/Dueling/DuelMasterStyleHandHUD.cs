@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Master-Duel-style hand presentation anchored to the bottom of the screen.
+    /// Master-Duel-style hand presentation anchored to the lower part of the screen.
     /// Uses the real duel hand and the production card renderer, so opening cards,
     /// draws, discards and played cards stay in sync with DuelGameController.
     /// </summary>
@@ -74,7 +74,9 @@ namespace DuelGenesis.Dueling
 
             float rowWidth = cardWidth + spacing * Mathf.Max(0, hand.Count - 1);
             float startX = (Screen.width - rowWidth) * 0.5f;
-            float baseY = Screen.height - cardHeight - 12f;
+
+            // Leave a clean strip beneath the cards for the contextual Summon/Set/Attack panel.
+            float baseY = Screen.height - cardHeight - 126f;
 
             for (int i = 0; i < hand.Count; i++)
             {
