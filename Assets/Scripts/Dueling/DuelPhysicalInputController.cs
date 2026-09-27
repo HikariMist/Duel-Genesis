@@ -8,13 +8,22 @@ using UnityEngine;
 namespace DuelGenesis.Dueling
 {
     /// <summary>
-    /// Physical/clickable front-end for DuelGameController.
-    /// The rules engine remains untouched; this component calls the existing rule methods
-    /// while suppressing the legacy full-screen OnGUI duel menu.
+    /// Physical/clickable front-end for DuelGameController. Hand actions enter a placement
+    /// mode and the player chooses the exact physical Monster or Spell/Trap zone to use.
     /// </summary>
     public sealed class DuelPhysicalInputController : MonoBehaviour
     {
         private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+
+        private enum PlacementAction
+        {
+            None,
+            NormalSummonAttack,
+            NormalSetDefense,
+            SpecialSummon,
+            ActivateSpell,
+            SetTrap
+        }
 
         private DuelGameController _duel;
         private Transform _table;
@@ -25,6 +34,8 @@ namespace DuelGenesis.Dueling
         private readonly List<DuelHandCardTarget> _handCards = new();
         private CardData _selectedHandCard;
         private DuelMonsterState _selectedMonster;
+        private PlacementAction _placementAction;
+        private CardData _placementCard;
         private bool _legacyUiSuppressed;
         private bool _wasActive;
         private string _handSignature = string.Empty;
@@ -95,8 +106,6 @@ namespace DuelGenesis.Dueling
             if (!active)
                 return;
 
-            // DuelGameController contains the old giant OnGUI menu but no frame-driven duel loop.
-            // Disabling the Behaviour hides only that legacy UI; its rule methods remain callable.
             if (!_legacyUiSuppressed && _duel.enabled)
             {
                 _duel.enabled = false;
@@ -202,6 +211,8 @@ namespace DuelGenesis.Dueling
 
         private void EnterPhysicalDuel()
         {
+            DuelFieldSlotRegistry.Reset();
+
             if (_handRoot != null)
                 _handRoot.gameObject.SetActive(true);
             if (_targetRoot != null)
@@ -209,6 +220,7 @@ namespace DuelGenesis.Dueling
 
             _selectedHandCard = null;
             _selectedMonster = null;
+            CancelPlacement();
             _handSignature = string.Empty;
             _nextSync = 0f;
 
@@ -225,9 +237,11 @@ namespace DuelGenesis.Dueling
         {
             _selectedHandCard = null;
             _selectedMonster = null;
+            CancelPlacement();
             _handSignature = string.Empty;
             ClearChildren(_handRoot);
             _handCards.Clear();
+            DuelFieldSlotRegistry.Reset();
 
             if (_handRoot != null)
                 _handRoot.gameObject.SetActive(false);
@@ -256,9 +270,18 @@ namespace DuelGenesis.Dueling
             List<CardData> hand = PlayerHand();
             if (_selectedHandCard != null && (hand == null || !hand.Contains(_selectedHandCard)))
                 _selectedHandCard = null;
+            if (_placementCard != null && (hand == null || !hand.Contains(_placementCard)))
+                CancelPlacement();
 
-            if (_selectedMonster != null && !_duel.PlayerMonsters.Contains(_selectedMonster))
+            if (_selectedMonster != null && !ContainsMonster(_duel.PlayerMonsters, _selectedMonster))
                 _selectedMonster = null;
+        }
+
+        private static bool ContainsMonster(IReadOnlyList<DuelMonsterState> list, DuelMonsterState target)
+        {
+            for (int i = 0; list != null && i < list.Count; i++)
+                if (ReferenceEquals(list[i], target)) return true;
+            return false;
         }
 
         private string BuildHandSignature(List<CardData> hand)
@@ -334,14 +357,19 @@ namespace DuelGenesis.Dueling
 
         private void SyncTargetHitboxes()
         {
-            if (_targetRoot == null)
+            if (_targetRoot == null || _duel == null)
                 return;
 
             bool archmageTargeting = PendingArchmage() != null;
             for (int i = 0; i < _targetRoot.childCount; i++)
             {
                 GameObject child = _targetRoot.GetChild(i).gameObject;
-                child.SetActive(archmageTargeting && i < _duel.CpuBackrow.Count);
+                bool valid = archmageTargeting && i < _duel.CpuBackrow.Count;
+                child.SetActive(valid);
+                if (!valid) continue;
+
+                int slot = DuelFieldSlotRegistry.GetBackrowSlot(_duel.CpuBackrow[i], false, _duel.CpuBackrow);
+                child.transform.localPosition = DuelTabletopLayout.BackrowZonePosition(slot, false) + Vector3.up * 0.08f;
             }
         }
 
@@ -361,13 +389,198 @@ namespace DuelGenesis.Dueling
             if (HasPendingTarget())
                 return;
 
+            CancelPlacement();
             _selectedHandCard = card;
             _selectedMonster = null;
+        }
+
+        public bool ClickZone(DuelTabletopZone zone)
+        {
+            if (_duel == null || !_duel.IsActive || zone == null || _placementAction == PlacementAction.None)
+                return false;
+
+            if (!zone.PlayerSide)
+            {
+                SetMessage("Choose one of your own field zones.");
+                return true;
+            }
+
+            if (!PlacementMatchesZone(zone))
+            {
+                SetMessage(PlacementInstruction());
+                return true;
+            }
+
+            if ((zone.Kind == DuelTabletopZoneKind.Monster) &&
+                DuelFieldSlotRegistry.IsMonsterSlotOccupied(_duel.PlayerMonsters, true, zone.Index))
+            {
+                SetMessage("That Monster Zone is already occupied. Choose another zone.");
+                return true;
+            }
+
+            if (zone.Kind == DuelTabletopZoneKind.SpellTrap &&
+                DuelFieldSlotRegistry.IsBackrowSlotOccupied(_duel.PlayerBackrow, true, zone.Index))
+            {
+                SetMessage("That Spell/Trap Zone is already occupied. Choose another zone.");
+                return true;
+            }
+
+            CardData card = _placementCard;
+            PlacementAction action = _placementAction;
+            bool resolved = false;
+
+            if (action == PlacementAction.NormalSummonAttack || action == PlacementAction.NormalSetDefense || action == PlacementAction.SpecialSummon)
+            {
+                List<DuelMonsterState> before = SnapshotMonsters(_duel.PlayerMonsters);
+                if (action == PlacementAction.NormalSummonAttack)
+                    Invoke(_playerNormalSummon, card, DuelMonsterPosition.FaceUpAttack);
+                else if (action == PlacementAction.NormalSetDefense)
+                    Invoke(_playerNormalSummon, card, DuelMonsterPosition.FaceDownDefense);
+                else
+                    Invoke(_playerSpecialValkyrie, card);
+
+                DuelMonsterState added = FindNewMonster(before, _duel.PlayerMonsters);
+                if (added != null)
+                {
+                    DuelFieldSlotRegistry.AssignMonster(added, true, zone.Index);
+                    resolved = true;
+                }
+            }
+            else if (action == PlacementAction.SetTrap || action == PlacementAction.ActivateSpell)
+            {
+                List<DuelBackrowState> before = SnapshotBackrow(_duel.PlayerBackrow);
+                if (action == PlacementAction.SetTrap)
+                    Invoke(_playerSetTrap, card);
+                else
+                    Invoke(_playerActivateSpell, card);
+
+                DuelBackrowState added = FindNewBackrow(before, _duel.PlayerBackrow);
+                if (added != null && zone.Kind == DuelTabletopZoneKind.SpellTrap)
+                    DuelFieldSlotRegistry.AssignBackrow(added, true, zone.Index);
+
+                // Normal/Quick-Play spells can resolve immediately to the GY and therefore
+                // do not leave a permanent backrow state, but the chosen zone still served
+                // as the activation location.
+                resolved = PlayerHand() == null || !PlayerHand().Contains(card) || added != null || PendingQuickCharge() != null;
+            }
+
+            if (resolved)
+            {
+                _selectedHandCard = null;
+                CancelPlacement();
+                _handSignature = string.Empty;
+            }
+
+            return true;
+        }
+
+        private bool PlacementMatchesZone(DuelTabletopZone zone)
+        {
+            switch (_placementAction)
+            {
+                case PlacementAction.NormalSummonAttack:
+                case PlacementAction.NormalSetDefense:
+                case PlacementAction.SpecialSummon:
+                    return zone.Kind == DuelTabletopZoneKind.Monster;
+                case PlacementAction.SetTrap:
+                    return zone.Kind == DuelTabletopZoneKind.SpellTrap;
+                case PlacementAction.ActivateSpell:
+                    return IsFieldSpell(_placementCard)
+                        ? zone.Kind == DuelTabletopZoneKind.FieldSpell
+                        : zone.Kind == DuelTabletopZoneKind.SpellTrap;
+                default:
+                    return false;
+            }
+        }
+
+        private void BeginPlacement(CardData card, PlacementAction action)
+        {
+            _placementCard = card;
+            _placementAction = action;
+            SetMessage(PlacementInstruction());
+        }
+
+        private void CancelPlacement()
+        {
+            _placementAction = PlacementAction.None;
+            _placementCard = null;
+        }
+
+        private string PlacementInstruction()
+        {
+            switch (_placementAction)
+            {
+                case PlacementAction.NormalSummonAttack:
+                    return "Choose an empty Monster Zone for the Summon.";
+                case PlacementAction.NormalSetDefense:
+                    return "Choose an empty Monster Zone to Set the monster.";
+                case PlacementAction.SpecialSummon:
+                    return "Choose an empty Monster Zone for the Special Summon.";
+                case PlacementAction.SetTrap:
+                    return "Choose an empty Spell/Trap Zone to Set the card.";
+                case PlacementAction.ActivateSpell:
+                    return IsFieldSpell(_placementCard)
+                        ? "Choose your Field Zone to activate this Field Spell."
+                        : "Choose an empty Spell/Trap Zone to activate this Spell.";
+                default:
+                    return "Choose a field zone.";
+            }
+        }
+
+        private static bool IsFieldSpell(CardData card)
+        {
+            if (card == null || card.kind != CardKind.Spell)
+                return false;
+            string line = card.typeLine ?? string.Empty;
+            return line.IndexOf("Field", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static List<DuelMonsterState> SnapshotMonsters(IReadOnlyList<DuelMonsterState> list)
+        {
+            List<DuelMonsterState> result = new();
+            for (int i = 0; list != null && i < list.Count; i++) result.Add(list[i]);
+            return result;
+        }
+
+        private static List<DuelBackrowState> SnapshotBackrow(IReadOnlyList<DuelBackrowState> list)
+        {
+            List<DuelBackrowState> result = new();
+            for (int i = 0; list != null && i < list.Count; i++) result.Add(list[i]);
+            return result;
+        }
+
+        private static DuelMonsterState FindNewMonster(List<DuelMonsterState> before, IReadOnlyList<DuelMonsterState> after)
+        {
+            for (int i = 0; after != null && i < after.Count; i++)
+            {
+                DuelMonsterState candidate = after[i];
+                bool existed = false;
+                for (int j = 0; j < before.Count; j++)
+                    if (ReferenceEquals(before[j], candidate)) { existed = true; break; }
+                if (!existed) return candidate;
+            }
+            return null;
+        }
+
+        private static DuelBackrowState FindNewBackrow(List<DuelBackrowState> before, IReadOnlyList<DuelBackrowState> after)
+        {
+            for (int i = 0; after != null && i < after.Count; i++)
+            {
+                DuelBackrowState candidate = after[i];
+                bool existed = false;
+                for (int j = 0; j < before.Count; j++)
+                    if (ReferenceEquals(before[j], candidate)) { existed = true; break; }
+                if (!existed) return candidate;
+            }
+            return null;
         }
 
         public void ClickMonster(bool playerSide, DuelMonsterState monster)
         {
             if (_duel == null || !_duel.IsActive || monster == null)
+                return;
+
+            if (_placementAction != PlacementAction.None)
                 return;
 
             if (playerSide)
@@ -403,20 +616,9 @@ namespace DuelGenesis.Dueling
             _selectedMonster = null;
         }
 
-        private DuelMonsterState PendingAttacker()
-        {
-            return _pendingAttackerField?.GetValue(_duel) as DuelMonsterState;
-        }
-
-        private CardData PendingQuickCharge()
-        {
-            return _pendingQuickChargeField?.GetValue(_duel) as CardData;
-        }
-
-        private DuelMonsterState PendingArchmage()
-        {
-            return _pendingArchmageField?.GetValue(_duel) as DuelMonsterState;
-        }
+        private DuelMonsterState PendingAttacker() => _pendingAttackerField?.GetValue(_duel) as DuelMonsterState;
+        private CardData PendingQuickCharge() => _pendingQuickChargeField?.GetValue(_duel) as CardData;
+        private DuelMonsterState PendingArchmage() => _pendingArchmageField?.GetValue(_duel) as DuelMonsterState;
 
         private bool IsDiscarding()
         {
@@ -431,6 +633,12 @@ namespace DuelGenesis.Dueling
         private string Message()
         {
             return _messageField?.GetValue(_duel) as string ?? string.Empty;
+        }
+
+        private void SetMessage(string value)
+        {
+            if (_duel != null && _messageField != null)
+                _messageField.SetValue(_duel, value ?? string.Empty);
         }
 
         private bool CallBool(MethodInfo method, params object[] args)
@@ -532,12 +740,23 @@ namespace DuelGenesis.Dueling
             {
                 _selectedHandCard = null;
                 _selectedMonster = null;
+                CancelPlacement();
                 Invoke(_advancePhase);
             }
         }
 
         private void DrawContextActions(GUIStyle hud, GUIStyle message)
         {
+            if (_placementAction != PlacementAction.None)
+            {
+                Rect place = new Rect(Screen.width * 0.5f - 270f, Screen.height - 88f, 540f, 64f);
+                GenesisTheme.Box(place, new Color(0.04f, 0.07f, 0.12f, 0.96f));
+                GUI.Label(new Rect(place.x + 12f, place.y + 7f, place.width - 118f, 48f), PlacementInstruction(), hud);
+                if (GenesisTheme.Button(new Rect(place.xMax - 98f, place.y + 16f, 82f, 32f), "CANCEL", GenesisTheme.Danger))
+                    CancelPlacement();
+                return;
+            }
+
             if (HasPendingTarget())
             {
                 Rect target = new Rect(Screen.width * 0.5f - 235f, Screen.height - 92f, 470f, 70f);
@@ -592,15 +811,15 @@ namespace DuelGenesis.Dueling
                 bool canSummon = CallBool(_canNormalSummon, card);
                 GUI.enabled = canSummon;
                 if (GenesisTheme.Button(new Rect(panel.x + 24f, y, 180f, 34f), "SUMMON — ATTACK", GenesisTheme.Cyan))
-                    Invoke(_playerNormalSummon, card, DuelMonsterPosition.FaceUpAttack);
+                    BeginPlacement(card, PlacementAction.NormalSummonAttack);
                 if (GenesisTheme.Button(new Rect(panel.x + 214f, y, 180f, 34f), "SET — DEFENSE", GenesisTheme.Purple))
-                    Invoke(_playerNormalSummon, card, DuelMonsterPosition.FaceDownDefense);
+                    BeginPlacement(card, PlacementAction.NormalSetDefense);
                 GUI.enabled = true;
 
                 bool canSpecial = card.id == "DG020" && CallBool(_canSpecialValkyrie, card, true);
                 GUI.enabled = canSpecial;
                 if (GenesisTheme.Button(new Rect(panel.x + 404f, y, 150f, 34f), "SPECIAL", GenesisTheme.Gold))
-                    Invoke(_playerSpecialValkyrie, card);
+                    BeginPlacement(card, PlacementAction.SpecialSummon);
                 GUI.enabled = true;
             }
             else if (card.kind == CardKind.Spell)
@@ -608,7 +827,7 @@ namespace DuelGenesis.Dueling
                 bool canActivate = CallBool(_canActivateSpell, card);
                 GUI.enabled = canActivate;
                 if (GenesisTheme.Button(new Rect(panel.center.x - 100f, y, 200f, 34f), "ACTIVATE SPELL", GenesisTheme.Green))
-                    Invoke(_playerActivateSpell, card);
+                    BeginPlacement(card, PlacementAction.ActivateSpell);
                 GUI.enabled = true;
             }
             else
@@ -616,12 +835,15 @@ namespace DuelGenesis.Dueling
                 bool canSet = CallBool(_canSetTrap, card);
                 GUI.enabled = canSet;
                 if (GenesisTheme.Button(new Rect(panel.center.x - 100f, y, 200f, 34f), "SET TRAP", GenesisTheme.Purple))
-                    Invoke(_playerSetTrap, card);
+                    BeginPlacement(card, PlacementAction.SetTrap);
                 GUI.enabled = true;
             }
 
             if (GenesisTheme.Button(new Rect(panel.xMax - 92f, panel.y + 6f, 76f, 26f), "CLOSE", GenesisTheme.Muted))
+            {
+                CancelPlacement();
                 _selectedHandCard = null;
+            }
         }
 
         private void DrawMonsterActions(GUIStyle hud, GUIStyle message)
@@ -720,10 +942,7 @@ namespace DuelGenesis.Dueling
             transform.localPosition = position;
         }
 
-        private void OnMouseDown()
-        {
-            _controller?.ClickHandCard(Card);
-        }
+        private void OnMouseDown() => _controller?.ClickHandCard(Card);
 
         private void OnMouseEnter()
         {
@@ -731,10 +950,7 @@ namespace DuelGenesis.Dueling
             transform.localScale = _baseScale * 1.08f;
         }
 
-        private void OnMouseExit()
-        {
-            transform.localScale = _baseScale;
-        }
+        private void OnMouseExit() => transform.localScale = _baseScale;
     }
 
     public sealed class DuelMonsterClickTarget : MonoBehaviour
@@ -769,9 +985,6 @@ namespace DuelGenesis.Dueling
             _index = index;
         }
 
-        private void OnMouseDown()
-        {
-            _controller?.ClickCpuBackrow(_index);
-        }
+        private void OnMouseDown() => _controller?.ClickCpuBackrow(_index);
     }
 }
