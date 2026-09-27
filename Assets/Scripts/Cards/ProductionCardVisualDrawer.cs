@@ -9,6 +9,11 @@ namespace DuelGenesis.Cards
     /// </summary>
     public static class ProductionCardVisualDrawer
     {
+        // Normalized location of the artwork window inside a supplied full-card scan.
+        // GUI texture coordinates use bottom-left origin, so the Y value is converted
+        // from the card-face top-origin layout used by the preview rectangles below.
+        private static readonly Rect FullCardArtworkUv = new Rect(0.105f, 0.33f, 0.79f, 0.445f);
+
         public static void DrawCard(Rect rect, CardData card)
         {
             if (card == null)
@@ -17,33 +22,40 @@ namespace DuelGenesis.Cards
             Texture2D source = ProductionCardArtRegistry.LoadFace(card.cardName);
             Texture2D frame = ProductionCardArtRegistry.LoadFrame(card.ResolvedFrameKind);
 
-            bool sourceLooksLikeCompleteCard = source != null &&
-                                               source.height > 0 &&
+            if (frame != null)
+                GUI.DrawTexture(rect, frame, ScaleMode.StretchToFill, true);
+            else
+                GUI.Box(rect, GUIContent.none);
+
+            DrawArtwork(rect, source);
+            DrawMetadata(rect, card);
+        }
+
+        private static void DrawArtwork(Rect rect, Texture2D source)
+        {
+            if (source == null)
+                return;
+
+            Rect artworkRect = new Rect(
+                rect.x + rect.width * 0.105f,
+                rect.y + rect.height * 0.225f,
+                rect.width * 0.79f,
+                rect.height * 0.445f);
+
+            bool sourceLooksLikeCompleteCard = source.height > 0 &&
                                                (float)source.width / source.height < 0.82f;
 
             if (sourceLooksLikeCompleteCard)
             {
-                GUI.DrawTexture(rect, source, ScaleMode.ScaleToFit, true);
+                // DMO includes portrait card-face scans. Extract only their artwork window
+                // instead of drawing the entire supplied card over our production frame.
+                GUI.DrawTextureWithTexCoords(artworkRect, source, FullCardArtworkUv, true);
             }
             else
             {
-                if (frame != null)
-                    GUI.DrawTexture(rect, frame, ScaleMode.StretchToFill, true);
-                else
-                    GUI.Box(rect, GUIContent.none);
-
-                if (source != null)
-                {
-                    Rect artworkRect = new Rect(
-                        rect.x + rect.width * 0.105f,
-                        rect.y + rect.height * 0.225f,
-                        rect.width * 0.79f,
-                        rect.height * 0.445f);
-                    GUI.DrawTexture(artworkRect, source, ScaleMode.ScaleAndCrop, true);
-                }
+                // Artwork-only sources preserve aspect ratio and crop cleanly to the art window.
+                GUI.DrawTexture(artworkRect, source, ScaleMode.ScaleAndCrop, true);
             }
-
-            DrawMetadata(rect, card);
         }
 
         private static void DrawMetadata(Rect rect, CardData card)
@@ -52,6 +64,7 @@ namespace DuelGenesis.Cards
             int nameSize = Mathf.Clamp(Mathf.RoundToInt(9f * scale), 7, 18);
             int levelSize = Mathf.Clamp(Mathf.RoundToInt(8f * scale), 7, 17);
             int statSize = Mathf.Clamp(Mathf.RoundToInt(7f * scale), 6, 15);
+            int raritySize = Mathf.Clamp(Mathf.RoundToInt(5.5f * scale), 6, 12);
 
             Color titleColor = card.ResolvedFrameKind == CardFrameKind.XyzMonster ||
                                card.ResolvedFrameKind == CardFrameKind.Spell ||
@@ -92,7 +105,7 @@ namespace DuelGenesis.Cards
                 rect.width * 0.80f,
                 rect.height * 0.095f);
 
-            // A light shadow makes the card name readable on both supplied full-card images and blank frames.
+            // A light shadow makes the card name readable on every frame type.
             GUIStyle shadowStyle = new GUIStyle(nameStyle);
             shadowStyle.normal.textColor = new Color(0f, 0f, 0f, 0.45f);
             GUI.Label(new Rect(nameRect.x + 1f, nameRect.y + 1f, nameRect.width, nameRect.height), card.cardName, shadowStyle);
@@ -109,6 +122,8 @@ namespace DuelGenesis.Cards
                 GUI.Label(levelRect, stars, levelStyle);
             }
 
+            DrawRarityBadge(rect, card, raritySize);
+
             if (card.kind == CardKind.Monster)
             {
                 Rect statsRect = new Rect(
@@ -118,6 +133,48 @@ namespace DuelGenesis.Cards
                     rect.height * 0.06f);
                 GUI.Label(statsRect, $"ATK {card.attack}  DEF {card.defense}", statStyle);
             }
+        }
+
+        private static void DrawRarityBadge(Rect rect, CardData card, int fontSize)
+        {
+            string label = card.RarityLabel;
+            if (string.IsNullOrWhiteSpace(label))
+                return;
+
+            Rect badgeRect = new Rect(
+                rect.x + rect.width * 0.10f,
+                rect.y + rect.height * 0.835f,
+                rect.width * 0.42f,
+                rect.height * 0.045f);
+
+            Color rarityColor = GetRarityColor(card.rarity);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.Box(badgeRect, GUIContent.none);
+            GUI.color = oldColor;
+
+            GUIStyle rarityStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = fontSize,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                clipping = TextClipping.Clip,
+                normal = { textColor = rarityColor }
+            };
+
+            GUI.Label(badgeRect, label, rarityStyle);
+        }
+
+        private static Color GetRarityColor(CardRarity rarity)
+        {
+            return rarity switch
+            {
+                CardRarity.SecretRare => new Color(0.95f, 0.75f, 1f, 1f),
+                CardRarity.UltraRare => new Color(1f, 0.82f, 0.22f, 1f),
+                CardRarity.SuperRare => new Color(0.55f, 0.90f, 1f, 1f),
+                CardRarity.Rare => new Color(0.88f, 0.90f, 0.96f, 1f),
+                _ => Color.white
+            };
         }
 
         private static string BuildStars(int level)
