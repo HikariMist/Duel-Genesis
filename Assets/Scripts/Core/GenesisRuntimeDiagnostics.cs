@@ -58,6 +58,8 @@ namespace DuelGenesis.Core
 
             if (Object.FindFirstObjectByType<DuelGameController>() == null)
                 failures.Add("DuelGameController runtime system is missing.");
+            if (Object.FindFirstObjectByType<DuelBoardView>() == null)
+                failures.Add("DuelBoardView (duel table) is missing.");
             if (Object.FindFirstObjectByType<PackOpeningUI>() == null)
                 failures.Add("PackOpeningUI runtime system is missing.");
             if (Object.FindFirstObjectByType<DeckBuilderUI>() == null)
@@ -68,16 +70,6 @@ namespace DuelGenesis.Core
                 failures.Add("ProgressionBridge is missing.");
             if (Object.FindFirstObjectByType<ExternalCardCatalogLoader>() == null)
                 failures.Add("ExternalCardCatalogLoader is missing.");
-            if (Object.FindFirstObjectByType<DuelArenaFX>() == null)
-                failures.Add("DuelArenaFX is missing.");
-            if (Object.FindFirstObjectByType<DuelFieldVisualizer>() == null)
-                failures.Add("DuelFieldVisualizer is missing.");
-            if (Object.FindFirstObjectByType<DuelBackrowVisualizer>() == null)
-                failures.Add("DuelBackrowVisualizer is missing.");
-            if (Object.FindFirstObjectByType<DuelPileVisualizer>() == null)
-                failures.Add("DuelPileVisualizer is missing.");
-            if (Object.FindFirstObjectByType<DuelPresentationOverlay>() == null)
-                failures.Add("DuelPresentationOverlay is missing.");
             if (Object.FindFirstObjectByType<GenesisMainMenu>() == null)
                 failures.Add("GenesisMainMenu is missing.");
             if (Object.FindFirstObjectByType<GenesisProfilePanel>() == null)

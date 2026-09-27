@@ -66,8 +66,13 @@ namespace DuelGenesis.EditorTools
                 failures.Add("GenesisMainMenu modal API is missing.");
             if (typeof(GenesisProfilePanel).GetProperty("IsOpen") == null)
                 failures.Add("GenesisProfilePanel modal API is missing.");
-            if (typeof(DuelPresentationOverlay) == null)
-                failures.Add("DuelPresentationOverlay type is missing.");
+            if (DuelRules.HandSizeLimit != 6 || DuelRules.StartingLifePoints != 8000 || DuelRules.OpeningHandSize != 5)
+                failures.Add("Official duel constants are wrong (hand limit 6, 8000 LP, 5-card opening hand).");
+            if (typeof(DuelBoardView).GetMethod("BeginPresentation") == null || typeof(DuelHud) == null)
+                failures.Add("Duel presentation (DuelBoardView / DuelHud) is missing.");
+            string engineReport = DuelEngineSelfTest.Run();
+            if (!string.IsNullOrEmpty(engineReport))
+                failures.Add(engineReport);
 
             if (!File.Exists("Assets/Scenes/GenesisPrototype.unity"))
                 failures.Add("GenesisPrototype.unity is missing from Assets/Scenes.");

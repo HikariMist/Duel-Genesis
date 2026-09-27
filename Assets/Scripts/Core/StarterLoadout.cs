@@ -37,7 +37,12 @@ namespace DuelGenesis.Core
             }
 
             if (PlayerPrefs.GetInt(ClaimedKey, 0) == 1)
+            {
+                // Older saves counted Fusion monsters in the Main Deck; keep them duel-ready.
+                if (!deck.Validate(collection, out _) && deck.MainDeckCount < PlayerDeck.MinimumDeckSize)
+                    deck.TopUpMainDeck(collection);
                 return;
+            }
 
             if (deck.Validate(collection, out _))
             {
@@ -45,28 +50,35 @@ namespace DuelGenesis.Core
                 return;
             }
 
-            List<CardData> starterPool = CardDatabase.All
-                .Where(IsEasyStarterMonster)
-                .OrderBy(card => card.cardName)
-                .Take(20)
-                .ToList();
-
-            if (starterPool.Count < 20)
+            // A real starter: a Level 1-4 core, a small Tribute curve and staple Spells/Traps that work.
+            var starter = new List<(CardData card, int copies)>();
+            foreach (CardData card in CardDatabase.All.Where(IsEasyStarterMonster)
+                         .OrderByDescending(card => Mathf.Max(card.attack, card.defense)).ThenBy(card => card.cardName).Take(13))
+                starter.Add((card, 2));
+            foreach (CardData card in CardDatabase.All.Where(c => IsSummonableMonster(c) && (c.level == 5 || c.level == 6))
+                         .OrderByDescending(card => card.attack).Take(2))
+                starter.Add((card, 1));
+            foreach (CardData card in CardDatabase.All.Where(c => IsSummonableMonster(c) && c.level >= 7)
+                         .OrderByDescending(card => card.attack).Take(1))
+                starter.Add((card, 1));
+            string[] staples =
             {
-                foreach (CardData card in CardDatabase.All.Where(IsMainDeckCard).OrderBy(card => card.cardName))
-                {
-                    if (starterPool.Contains(card)) continue;
-                    starterPool.Add(card);
-                    if (starterPool.Count >= 20) break;
-                }
+                "Pot of Greed", "Dark Hole", "Mystical Space Typhoon", "Swords of Revealing Light", "Rush Recklessly",
+                "Book of Moon", "Mirror Force", "Trap Hole", "Sakuretsu Armor", "Magic Cylinder", "Negate Attack",
+                "Heavy Storm", "Premature Burial", "Call of the Haunted"
+            };
+            foreach (string name in staples)
+            {
+                CardData card = CardDatabase.All.FirstOrDefault(c => c.cardName == name);
+                if (card != null) starter.Add((card, 1));
             }
 
-            foreach (CardData card in starterPool)
+            foreach ((CardData card, int copies) in starter)
             {
                 if (deck.MainDeckCount >= StarterDeckSize)
                     break;
 
-                int desiredCopies = Mathf.Min(2, StarterDeckSize - deck.MainDeckCount);
+                int desiredCopies = Mathf.Min(copies, StarterDeckSize - deck.MainDeckCount);
                 int owned = collection.GetQuantity(card.id);
                 if (owned < desiredCopies)
                     collection.AddCard(card, desiredCopies - owned);
@@ -80,7 +92,7 @@ namespace DuelGenesis.Core
 
             if (deck.MainDeckCount < StarterDeckSize)
             {
-                foreach (CardData card in CardDatabase.All.Where(IsMainDeckCard).OrderBy(card => card.cardName))
+                foreach (CardData card in CardDatabase.All.Where(IsEasyStarterMonster).OrderByDescending(card => card.attack))
                 {
                     while (deck.GetQuantity(card.id) < PlayerDeck.MaximumCopiesPerCard && deck.MainDeckCount < StarterDeckSize)
                     {
@@ -108,10 +120,13 @@ namespace DuelGenesis.Core
 
         private static bool IsEasyStarterMonster(CardData card)
         {
-            return card != null &&
-                   card.kind == CardKind.Monster &&
-                   card.level > 0 && card.level <= 4 &&
-                   IsMainDeckCard(card);
+            return IsSummonableMonster(card) && card.level > 0 && card.level <= 4;
+        }
+
+        private static bool IsSummonableMonster(CardData card)
+        {
+            return card != null && card.kind == CardKind.Monster && IsMainDeckCard(card) &&
+                   DuelGenesis.Dueling.DuelRules.CanEverBeNormalSummoned(card);
         }
 
         private static bool IsMainDeckCard(CardData card)

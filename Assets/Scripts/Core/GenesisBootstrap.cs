@@ -47,6 +47,10 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<DuelGameController>() == null)
                 systems.AddComponent<DuelGameController>();
 
+            // Life-size duel table + card presentation (builds the table in the world on load).
+            if (Object.FindFirstObjectByType<DuelBoardView>() == null)
+                systems.AddComponent<DuelBoardView>();
+
             if (Object.FindFirstObjectByType<GenesisHUD>() == null)
                 systems.AddComponent<GenesisHUD>();
 
@@ -65,20 +69,10 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<RuntimeTextMeshFixer>() == null)
                 systems.AddComponent<RuntimeTextMeshFixer>();
 
-            if (Object.FindFirstObjectByType<DuelArenaFX>() == null)
-                systems.AddComponent<DuelArenaFX>();
 
-            if (Object.FindFirstObjectByType<DuelFieldVisualizer>() == null)
-                systems.AddComponent<DuelFieldVisualizer>();
 
-            if (Object.FindFirstObjectByType<DuelBackrowVisualizer>() == null)
-                systems.AddComponent<DuelBackrowVisualizer>();
 
-            if (Object.FindFirstObjectByType<DuelPileVisualizer>() == null)
-                systems.AddComponent<DuelPileVisualizer>();
 
-            if (Object.FindFirstObjectByType<DuelPresentationOverlay>() == null)
-                systems.AddComponent<DuelPresentationOverlay>();
 
             if (Object.FindFirstObjectByType<GenesisRuntimeDiagnostics>() == null)
                 systems.AddComponent<GenesisRuntimeDiagnostics>();

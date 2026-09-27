@@ -16,10 +16,14 @@ namespace DuelGenesis.Cards
         private static readonly Dictionary<string, Texture2D> FrameCache = new();
         private static bool _faceIndexBuilt;
 
+        /// <summary>
+        /// Complete card face (frame + artwork + text) at real card proportions.
+        /// Never returns the bare square artwork, which would distort on a card-shaped surface.
+        /// </summary>
         public static Texture2D LoadDisplayTexture(CardData card)
         {
             if (card == null) return null;
-            return LoadFace(card.cardName) ?? LoadFrame(card.ResolvedFrameKind);
+            return CardFaceCompositor.GetFace(card) ?? LoadFrame(card.ResolvedFrameKind);
         }
 
         public static Texture2D LoadFace(string cardName)
@@ -40,9 +44,16 @@ namespace DuelGenesis.Cards
             return texture;
         }
 
+        /// <summary>Classic swirl card back composed at real card proportions.</summary>
         public static Texture2D LoadCardBack()
         {
-            return LoadFrameFile("Card Back Anime 1.png", "CARD_BACK");
+            return CardFaceCompositor.GetCardBack() ?? LoadFrameFile("Blank Playing Card.png", "CARD_BACK_RAW");
+        }
+
+        /// <summary>Raw texture from the supplied frame/back library by file name.</summary>
+        public static Texture2D LoadFrameTexture(string fileName)
+        {
+            return LoadFrameFile(fileName, "RAW:" + fileName);
         }
 
         public static Texture2D LoadFrame(CardFrameKind frameKind)

@@ -51,8 +51,7 @@ namespace DuelGenesis.Core
             Colorize("Seat Interaction", new Color(0.10f, 0.16f, 0.22f, 1f));
 
             BuildGenesisPlazaDecor();
-            BuildTabletopZoneGlow();
-            AddAccentLights();
+            AddAccentLights();   // the duel table builds its own mat, zones and lighting (DuelBoardView)
         }
 
         private static void Colorize(string objectName, Color color, bool emission = false)
@@ -192,32 +191,6 @@ namespace DuelGenesis.Core
                 renderer.material = CreateMaterial(color, true);
         }
 
-        private static void BuildTabletopZoneGlow()
-        {
-            GameObject root = GameObject.Find("Duel Table Prototype");
-            if (root == null || root.transform.Find("DG Visual Zone Grid") != null)
-                return;
-
-            GameObject grid = new GameObject("DG Visual Zone Grid");
-            grid.transform.SetParent(root.transform, false);
-
-            const float startX = -1.68f;
-            const float spacing = 0.84f;
-
-            for (int i = 0; i < 5; i++)
-            {
-                float x = startX + spacing * i;
-                CreateTile(grid.transform, $"Player Monster Zone {i + 1}", new Vector3(x, 1.345f, -0.34f), new Vector3(0.67f, 0.018f, 0.46f), Cyan);
-                CreateTile(grid.transform, $"CPU Monster Zone {i + 1}", new Vector3(x, 1.345f, 0.34f), new Vector3(0.67f, 0.018f, 0.46f), Magenta);
-                CreateTile(grid.transform, $"Player Spell Trap Zone {i + 1}", new Vector3(x, 1.345f, -0.91f), new Vector3(0.67f, 0.014f, 0.32f), new Color(0.10f, 0.45f, 0.52f, 1f));
-                CreateTile(grid.transform, $"CPU Spell Trap Zone {i + 1}", new Vector3(x, 1.345f, 0.91f), new Vector3(0.67f, 0.014f, 0.32f), new Color(0.42f, 0.13f, 0.50f, 1f));
-            }
-
-            CreateTile(grid.transform, "Genesis Center Line", new Vector3(0f, 1.36f, 0f), new Vector3(4.08f, 0.022f, 0.045f), Mint);
-            CreateTile(grid.transform, "Player Deck Marker", new Vector3(1.95f, 1.37f, -1.13f), new Vector3(0.42f, 0.025f, 0.25f), Gold);
-            CreateTile(grid.transform, "CPU Deck Marker", new Vector3(-1.95f, 1.37f, 1.13f), new Vector3(0.42f, 0.025f, 0.25f), Gold);
-        }
-
         private static void CreateTile(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Color color)
         {
             GameObject tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -241,13 +214,6 @@ namespace DuelGenesis.Core
 
         private static void AddAccentLights()
         {
-            GameObject table = GameObject.Find("Duel Table Prototype");
-            if (table != null && table.transform.Find("DG Cyan Light") == null)
-            {
-                AddPointLight(table.transform, "DG Cyan Light", new Vector3(-1.7f, 3.2f, -0.2f), Cyan, 3.2f, 6.5f);
-                AddPointLight(table.transform, "DG Magenta Light", new Vector3(1.7f, 3.2f, 0.2f), Magenta, 3.2f, 6.5f);
-            }
-
             GameObject shop = GameObject.Find("Genesis Card Shop Prototype");
             if (shop != null && shop.transform.Find("DG Shop Glow") == null)
                 AddPointLight(shop.transform, "DG Shop Glow", new Vector3(0f, 2.4f, -1.3f), Purple, 2.8f, 5f);

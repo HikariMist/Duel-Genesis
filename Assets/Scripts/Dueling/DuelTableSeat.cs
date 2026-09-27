@@ -126,6 +126,8 @@ namespace DuelGenesis.Dueling
             }
 
             _seatedPlayer.SetMovementEnabled(true);
+            ThirdPersonCamera camera = Object.FindAnyObjectByType<ThirdPersonCamera>();
+            if (camera != null) camera.SetLookEnabled(true);
             _seatedPlayer = null;
             _hasReturnPoint = false;
             _duelWasActive = false;
