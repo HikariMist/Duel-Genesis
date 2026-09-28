@@ -20,6 +20,7 @@ namespace DuelGenesis.Cards
             if (CardFaceCompositor.TryGetFace(card, out Texture2D face))
             {
                 GUI.DrawTexture(cardRect, face, ScaleMode.StretchToFill, true);
+                CardRarityFx.DrawFoil(cardRect, card.rarity, card.id != null ? card.id.GetHashCode() & 0xffff : 0);
                 return;
             }
 

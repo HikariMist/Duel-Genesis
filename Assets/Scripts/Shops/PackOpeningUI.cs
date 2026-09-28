@@ -20,6 +20,7 @@ namespace DuelGenesis.Shops
         private const float TearSeconds = 1.25f;
 
         private readonly List<CardData> _lastPack = new();
+        private readonly List<float> _flippedAt = new();   // when each card was turned face-up (for the rare-pull burst)
         private Stage _stage = Stage.Closed;
         private int _revealedCount;
         private GenesisPackType _pack;
@@ -91,6 +92,8 @@ namespace DuelGenesis.Shops
             foreach (CardData card in cards) _collection.AddCard(card);
             _lastPack.Clear();
             _lastPack.AddRange(cards);
+            _flippedAt.Clear();
+            foreach (CardData _ in cards) _flippedAt.Add(-1f);
             _pack = pack;
             _revealedCount = 0;
             SetStage(Stage.Tearing);
@@ -208,6 +211,9 @@ namespace DuelGenesis.Shops
 
                 if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) Buy(pack);
             }
+
+            GUI.Label(new Rect(body.x, body.yMax - 22f, body.width, 22f), GenesisPacks.OddsText,
+                Style(13, FontStyle.Normal, TextAnchor.MiddleCenter, GenesisTheme.Muted));
         }
 
         private void DrawTear(Rect body)
@@ -247,13 +253,26 @@ namespace DuelGenesis.Shops
 
                 if (i < _revealedCount)
                 {
+                    if (i < _flippedAt.Count && _flippedAt[i] < 0f) _flippedAt[i] = Time.unscaledTime;
+                    float age = i < _flippedAt.Count ? Time.unscaledTime - _flippedAt[i] : 99f;
+                    Rect face = ProductionCardVisualDrawer.FitCard(rect);
+                    CardRarityFx.DrawRevealBurst(face, card.rarity, age);   // rays behind the card
                     if (card.rarity >= CardRarity.Rare)
                     {
                         float pulse = 0.55f + 0.35f * Mathf.Sin(Time.unscaledTime * 4f + i);
                         Color glow = GenesisTheme.RarityColor(card.rarity);
-                        GenesisTheme.Box(Grow(rect, 6f), new Color(glow.r, glow.g, glow.b, pulse));
+                        float spread = card.rarity >= CardRarity.UltraRare ? 9f : 6f;
+                        GenesisTheme.Box(Grow(face, spread), new Color(glow.r, glow.g, glow.b, pulse));
                     }
-                    ProductionCardVisualDrawer.DrawCard(rect, card);
+                    // A pop of scale as a foil card lands face-up.
+                    Rect drawRect = CardRarityFx.HasFoil(card.rarity) && age < 0.35f ? Grow(rect, 14f * Mathf.Sin(age / 0.35f * Mathf.PI)) : rect;
+                    ProductionCardVisualDrawer.DrawCard(drawRect, card);
+                    CardRarityFx.DrawCallOut(face, card.rarity, age);
+                    if (card.rarity == CardRarity.SecretRare && age < 0.6f)
+                    {
+                        Color rainbow = CardRarityFx.Tint(card.rarity, Time.unscaledTime);
+                        GenesisTheme.Box(new Rect(0, 0, Screen.width, Screen.height), new Color(rainbow.r, rainbow.g, rainbow.b, 0.35f * (1f - age / 0.6f)));
+                    }
                     GUI.Label(new Rect(rect.x - 10f, rect.yMax + 4f, rect.width + 20f, 22f), card.RarityLabel,
                         Style(13, FontStyle.Bold, TextAnchor.MiddleCenter, GenesisTheme.RarityColor(card.rarity)));
                     if (rect.Contains(Event.current.mousePosition)) hoverText = $"{card.cardName}  ·  {card.kind}  ·  {card.attribute}  ·  {card.ShortStats}";

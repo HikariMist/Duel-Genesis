@@ -27,8 +27,10 @@ namespace DuelGenesis.Shops
     }
 
     /// <summary>
-    /// The nine Duel Genesis boosters. Each has 9 cards: 6 commons, 2 rare-or-better slots and one foil
-    /// slot with a real shot at Super, Ultra and Secret rares. Cards only come from the pack's own pool.
+    /// The nine Duel Genesis boosters. Each has 9 cards: 6 commons, 2 rare slots and one foil slot.
+    /// Rarities come from Tools/assign_rarities.py (StreamingAssets/duel_genesis_rarities.json).
+    /// Roughly: a Super Rare or better in 3 packs out of 5, an Ultra Rare or better in about 1 pack in 5,
+    /// and a Secret Rare in 1 pack in 25. Cards only come from the pack's own pool.
     /// </summary>
     public static class GenesisPacks
     {
@@ -71,16 +73,28 @@ namespace DuelGenesis.Shops
             return cards.OrderBy(c => (int)c.rarity).ToList();
         }
 
+        // Rare slots (x2): Rare 86%, Super 11%, Ultra 3%.
+        public const float RareSlotSuper = 0.11f, RareSlotUltra = 0.03f;
+        // Foil slot (x1): Rare 55%, Super 28%, Ultra 13%, Secret 4%.
+        public const float FoilSuper = 0.28f, FoilUltra = 0.13f, FoilSecret = 0.04f;
+
+        /// <summary>The odds line shown at the pack counter.</summary>
+        public static string OddsText =>
+            $"Each pack: 9 cards  ·  6 Common  ·  2 Rare slots  ·  1 Foil slot: Super {FoilSuper * 100:0}%  ·  Ultra {FoilUltra * 100:0}%  ·  Secret {FoilSecret * 100:0}%";
+
         private static CardRarity RollRare()
         {
             float r = UnityEngine.Random.value;
-            return r < 0.80f ? CardRarity.Rare : r < 0.95f ? CardRarity.SuperRare : CardRarity.UltraRare;
+            return r < RareSlotUltra ? CardRarity.UltraRare : r < RareSlotUltra + RareSlotSuper ? CardRarity.SuperRare : CardRarity.Rare;
         }
 
         private static CardRarity RollFoil()
         {
             float r = UnityEngine.Random.value;
-            return r < 0.45f ? CardRarity.Rare : r < 0.75f ? CardRarity.SuperRare : r < 0.95f ? CardRarity.UltraRare : CardRarity.SecretRare;
+            if (r < FoilSecret) return CardRarity.SecretRare;
+            if (r < FoilSecret + FoilUltra) return CardRarity.UltraRare;
+            if (r < FoilSecret + FoilUltra + FoilSuper) return CardRarity.SuperRare;
+            return CardRarity.Rare;
         }
 
         /// <summary>A card of the wanted rarity, or the nearest rarity below (then above) that the pool has.</summary>
