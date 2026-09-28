@@ -161,7 +161,7 @@ namespace DuelGenesis.EditorTools
             // ---------------- people
             Transform people = new GameObject("People").transform;
             people.SetParent(root.transform, false);
-            SetupPlayerAvatar();
+            RemoveCharacters();          // no UMA avatars or NPCs; players get the Genesis character (DMO)
             SpawnNpcs(people);
             PlaceDistricts(root.transform);
 
@@ -405,38 +405,72 @@ namespace DuelGenesis.EditorTools
             Log.AppendLine("Player: UMA avatar attached (Human Male 3.0).");
         }
 
+        /// <summary>
+        /// Duel Genesis is going online: the world has no NPC avatars ("bots"). The two extra hub tables are
+        /// playable tables (a CPU opponent until matchmaking exists), with no characters standing at them.
+        /// </summary>
         private static void SpawnNpcs(Transform parent)
         {
-            GameObject table = GameObject.Find("Duel Table Prototype");
-            GameObject shop = GameObject.Find("Genesis Card Shop Prototype");
-            Vector3 tablePos = table != null ? table.transform.position : new Vector3(6f, 0f, 2f);
-            Vector3 shopPos = shop != null ? shop.transform.position : new Vector3(-6f, 0f, 2f);
+            BuildHubTable(parent, "Hub Duel Table A", new Vector3(10.6f, 0f, 2.0f), 90f, 1);
+            BuildHubTable(parent, "Hub Duel Table B", new Vector3(-10.2f, 0f, -1.8f), 90f, 2);
+        }
 
-            // The CPU duelist waits on the far side of the duel table, facing the player's seat.
-            GameObject rival = SpawnUma(parent, tablePos + new Vector3(0f, 0f, 1.05f), 180f, "Human Female 3.0",
-                new[] { "Hoodie_turquoise_Recipe", "tights_gray_Recipe", "shoes_tall_white_Recipe", "HairPonytail_Recipe" }, UmaIdle);
-            if (rival != null) rival.name = "NPC - Rival Duelist";
+        private static void BuildHubTable(Transform parent, string name, Vector3 position, float yaw, int number)
+        {
+            GameObject table = new GameObject(name);
+            table.transform.SetParent(parent, false);
+            table.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            var decor = table.AddComponent<DuelGenesis.Dueling.AmbientDuelTable>();
+            decor.seed = number;
+            decor.dealCards = false;
+            BoxCollider col = table.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 0.38f, 0f);
+            col.size = new Vector3(1.24f, 0.76f, 0.94f);
+            var duel = table.AddComponent<DuelGenesis.Dueling.CityDuelTable>();
+            duel.opponentSeed = 4241 * number + 17;
+            duel.tableName = name;
+        }
 
-            GameObject clerk = SpawnUma(parent, shopPos + new Vector3(1.6f, 0f, 0.1f), 200f, "Human Male 3.0",
-                new[] { "male_jacket_hive_Recipe", "male_sweatpants_black_Recipe", "male_shoes_tall_Recipe", "Hair_PulledBack_Recipe" }, UmaIdle);
-            if (clerk != null) clerk.name = "NPC - Card Shop Clerk";
+        /// <summary>Removes every avatar the old builder placed (UMA player avatar and all NPCs).</summary>
+        [MenuItem("Duel Genesis/World/Remove All NPC + UMA Characters From Scene")]
+        public static void RemoveCharactersMenu()
+        {
+            if (!OpenPlayableScene()) return;
+            int removed = RemoveCharacters();
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+            Debug.Log($"Duel: Genesis removed {removed} character objects (NPCs and the UMA player avatar).");
+        }
 
-            // Two ambient tables where NPCs are mid-duel (same table, mat, arena and holograms as the real one).
-            SpawnAmbientTable(parent, "Ambient Duel Table A", new Vector3(10.6f, 0f, 2.0f), 90f, 1,
-                new[] { "male_hoodie_grey_Recipe", "male_sportpants_alt_black_Recipe", "male_shoes_tall_Recipe", "Hair_MessyPomp_Recipe" },
-                new[] { "sportswear_top_Recipe", "shorts_turquoise_Recipe", "shoes_tall_turquoise.001_Recipe", "Hair_Bun_Recipe" });
-            SpawnAmbientTable(parent, "Ambient Duel Table B", new Vector3(-10.2f, 0f, -1.8f), 90f, 2,
-                new[] { "male_tanktop_yellow_Recipe", "male_shorts_hive_Recipe", "male_shoe_low_white.001_Recipe", "Hair_StraigntPulledBack_Recipe" },
-                new[] { "jacket_hive.001_Recipe", "skirt_turquoise_Recipe", "shoes_tall_white_Recipe", "Hair_Bob_Recipe" });
-
-            // Spectators watch the playable table from its sides.
-            GameObject fanA = SpawnUma(parent, tablePos + new Vector3(-1.35f, 0f, 1.2f), 125f, "Human Female 3.0",
-                new[] { "colors_top_Recipe", "colors_top_bottom_Recipe", "shoe_low_white_Recipe", "Hair_CurveUnder_Recipe" }, UmaIdle);
-            if (fanA != null) fanA.name = "NPC - Spectator";
-
-            GameObject fanB = SpawnUma(parent, tablePos + new Vector3(1.4f, 0f, 1.25f), 235f, "Human Male 3.0",
-                new[] { "male_tshirt_white_Recipe", "male_sportpants_blueWhite_Recipe", "male_shoes_tall_turquoise_Recipe", "HairMessyUp_Recipe" }, UmaIdle);
-            if (fanB != null) fanB.name = "NPC - Spectator";
+        public static int RemoveCharacters()
+        {
+            int removed = 0;
+            foreach (Transform t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t == null || !t.gameObject.scene.IsValid()) continue;
+                string n = t.gameObject.name;
+                bool npc = n.StartsWith("NPC - ");
+                bool umaPlayer = n == "Genesis Avatar";
+                bool uma = t.GetComponents<Component>().Any(c => c != null && c.GetType().FullName != null && c.GetType().FullName.StartsWith("UMA."));
+                if (npc || umaPlayer || (uma && t.parent != null && t.parent.GetComponent<DuelGenesis.Player.ThirdPersonPlayerController>() != null))
+                {
+                    Object.DestroyImmediate(t.gameObject);
+                    removed++;
+                }
+            }
+            // Ambient tables that used to have NPCs mid-duel become empty playable tables.
+            foreach (var decor in Object.FindObjectsByType<DuelGenesis.Dueling.AmbientDuelTable>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (decor == null) continue;
+                decor.dealCards = false;
+                if (decor.GetComponent<DuelGenesis.Dueling.CityDuelTable>() == null)
+                {
+                    var duel = decor.gameObject.AddComponent<DuelGenesis.Dueling.CityDuelTable>();
+                    duel.opponentSeed = 4241 * (decor.seed + 1) + 17;
+                    duel.tableName = decor.gameObject.name;
+                }
+            }
+            return removed;
         }
 
         private static void SpawnAmbientTable(Transform parent, string name, Vector3 position, float yaw, int seed, string[] maleOutfit, string[] femaleOutfit)
@@ -713,12 +747,6 @@ namespace DuelGenesis.EditorTools
             duel.opponentSeed = 7919 * number + 101;
             duel.tableName = $"Street Duel Table {number}";
 
-            // The resident duelist waits on the far side (one avatar per table keeps UMA cost down).
-            Vector3 far = table.transform.TransformPoint(new Vector3(0f, 0f, 0.85f));
-            bool female = number % 2 == 0;
-            GameObject rival = SpawnUma(parent, far, yaw + 180f, female ? "Human Female 3.0" : "Human Male 3.0",
-                female ? FemaleOutfits[number % FemaleOutfits.Length] : MaleOutfits[number % MaleOutfits.Length], UmaIdle);
-            if (rival != null) rival.name = $"NPC - Resident Duelist (Table {number})";
             Beacon(table.transform, new Vector3(-1.9f, 0f, 0.4f), "DUEL TABLE", new Color(1f, 0.3f, 0.75f));
         }
 
@@ -746,10 +774,6 @@ namespace DuelGenesis.EditorTools
             SpawnSized(Polygon + "Props/ColaMachine prefab.prefab", shop.transform, t.TransformPoint(new Vector3(2.9f, 0f, 1.3f)), back, height: 1.85f);
             SpawnSized(Polygon + "Props/bench prefab.prefab", shop.transform, t.TransformPoint(new Vector3(-2.8f, 0f, -1.2f)), yaw + 90f, length: 1.8f);
             SpawnSized(Polygon + "Props/Bin prefab.prefab", shop.transform, t.TransformPoint(new Vector3(-2.9f, 0f, 1.3f)), back, height: 0.9f);
-
-            GameObject clerk = SpawnUma(parent, t.TransformPoint(new Vector3(0f, 0f, 2.2f)), back, number % 2 == 0 ? "Human Female 3.0" : "Human Male 3.0",
-                number % 2 == 0 ? FemaleOutfits[(number + 2) % FemaleOutfits.Length] : MaleOutfits[(number + 2) % MaleOutfits.Length], UmaIdle);
-            if (clerk != null) clerk.name = $"NPC - Card Shop Clerk (Shop {number})";
 
             Beacon(shop.transform, new Vector3(0f, 0f, 2.6f), "CARD SHOP", new Color(0.2f, 0.85f, 1f));
         }
