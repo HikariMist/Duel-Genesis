@@ -64,7 +64,10 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis imported the Kame Game Shop ({copied} assets copied).\n{log}");
         }
 
-        [MenuItem("Duel Genesis/World/7. Place Kame Game Shop In The City")]
+        public const int CityShopCount = 3;          // plus the one on the plaza
+        public const float MaxShopDistance = 200f;   // metres from the plaza, so shops stay within walking range
+
+        [MenuItem("Duel Genesis/World/7. Place Kame Game Shops (Plaza + Across The City)")]
         public static void PlaceKameGameShop()
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ShopPrefabPath);
@@ -73,74 +76,148 @@ namespace DuelGenesis.EditorTools
             GameObject city = GameObject.Find(GenesisWorldBuilder.CityRootName);
             if (city == null) { EditorUtility.DisplayDialog("Kame Game Shop", "Build Genesis City first (World > 3).", "OK"); return; }
 
-            Transform old = city.transform.Find("Kame Game Shop");
-            if (old != null) Object.DestroyImmediate(old.gameObject);
-
-            var shop = (GameObject)PrefabUtility.InstantiatePrefab(prefab, city.transform);
-            shop.name = "Kame Game Shop";
-            shop.transform.position = new Vector3(0f, -500f, 0f);   // out of the way while measuring
+            // Start clean: earlier Kame shops go, and the plaza's old placeholder shop is replaced.
+            foreach (Transform t in city.transform.Cast<Transform>().Where(t => t.name.StartsWith("Kame Game Shop")).ToList())
+                Object.DestroyImmediate(t.gameObject);
+            bool hadOld = RemoveOldHubShop(city.transform, out Vector3 oldSpot);
             Physics.SyncTransforms();
-            Bounds b = GenesisWorldBuilder.RendererBounds(shop);
-            Vector3 pivotOffset = shop.transform.position - b.center;
-            pivotOffset.y = shop.transform.position.y - b.min.y;
 
-            if (!FindFreeSpot(city.transform, b.size, out Vector3 ground, out float yaw))
+            var log = new StringBuilder();
+            var placed = new List<Vector3>();
+
+            // The model's shop front (Millennium Eye sign + glass windows) is its local +X side, so a yaw of
+            // "direction - 90" turns the front towards that direction.
+            // 1. The plaza shop, where the old storefront stood, front to the plaza (-Z).
+            Vector3 hubSpot = hadOld ? oldSpot : new Vector3(-6f, 0f, 5.2f);
+            float hubGround = Physics.Raycast(hubSpot + Vector3.up * 50f, Vector3.down, out RaycastHit g, 120f, ~0, QueryTriggerInteraction.Ignore) ? g.point.y : 0f;
+            GameObject first = SpawnShop(prefab, city.transform, "Kame Game Shop", new Vector3(hubSpot.x, hubGround, hubSpot.z), 90f);
+            placed.Add(hubSpot);
+            log.AppendLine($"Plaza shop at {first.transform.position}.");
+
+            // 2. More shops on open lots spread across the map, each facing the plaza.
+            Bounds size = SolidBounds(first);
+            float radius = Mathf.Max(size.size.x, size.size.z) * 0.5f + 1.5f;
+            List<Vector3> lots = FindLots(city.transform, radius, size.size.y);
+            log.AppendLine($"{lots.Count} open lots fit a {radius * 2f:0} m shop.");
+            for (int n = 0; n < CityShopCount; n++)
             {
-                ground = new Vector3(0f, 0f, 30f);
-                yaw = 180f;
-                Debug.LogWarning("Duel: Genesis found no clear flat lot for the Kame Game Shop; placed it 30 m north of the hub. Move it by hand if it clips.");
+                Vector3 best = default;
+                float bestDist = -1f;
+                foreach (Vector3 p in lots)
+                {
+                    float d = placed.Min(a => Vector2.Distance(new Vector2(a.x, a.z), new Vector2(p.x, p.z)));
+                    if (d > bestDist) { bestDist = d; best = p; }
+                }
+                if (bestDist < radius * 2f + 20f) { log.AppendLine("No more lots far enough apart."); break; }
+                float yaw = Quaternion.LookRotation(new Vector3(-best.x, 0f, -best.z).normalized, Vector3.up).eulerAngles.y - 90f;
+                GameObject shop = SpawnShop(prefab, city.transform, $"Kame Game Shop {n + 2}", best, yaw);
+                placed.Add(best);
+                Physics.SyncTransforms();
+                lots.RemoveAll(p => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(best.x, best.z)) < radius * 2f + 20f);
+                log.AppendLine($"{shop.name} at {best} ({bestDist:0} m from the nearest other shop).");
             }
-            shop.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-            shop.transform.position = ground + Quaternion.Euler(0f, yaw, 0f) * new Vector3(pivotOffset.x, 0f, pivotOffset.z) + Vector3.up * pivotOffset.y;
+
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+            Selection.activeGameObject = first;
+            Debug.Log($"Duel: Genesis placed {placed.Count} Kame Game Shops (their counters sell booster packs).\n{log}");
+        }
+
+        /// <summary>One shop, its centre at <paramref name="ground"/>, door towards <paramref name="yaw"/>.</summary>
+        private static GameObject SpawnShop(GameObject prefab, Transform city, string name, Vector3 ground, float yaw)
+        {
+            var shop = (GameObject)PrefabUtility.InstantiatePrefab(prefab, city);
+            shop.name = name;
+            shop.transform.SetPositionAndRotation(new Vector3(0f, -500f, 0f), Quaternion.Euler(0f, yaw, 0f));
+            Physics.SyncTransforms();
+            Bounds b = SolidBounds(shop);
+            Vector3 offset = shop.transform.position - new Vector3(b.center.x, b.min.y, b.center.z);
+            shop.transform.position = ground + offset;
+
+            // Let players walk in: the door keeps its look but loses its collider.
+            Transform door = FindDeep(shop.transform, "Door 1");
+            if (door != null) foreach (Collider c in door.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
 
             // The counter sells the Duel Genesis packs.
             Transform counter = FindDeep(shop.transform, "CashRegister") ?? FindDeep(shop.transform, "CounterTop_Prefab") ?? shop.transform;
             var terminal = counter.gameObject.AddComponent<DuelGenesis.Shops.CardShopTerminal>();
-            terminal.shopName = "Kame Game Shop";
+            terminal.shopName = name.Replace(" 2", "").Replace(" 3", "").Replace(" 4", "");
             if (counter.GetComponentInChildren<Collider>() == null) counter.gameObject.AddComponent<BoxCollider>();
 
+            Physics.SyncTransforms();
+            Bounds placed = SolidBounds(shop);
             var beacon = new GameObject("Beacon - GAME SHOP");
             beacon.transform.SetParent(shop.transform, false);
-            beacon.transform.position = GenesisWorldBuilder.RendererBounds(shop).center + Vector3.up * GenesisWorldBuilder.RendererBounds(shop).extents.y;
+            beacon.transform.position = new Vector3(placed.center.x, placed.max.y, placed.center.z);
             var gb = beacon.AddComponent<DuelGenesis.Core.GenesisBeacon>();
             gb.label = "KAME GAME SHOP";
             gb.color = new Color(1f, 0.8f, 0.25f);
-
-            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
-            Selection.activeGameObject = shop;
-            Debug.Log($"Duel: Genesis placed the Kame Game Shop at {shop.transform.position} (yaw {yaw:0}). Its counter sells booster packs.");
+            return shop;
         }
 
-        /// <summary>A flat patch of street near the hub big enough for <paramref name="size"/>, facing the hub.</summary>
-        private static bool FindFreeSpot(Transform city, Vector3 size, out Vector3 ground, out float yaw)
+        /// <summary>
+        /// Deletes the plaza's old placeholder card shop: the prototype box and pack terminal, the red
+        /// storefront, the pack kiosk and the ATMs, cola machine and bin beside it. Returns the storefront spot.
+        /// </summary>
+        public static bool RemoveOldHubShop(Transform city, out Vector3 spot)
         {
-            Transform map = city.Find("Map");
-            float radius = Mathf.Max(size.x, size.z) * 0.5f;
-            for (float r = 22f; r <= 140f; r += 6f)
-            for (int a = 0; a < 360; a += 12)
-            {
-                Vector3 p = Quaternion.Euler(0f, a, 0f) * Vector3.forward * r;
-                if (!Physics.Raycast(p + Vector3.up * 80f, Vector3.down, out RaycastHit hit, 200f, ~0, QueryTriggerInteraction.Ignore)) continue;
-                if (hit.normal.y < 0.97f || (map != null && !hit.collider.transform.IsChildOf(map))) continue;
-                bool flat = true;
-                for (int i = 0; i < 8 && flat; i++)
-                {
-                    Vector3 edge = hit.point + Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward * radius;
-                    flat = Physics.Raycast(edge + Vector3.up * 40f, Vector3.down, out RaycastHit e, 80f, ~0, QueryTriggerInteraction.Ignore)
-                           && Mathf.Abs(e.point.y - hit.point.y) < 0.4f;
-                }
-                if (!flat) continue;
-                Vector3 centre = hit.point + Vector3.up * (size.y * 0.5f + 0.3f);
-                if (Physics.CheckBox(centre, new Vector3(radius, size.y * 0.5f, radius), Quaternion.identity, ~0, QueryTriggerInteraction.Ignore)) continue;
-                ground = hit.point;
-                yaw = Quaternion.LookRotation(-p.normalized).eulerAngles.y;   // front towards the hub
-                return true;
-            }
-            ground = default;
-            yaw = 0f;
-            return false;
+            spot = default;
+            GameObject proto = GameObject.Find("Genesis Card Shop Prototype");
+            GameObject front = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Select(t => t.gameObject).FirstOrDefault(go => go.name == "Genesis Card Shop (storefront)" && go.scene.IsValid());
+            if (proto == null && front == null) return false;
+
+            Vector3 protoPos = proto != null ? proto.transform.position : front.transform.position - new Vector3(0f, 0f, 3.2f);
+            spot = front != null ? front.transform.position : protoPos + new Vector3(0f, 0f, 3.2f);
+
+            string[] propNames = { "Card Pack Kiosk", "ATM", "ColaMachine", "Bin" };
+            List<GameObject> doomed = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(t => t.gameObject.scene.IsValid() && t.parent != null && t.parent.name == "Hub Dressing" &&
+                            propNames.Any(n => t.name.StartsWith(n)) &&
+                            Vector2.Distance(new Vector2(t.position.x, t.position.z), new Vector2(protoPos.x, protoPos.z)) < 6.5f)
+                .Select(t => t.gameObject).ToList();
+            if (proto != null) doomed.Add(proto);
+            if (front != null) doomed.Add(front);
+            foreach (GameObject go in doomed.Distinct()) if (go != null) Object.DestroyImmediate(go);
+            Debug.Log($"Duel: Genesis removed the old plaza card shop ({doomed.Count} objects).");
+            return true;
         }
+
+        /// <summary>Flat, empty street lots across the whole map where a shop of <paramref name="radius"/> fits.</summary>
+        private static List<Vector3> FindLots(Transform city, float radius, float height)
+        {
+            var lots = new List<Vector3>();
+            Transform map = city.Find("Map");
+            if (map == null) return lots;
+            Bounds b = GenesisWorldBuilder.RendererBounds(map.gameObject);
+            for (float x = b.min.x + radius; x < b.max.x - radius; x += 6f)
+            for (float z = b.min.z + radius; z < b.max.z - radius; z += 6f)
+            {
+                float fromHub = new Vector2(x, z).magnitude;
+                if (fromHub < 45f || fromHub > MaxShopDistance) continue;   // not on the plaza, not at the map's edge
+                float? y0 = null;
+                bool ok = true;
+                for (int ix = -1; ix <= 1 && ok; ix++)
+                for (int iz = -1; iz <= 1 && ok; iz++)
+                {
+                    var o = new Vector3(x + ix * radius * 0.9f, 250f, z + iz * radius * 0.9f);
+                    RaycastHit[] hits = Physics.RaycastAll(o, Vector3.down, 500f, ~0, QueryTriggerInteraction.Ignore);
+                    if (hits.Length == 0) { ok = false; break; }
+                    System.Array.Sort(hits, (a, c) => a.distance.CompareTo(c.distance));
+                    RaycastHit top = hits[0];
+                    if (top.collider.name.Contains("Test_Ground") && hits.Length > 1) top = hits[1];
+                    if (!top.collider.transform.IsChildOf(map) || top.point.y > 3f || top.point.y < -8f) { ok = false; break; }
+                    if (y0 == null) y0 = top.point.y;
+                    else if (Mathf.Abs(top.point.y - y0.Value) > 0.5f) ok = false;
+                }
+                if (!ok || y0 == null) continue;
+                Vector3 centre = new Vector3(x, y0.Value + height * 0.5f + 0.3f, z);
+                Collider[] blockers = Physics.OverlapBox(centre, new Vector3(radius, height * 0.5f, radius), Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+                if (blockers.All(c => c.name.Contains("Test_Ground"))) lots.Add(new Vector3(x, y0.Value, z));
+            }
+            return lots;
+        }
+
 
         // ------------------------------------------------------------------ generic dependency copy
 
@@ -289,6 +366,23 @@ namespace DuelGenesis.EditorTools
             PrefabUtility.SaveAsPrefabAsset(root, path);
             PrefabUtility.UnloadPrefabContents(root);
             log.AppendLine($"DMO import: prefab cleaned ({removed} missing scripts removed).");
+        }
+
+        /// <summary>
+        /// Bounds of the static meshes only. Skinned figurines report huge, stale bounds from DMO, and a
+        /// stray oversized mesh would do the same, so both are ignored.
+        /// </summary>
+        private static Bounds SolidBounds(GameObject go)
+        {
+            bool any = false;
+            Bounds b = new Bounds(go.transform.position, Vector3.zero);
+            foreach (MeshRenderer r in go.GetComponentsInChildren<MeshRenderer>())
+            {
+                Bounds rb = r.bounds;
+                if (rb.size.magnitude > 80f || rb.size.magnitude < 0.001f) continue;
+                if (!any) { b = rb; any = true; } else b.Encapsulate(rb);
+            }
+            return b;
         }
 
         private static Transform FindDeep(Transform t, string name)
