@@ -48,7 +48,7 @@ namespace DuelGenesis.Dueling
         private void DealBoard()
         {
             var rng = new System.Random(seed * 7919 + 13);
-            List<CardData> monsters = CardDatabase.All.Where(c => c.kind == CardKind.Monster && CardModelRegistry.LoadPrefab(c) != null && c.level <= 8).ToList();
+            List<CardData> monsters = CardDatabase.All.Where(c => c.kind == CardKind.Monster && c.level <= 8 && CardModelRegistry.HasModel(c)).ToList();   // manifest check: never load 400 prefabs just to filter
             List<CardData> backrow = CardDatabase.All.Where(c => c.kind != CardKind.Monster).ToList();
             if (monsters.Count == 0) return;
 

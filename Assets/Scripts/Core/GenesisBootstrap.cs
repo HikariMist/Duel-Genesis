@@ -72,6 +72,9 @@ namespace DuelGenesis.Core
             if (Object.FindFirstObjectByType<RuntimeTextMeshFixer>() == null)
                 systems.AddComponent<RuntimeTextMeshFixer>();
 
+            // The spinning Duel Genesis logo hologram above Genesis City.
+            GenesisSkyHologram.EnsureInCity();
+
 
 
 

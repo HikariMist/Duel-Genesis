@@ -99,6 +99,10 @@ namespace DuelGenesis.Cards
             return Resources.Load<GameObject>($"Models/{characterName}");
         }
 
+        /// <summary>Cheap check (manifest lookup only) — does not load the prefab.</summary>
+        public static bool HasModel(CardData card) =>
+            card != null && (ResourcePaths.ContainsKey(card.id ?? string.Empty) || TryResolveDmoCharacterName(card.cardName, out _));
+
         public static AnimationClip[] LoadAnimationClips(CardData card)
         {
             if (card == null || !TryResolveDmoCharacterName(card.cardName, out string characterName))
