@@ -141,6 +141,8 @@ namespace DuelGenesis.EditorTools
             DressCardShop(hub);
             DressHub(hub);
             PlaceTraffic(root.transform, city.transform);
+            int boards = GenesisBillboards.Place(root.transform, Log);
+            Log.AppendLine($"Billboards: {boards} placed.");
 
             // ---------------- people
             Transform people = new GameObject("People").transform;
