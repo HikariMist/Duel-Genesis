@@ -123,6 +123,12 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis placed {placed.Count} Kame Game Shops (their counters sell booster packs).\n{log}");
         }
 
+        /// <summary>DMO's shop fixtures, removed so the interior starts empty.</summary>
+        private static readonly string[] InteriorFixtures =
+        {
+            "Left Stand", "Shelf 2", "CounterTop_Prefab", "CashRegister", "Pot Of Greed", "duel disk", "VIZ_3"
+        };
+
         /// <summary>One shop, its centre at <paramref name="ground"/>, door towards <paramref name="yaw"/>.</summary>
         private static GameObject SpawnShop(GameObject prefab, Transform city, string name, Vector3 ground, float yaw)
         {
@@ -138,11 +144,13 @@ namespace DuelGenesis.EditorTools
             Transform door = FindDeep(shop.transform, "Door 1");
             if (door != null) foreach (Collider c in door.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
 
-            // The counter sells the Duel Genesis packs.
-            Transform counter = FindDeep(shop.transform, "CashRegister") ?? FindDeep(shop.transform, "CounterTop_Prefab") ?? shop.transform;
-            var terminal = counter.gameObject.AddComponent<DuelGenesis.Shops.CardShopTerminal>();
-            terminal.shopName = name.Replace(" 2", "").Replace(" 3", "").Replace(" 4", "");
-            if (counter.GetComponentInChildren<Collider>() == null) counter.gameObject.AddComponent<BoxCollider>();
+            // Empty shell: the user is furnishing the interior from scratch, so every DMO fixture goes and only
+            // the building (floor, walls, roof, door, ceiling lights) stays. Our duel tables are added below.
+            foreach (string fixture in InteriorFixtures)
+            {
+                Transform f = FindDeep(shop.transform, fixture);
+                if (f != null) Object.DestroyImmediate(f.gameObject);
+            }
 
             Physics.SyncTransforms();
             Bounds placed = SolidBounds(shop);
@@ -191,8 +199,8 @@ namespace DuelGenesis.EditorTools
         }
 
         /// <summary>
-        /// Fills the shop floor with our own pieces: two playable duel tables and a wall of the nine Genesis
-        /// packs. Everything goes only where the floor is measured clear, so nothing clips into DMO's shelves.
+        /// Puts two playable duel tables (with their chairs) on the empty shop floor, only where the floor is
+        /// measured clear. BuildPackWall is kept for when the interior gets furnished.
         /// </summary>
         private static void FurnishInterior(GameObject shop, Transform city, string name, float groundY)
         {
@@ -271,19 +279,7 @@ namespace DuelGenesis.EditorTools
                 tables++;
             }
 
-            // 2. The pack wall: all nine Genesis packs on a lit display, back to the deepest free wall.
-            bool packs = false;
-            int pw = Mathf.CeilToInt(3.2f / cell);
-            for (int iu = 0; iu < n && !packs; iu++)
-            for (int iv = 0; iv < n && !packs; iv++)
-            {
-                if (!Clear(iu, iv, 2, pw)) continue;
-                Vector3 at = Centre(iu, iv, 2, pw);
-                BuildPackWall(fit, name, at, Quaternion.LookRotation(front, Vector3.up));
-                Take(iu, iv, 2, pw);
-                packs = true;
-            }
-            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables, pack wall {(packs ? "placed" : "had no room")}.");
+            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables (interior otherwise empty).");
         }
 
         /// <summary>A dark display board with the nine pack wrappers in a 5 + 4 layout, lit from the front.</summary>
