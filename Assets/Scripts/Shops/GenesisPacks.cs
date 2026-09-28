@@ -47,12 +47,27 @@ namespace DuelGenesis.Shops
             Make("fire", "Fire Pack", "FIRE monsters", 1200, new Color(1f, 0.5f, 0.15f), Attr("FIRE")),
             Make("water", "Water Pack", "WATER monsters", 1200, new Color(0.3f, 0.6f, 1f), Attr("WATER")),
             Make("wind", "Wind Pack", "WIND monsters", 1200, new Color(0.4f, 1f, 0.7f), Attr("WIND")),
+            // Monster Type packs.
+            Make("dragon", "Dragon Pack", "Dragon monsters", 1200, new Color(0.85f, 0.2f, 0.2f), Types("Dragon")),
+            Make("spellcaster", "Spellcaster Pack", "Spellcaster monsters", 1200, new Color(0.75f, 0.45f, 1f), Types("Spellcaster")),
+            Make("warrior", "Warrior Pack", "Warrior monsters", 1200, new Color(0.95f, 0.65f, 0.25f), Types("Warrior")),
+            Make("fiend", "Fiend Pack", "Fiend monsters", 1200, new Color(0.6f, 0.15f, 0.45f), Types("Fiend")),
+            Make("machine", "Machine Pack", "Machine monsters", 1200, new Color(0.6f, 0.7f, 0.8f), Types("Machine")),
+            Make("fairy", "Fairy Pack", "Fairy monsters", 1200, new Color(1f, 0.85f, 0.95f), Types("Fairy")),
+            Make("zombie", "Zombie Pack", "Zombie monsters", 1200, new Color(0.45f, 0.75f, 0.45f), Types("Zombie")),
+            Make("beast", "Beast Pack", "Beast, Beast-Warrior and Winged Beast", 1200, new Color(0.8f, 0.55f, 0.3f), Types("Beast", "Beast-Warrior", "Winged Beast")),
+            Make("thunder", "Thunder Pack", "Thunder monsters", 1200, new Color(1f, 0.95f, 0.3f), Types("Thunder")),
+            Make("insect", "Insect Pack", "Insect monsters", 1200, new Color(0.55f, 0.85f, 0.25f), Types("Insect")),
         };
 
         public static GenesisPackType Get(string id) => All.FirstOrDefault(p => p.id == id) ?? All[0];
 
         private static GenesisPackType Make(string id, string name, string blurb, int price, Color accent, Func<CardData, bool> filter) =>
             new GenesisPackType { id = id, displayName = name, blurb = blurb, price = price, accent = accent, filter = filter };
+
+        /// <summary>Monsters whose Type (the part of the type line before " /") is one of <paramref name="types"/>.</summary>
+        private static Func<CardData, bool> Types(params string[] types) =>
+            c => c.kind == CardKind.Monster && types.Any(t => string.Equals(((c.typeLine ?? "").Split('/')[0]).Trim(), t, StringComparison.OrdinalIgnoreCase));
 
         private static Func<CardData, bool> Attr(string attribute) =>
             c => c.kind == CardKind.Monster && string.Equals((c.attribute ?? "").Trim(), attribute, StringComparison.OrdinalIgnoreCase);

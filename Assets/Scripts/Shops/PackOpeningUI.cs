@@ -182,7 +182,7 @@ namespace DuelGenesis.Shops
         private void DrawShop(Rect body)
         {
             GenesisPackType[] packs = GenesisPacks.All;
-            const int perRow = 5;
+            int perRow = packs.Length <= 10 ? 5 : Mathf.CeilToInt(packs.Length / 3f);
             int rows = Mathf.CeilToInt(packs.Length / (float)perRow);
             float labelH = 54f;
             float packH = Mathf.Min((body.height - 20f) / rows - labelH - 14f, (body.width / perRow - 24f) * 1.5f);
@@ -204,9 +204,10 @@ namespace DuelGenesis.Shops
                 if (hover) GenesisTheme.Box(Grow(drawRect, 4f), new Color(pack.accent.r, pack.accent.g, pack.accent.b, 0.8f));
                 DrawArt(drawRect, pack, affordable ? 1f : 0.45f);
 
-                GUI.Label(new Rect(x - 12f, y + packH + 4f, packW + 24f, 24f), $"{i + 1}. {pack.displayName}",
-                    Style(16, FontStyle.Bold, TextAnchor.MiddleCenter, pack.accent));
-                GUI.Label(new Rect(x - 12f, y + packH + 26f, packW + 24f, 22f), $"{pack.price:N0} GC  ·  {pack.blurb}",
+                string key = i < 9 ? $"{i + 1}. " : "";
+                GUI.Label(new Rect(x - 12f, y + packH + 4f, packW + 24f, 24f), key + pack.displayName,
+                    Style(packs.Length > 10 ? 14 : 16, FontStyle.Bold, TextAnchor.MiddleCenter, pack.accent));
+                GUI.Label(new Rect(x - 12f, y + packH + 26f, packW + 24f, 22f), packs.Length > 10 ? $"{pack.price:N0} GC" : $"{pack.price:N0} GC  ·  {pack.blurb}",
                     Style(12, FontStyle.Normal, TextAnchor.MiddleCenter, affordable ? Color.white : GenesisTheme.Muted));
 
                 if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) Buy(pack);

@@ -32,6 +32,17 @@ PACKS = {
     "fire": ("FIRE PACK", "Horus the Black Flame Dragon LV8", (235, 80, 20), (60, 10, 5)),
     "water": ("WATER PACK", "Mobius the Frost Monarch", (40, 150, 235), (5, 25, 60)),
     "wind": ("WIND PACK", "Harpie Lady Sisters", (60, 200, 120), (8, 45, 30)),
+    # Monster Type packs
+    "dragon": ("DRAGON PACK", "Red-Eyes Black Dragon", (200, 30, 30), (40, 5, 5)),
+    "spellcaster": ("SPELLCASTER PACK", "Dark Magician Girl", (170, 90, 240), (30, 10, 50)),
+    "warrior": ("WARRIOR PACK", "Black Luster Soldier", (230, 150, 50), (50, 25, 5)),
+    "fiend": ("FIEND PACK", "Summoned Skull", (140, 30, 100), (25, 5, 20)),
+    "machine": ("MACHINE PACK", "XYZ-Dragon Cannon", (140, 160, 185), (25, 30, 40)),
+    "fairy": ("FAIRY PACK", "Airknight Parshath", (240, 200, 230), (60, 40, 70)),
+    "zombie": ("ZOMBIE PACK", "Vampire Lord", (90, 170, 90), (15, 30, 15)),
+    "beast": ("BEAST PACK", "Chimera the Flying Mythical Beast", (200, 130, 60), (45, 25, 10)),
+    "thunder": ("THUNDER PACK", "Zaborg the Thunder Monarch", (240, 220, 60), (50, 45, 5)),
+    "insect": ("INSECT PACK", "Perfectly Ultimate Great Moth", (130, 200, 50), (20, 40, 5)),
 }
 
 
@@ -74,6 +85,7 @@ def crimp(draw, top, colour):
 
 def main():
     font_big = ImageFont.truetype(FONT, 78)
+    font_mid = ImageFont.truetype(FONT, 64)
     font_small = ImageFont.truetype(FONT, 26)
     logo = Image.open(LOGO).convert("RGBA")
     logo.thumbnail((430, 230))
@@ -103,10 +115,11 @@ def main():
         # Logo and titles.
         img.alpha_composite(logo, ((W - logo.width) // 2, 72))
         d = ImageDraw.Draw(img, "RGBA")
-        tw = d.textlength(title, font=font_big)
+        fb = font_big if d.textlength(title, font=font_big) < W - 60 else font_mid
+        tw = d.textlength(title, font=fb)
         for ox, oy in ((4, 4), (-2, 0), (2, 0), (0, -2), (0, 2)):
-            d.text(((W - tw) / 2 + ox, 872 + oy), title, font=font_big, fill=(0, 0, 0, 200))
-        d.text(((W - tw) / 2, 872), title, font=font_big, fill=(255, 255, 255, 255))
+            d.text(((W - tw) / 2 + ox, 872 + oy), title, font=fb, fill=(0, 0, 0, 200))
+        d.text(((W - tw) / 2, 872), title, font=fb, fill=(255, 255, 255, 255))
         sub = "9 CARDS  •  BOOSTER"
         sw = d.textlength(sub, font=font_small)
         d.text(((W - sw) / 2, 972), sub, font=font_small, fill=(255, 225, 140, 255))
