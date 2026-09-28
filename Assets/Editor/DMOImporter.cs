@@ -640,7 +640,10 @@ namespace DuelGenesis.EditorTools
         // ------------------------------------------------------------------ generic dependency copy
 
         /// <summary>Copies every export asset reachable from <paramref name="seedGuids"/>. Returns the count, or -1 on error.</summary>
-        public static int ImportDependencies(IEnumerable<string> seedGuids, StringBuilder log)
+        public static int ImportDependencies(IEnumerable<string> seedGuids, StringBuilder log) => ImportDependencies(seedGuids, log, null);
+
+        /// <summary>As above, never following <paramref name="exclude"/> (e.g. DMO's huge player animator and its clips).</summary>
+        public static int ImportDependencies(IEnumerable<string> seedGuids, StringBuilder log, ICollection<string> exclude)
         {
             string exportAssets = Path.Combine(ExportRoot, "Assets");
             if (!Directory.Exists(exportAssets))
@@ -656,7 +659,7 @@ namespace DuelGenesis.EditorTools
             while (queue.Count > 0)
             {
                 string guid = queue.Dequeue();
-                if (!seen.Add(guid) || !index.TryGetValue(guid, out string file)) continue;
+                if (!seen.Add(guid) || (exclude != null && exclude.Contains(guid)) || !index.TryGetValue(guid, out string file)) continue;
                 string rel = file.Substring(exportAssets.Length).TrimStart('\\', '/');
                 string ext = Path.GetExtension(file).ToLowerInvariant();
                 if (ext == ".cs" || ext == ".shader" || ext == ".compute" || ext == ".dll" || ext == ".unity" ||
@@ -793,7 +796,7 @@ namespace DuelGenesis.EditorTools
         }
 
         /// <summary>Default layer, static flags for scenery, and no leftover missing-script components.</summary>
-        private static void CleanPrefab(string path, StringBuilder log)
+        public static void CleanPrefab(string path, StringBuilder log)
         {
             GameObject root = PrefabUtility.LoadPrefabContents(path);
             int removed = 0;
