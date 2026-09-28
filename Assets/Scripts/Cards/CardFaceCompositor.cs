@@ -155,13 +155,32 @@ namespace DuelGenesis.Cards
 
         private static string Key(CardData card) => string.IsNullOrEmpty(card.id) ? card.cardName : card.id;
 
+        /// <summary>
+        /// Enter Play Mode Options skip the domain reload, so statics from the previous Play session survive
+        /// while the textures they point at are destroyed when Play Mode ends. The old rig then rendered faces
+        /// with no artwork, no stars and finally blank white. Start every Play session from a clean slate.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetForPlaySession()
+        {
+            Faces.Clear();
+            Pending.Clear();
+            PendingKeys.Clear();
+            _cardBack = null;
+            if (_instance != null) DestroyImmediate(_instance.gameObject);
+            _instance = null;
+            foreach (CardFaceCompositor stale in Resources.FindObjectsOfTypeAll<CardFaceCompositor>())
+                if (stale != null) DestroyImmediate(stale.gameObject);
+        }
+
         private static CardFaceCompositor EnsureInstance()
         {
             if (_instance != null) return _instance;
             GameObject host = new GameObject("DG Card Face Compositor");
             if (Application.isPlaying)
-                DontDestroyOnLoad(host);
-            host.hideFlags = HideFlags.DontSave;
+                DontDestroyOnLoad(host);           // destroyed with Play Mode, so nothing stale survives
+            else
+                host.hideFlags = HideFlags.DontSave;
             _instance = host.AddComponent<CardFaceCompositor>();
             _instance.Build();
             return _instance;

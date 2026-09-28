@@ -237,12 +237,20 @@ namespace DuelGenesis.Dueling
                 return hologram;
             }
 
-            GameObject model = Instantiate(prefab, holder.transform);
+            // The model sits under a pivot we own. DMO clips animate the model root's own position, which
+            // overwrote the scale-and-ground offset and left many monsters floating high above the card.
+            Transform pivot = new GameObject("Model Pivot").transform;
+            pivot.SetParent(holder.transform, false);
+            GameObject model = Instantiate(prefab, pivot);
             model.name = "Model";
             PrepareModel(model);
-            Normalize(model.transform);
+            Normalize(model.transform, pivot);
             hologram.IsModel = true;
+            hologram._pivot = pivot;
+            hologram._model = model.transform;
+            hologram._pivotBase = pivot.localPosition;
             hologram.PlayIdle(model, card.Data);
+            hologram.BeginGrounding();
             return hologram;
         }
 
@@ -277,21 +285,86 @@ namespace DuelGenesis.Dueling
             if (Application.isPlaying) Destroy(o); else DestroyImmediate(o);
         }
 
-        public static void Normalize(Transform model)
+        /// <summary>Scales the model to figure size and stands it on the card. The scale and offset go on
+        /// <paramref name="target"/> (the model itself by default, or a pivot above it).</summary>
+        public static void Normalize(Transform model, Transform target = null)
         {
+            if (target == null) target = model;
             Renderer[] renderers = VisibleRenderers(model);
             if (renderers.Length == 0) return;
             Bounds bounds = CoreBounds(renderers);
             float footprint = Mathf.Max(bounds.size.x, bounds.size.z);
             float scale = Mathf.Min(TargetHeight / Mathf.Max(bounds.size.y, 0.0001f), MaxFootprint / Mathf.Max(footprint, 0.0001f));
             if (float.IsInfinity(scale) || scale <= 0f) return;
-            model.localScale *= scale;
+            target.localScale *= scale;
 
             // Stand the model on the card surface, centred on the card (using its body, not a long weapon or tail).
             bounds = CoreBounds(renderers);
             Bounds all = WorldBounds(renderers);
-            Vector3 bottom = model.parent.InverseTransformPoint(new Vector3(bounds.center.x, all.min.y, bounds.center.z));
-            model.localPosition -= bottom;
+            Vector3 bottom = target.parent.InverseTransformPoint(new Vector3(bounds.center.x, all.min.y, bounds.center.z));
+            target.localPosition -= bottom;
+        }
+
+        // ---------------------------------------------------------------- grounding on the animated pose
+
+        private Transform _pivot, _model;
+        private Vector3 _pivotBase;
+        private float _groundUntil, _nextGroundSample;
+        private float _lowestRaw = float.PositiveInfinity;
+        private static Mesh _bakeBuffer;
+        private static readonly List<Vector3> BakedVertices = new();
+
+        /// <summary>Watches the playing clip for a moment and keeps its lowest point on the card surface.
+        /// Bind-pose bounds lie for many DMO rigs (the idle pose crouches, hovers or is offset), so this measures
+        /// the real skinned vertices.</summary>
+        private void BeginGrounding()
+        {
+            float span = _clip != null ? Mathf.Clamp(_clip.length, 0.5f, 4f) : 0.5f;
+            _groundUntil = Time.time + span + 0.3f;
+            _nextGroundSample = Time.time + 0.1f;      // let the clip evaluate first: the bind pose is what lies
+            _lowestRaw = float.PositiveInfinity;
+        }
+
+        private void LateUpdate()
+        {
+            if (_pivot == null || _model == null || Time.time > _groundUntil || Time.time < _nextGroundSample) return;
+            _nextGroundSample = Time.time + 0.06f;
+            if (!TryLowestPoint(out float lowest)) return;
+
+            float offset = _pivot.localPosition.y - _pivotBase.y;
+            float raw = lowest - offset;               // lowest point as if no grounding offset were applied
+            if (raw >= _lowestRaw) return;
+            _lowestRaw = raw;
+            _pivot.localPosition = new Vector3(_pivotBase.x, _pivotBase.y - _lowestRaw, _pivotBase.z);
+        }
+
+        /// <summary>Lowest vertex of the visible model, in this hologram's local space.</summary>
+        private bool TryLowestPoint(out float lowest)
+        {
+            lowest = float.PositiveInfinity;
+            foreach (Renderer r in VisibleRenderers(_model))
+            {
+                if (r is SkinnedMeshRenderer smr)
+                {
+                    if (smr.sharedMesh == null) continue;
+                    if (_bakeBuffer == null) _bakeBuffer = new Mesh { name = "DG Hologram Bake" };
+                    smr.BakeMesh(_bakeBuffer, true);
+                    _bakeBuffer.GetVertices(BakedVertices);
+                    Matrix4x4 toLocal = transform.worldToLocalMatrix * Matrix4x4.TRS(smr.transform.position, smr.transform.rotation, Vector3.one);
+                    foreach (Vector3 v in BakedVertices) lowest = Mathf.Min(lowest, toLocal.MultiplyPoint3x4(v).y);
+                }
+                else if (r is MeshRenderer && r.TryGetComponent(out MeshFilter mf) && mf.sharedMesh != null && mf.sharedMesh.isReadable)
+                {
+                    mf.sharedMesh.GetVertices(BakedVertices);
+                    Matrix4x4 toLocal = transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                    foreach (Vector3 v in BakedVertices) lowest = Mathf.Min(lowest, toLocal.MultiplyPoint3x4(v).y);
+                }
+                else
+                {
+                    lowest = Mathf.Min(lowest, transform.InverseTransformPoint(r.bounds.min).y);
+                }
+            }
+            return !float.IsInfinity(lowest);
         }
 
         /// <summary>
@@ -511,6 +584,11 @@ namespace DuelGenesis.Dueling
             output.SetSourcePlayable(_playable);
             if (old.IsValid()) old.Destroy();
             _clip = next;
+            if (_pivot != null)
+            {
+                _pivot.localPosition = _pivotBase;
+                BeginGrounding();
+            }
         }
 
         private void Update()

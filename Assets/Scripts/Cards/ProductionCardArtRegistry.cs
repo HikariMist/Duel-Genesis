@@ -31,7 +31,7 @@ namespace DuelGenesis.Cards
             string key = Normalize(cardName);
             if (string.IsNullOrEmpty(key)) return null;
 
-            if (FaceCache.TryGetValue(key, out Texture2D cached))
+            if (FaceCache.TryGetValue(key, out Texture2D cached) && cached != null)
                 return cached;
 
             EnsureFaceIndex();
@@ -86,6 +86,10 @@ namespace DuelGenesis.Cards
             return FacePathIndex.ContainsKey(Normalize(card.cardName));
         }
 
+        /// <summary>Textures loaded in a previous Play session are destroyed with it (no domain reload).</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetForPlaySession() => ClearCaches();
+
         public static void ClearCaches()
         {
             FaceCache.Clear();
@@ -113,7 +117,7 @@ namespace DuelGenesis.Cards
 
         private static Texture2D LoadFrameFile(string fileName, string cacheKey)
         {
-            if (FrameCache.TryGetValue(cacheKey, out Texture2D cached))
+            if (FrameCache.TryGetValue(cacheKey, out Texture2D cached) && cached != null)
                 return cached;
 
             string folder = ResolveFramesFolder();

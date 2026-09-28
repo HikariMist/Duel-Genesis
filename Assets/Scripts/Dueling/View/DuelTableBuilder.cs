@@ -26,6 +26,21 @@ namespace DuelGenesis.Dueling
         private static Texture2D _radialTexture;
         private static Texture2D _logo;
 
+        /// <summary>Drop runtime-made meshes, materials and sprites from a previous Play session (no domain reload).</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetForPlaySession()
+        {
+            _cardMesh = null;
+            _faceMaterial = null;
+            _backMaterial = null;
+            _edgeMaterial = null;
+            _glowSprite = null;
+            _roundedSprite = null;
+            _roundedOutlineSprite = null;
+            _radialTexture = null;
+            _logo = null;
+        }
+
         public static Texture2D Logo => _logo != null ? _logo : _logo = Resources.Load<Texture2D>("DuelGenesis/DuelGenesisLogo");
 
         public static Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
