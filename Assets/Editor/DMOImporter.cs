@@ -45,6 +45,7 @@ namespace DuelGenesis.EditorTools
         // ------------------------------------------------------------------ Kame Game Shop
 
         public const string ShopPrefabPath = DestRoot + "/Prefabs/Kame Game Shop.prefab";
+        public const string PropsFolder = DestRoot + "/Prefabs/Props";
 
         [MenuItem("Duel Genesis/DMO/1. Import Kame Game Shop")]
         public static void ImportKameGameShop()
@@ -58,9 +59,27 @@ namespace DuelGenesis.EditorTools
 
             Directory.CreateDirectory(Path.Combine(ProjectRoot, DestRoot, "Prefabs"));
             File.WriteAllText(Path.Combine(ProjectRoot, ShopPrefabPath), yaml);
+
+            // Lounge furniture cut from DMO's world: the Best Burger booth set and three potted plants.
+            string propSource = Path.Combine(ProjectRoot, "DMOImport", "Props");
+            var propPaths = new List<string>();
+            if (Directory.Exists(propSource))
+            {
+                Directory.CreateDirectory(Path.Combine(ProjectRoot, PropsFolder));
+                foreach (string file in Directory.GetFiles(propSource, "*.prefab"))
+                {
+                    string text = File.ReadAllText(file);
+                    int n = ImportDependencies(GuidRx.Matches(text).Cast<Match>().Select(m => m.Groups[1].Value), log);
+                    if (n > 0) copied += n;
+                    string dest = PropsFolder + "/" + Path.GetFileName(file);
+                    File.WriteAllText(Path.Combine(ProjectRoot, dest), text);
+                    propPaths.Add(dest);
+                }
+            }
             AssetDatabase.Refresh();
             FixMaterials(log);
             CleanPrefab(ShopPrefabPath, log);
+            foreach (string prop in propPaths) CleanPrefab(prop, log);
             Debug.Log($"Duel: Genesis imported the Kame Game Shop ({copied} assets copied).\n{log}");
         }
 
@@ -238,8 +257,9 @@ namespace DuelGenesis.EditorTools
             }
             void Take(int u0, int v0, int w, int d)
             {
-                for (int iu = Mathf.Max(0, u0 - 1); iu < Mathf.Min(n, u0 + w + 1); iu++)
-                for (int iv = Mathf.Max(0, v0 - 1); iv < Mathf.Min(n, v0 + d + 1); iv++)
+                // Sizes already include walking room, so no extra margin: pieces pack side by side.
+                for (int iu = Mathf.Max(0, u0); iu < Mathf.Min(n, u0 + w); iu++)
+                for (int iv = Mathf.Max(0, v0); iv < Mathf.Min(n, v0 + d); iv++)
                     free[iu, iv] = false;
             }
             Vector3 Centre(int u0, int v0, int w, int d)
@@ -248,12 +268,22 @@ namespace DuelGenesis.EditorTools
                 return new Vector3((a.x + z.x) * 0.5f, floorY[u0 + w / 2, v0 + d / 2], (a.z + z.z) * 0.5f);
             }
 
+            int freeCount = 0;
+            for (int iu = 0; iu < n; iu++) for (int iv = 0; iv < n; iv++) if (free[iu, iv]) freeCount++;
+            var map = new StringBuilder();
+            for (int iv = n - 1; iv >= 0; iv--)
+            {
+                for (int iu = 0; iu < n; iu++) map.Append(free[iu, iv] ? '.' : '#');
+                map.Append('\n');
+            }
+            Debug.Log($"Duel: Genesis floor scan for {name}: grid {n}x{n} ({half * 2f:0.0} m), {freeCount} clear cells (front = right).\n{map}");
+
             // Keep the doorway clear: the strip just inside the front wall stays empty.
-            for (int iu = n - 4; iu < n; iu++) for (int iv = 0; iv < n; iv++) if (iu >= 0) free[iu, iv] = false;
+            for (int iu = n - 3; iu < n; iu++) for (int iv = 0; iv < n; iv++) if (iu >= 0) free[iu, iv] = false;
 
             // 1. Two duel tables (table + both seats need about 2.5 x 3 m), deepest in the shop first.
             int tables = 0;
-            int tw = Mathf.CeilToInt(2.5f / cell), td = Mathf.CeilToInt(3.0f / cell);
+            int tw = Mathf.CeilToInt(2.2f / cell), td = Mathf.CeilToInt(2.8f / cell);
             for (int iu = 0; iu < n && tables < 2; iu++)
             for (int iv = 0; iv < n && tables < 2; iv++)
             {
@@ -279,7 +309,72 @@ namespace DuelGenesis.EditorTools
                 tables++;
             }
 
-            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables (interior otherwise empty).");
+            // 2. A lounge corner: DMO's Best Burger booth set, tried in both orientations.
+            bool booth = false;
+            var boothPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PropsFolder + "/Booth Set.prefab");
+            if (boothPrefab != null)
+            {
+                var probe = (GameObject)PrefabUtility.InstantiatePrefab(boothPrefab, fit);
+                probe.transform.SetPositionAndRotation(new Vector3(0f, -600f, 0f), Quaternion.identity);
+                Physics.SyncTransforms();
+                Bounds bb = SolidBounds(probe);
+                Vector3 pivotToCentre = new Vector3(bb.center.x, bb.min.y, bb.center.z) - probe.transform.position;
+                int bw = Mathf.CeilToInt((bb.size.x + 0.4f) / cell), bd = Mathf.CeilToInt((bb.size.z + 0.4f) / cell);
+                Debug.Log($"Duel: Genesis booth set measures {bb.size.x:0.0} x {bb.size.z:0.0} m ({bw} x {bd} cells).");
+                for (int iu = 0; iu < n && !booth; iu++)
+                for (int iv = 0; iv < n && !booth; iv++)
+                {
+                    for (int turn = 0; turn < 2 && !booth; turn++)
+                    {
+                        int w = turn == 0 ? bw : bd, d = turn == 0 ? bd : bw;
+                        if (!Clear(iu, iv, w, d)) continue;
+                        Vector3 at = Centre(iu, iv, w, d);
+                        Quaternion rot = shop.transform.rotation * Quaternion.Euler(0f, turn * 90f, 0f);
+                        probe.name = name + " - Lounge Booth";
+                        probe.transform.SetPositionAndRotation(at - rot * pivotToCentre, rot);
+                        Take(iu, iv, w, d);
+                        booth = true;
+                    }
+                }
+                if (!booth) Object.DestroyImmediate(probe);
+            }
+
+            // 3. Potted plants in the free corners (and along the walls if corners are taken).
+            int plants = 0;
+            var plantCells = new List<(int, int)>();
+            string[] plantNames = { "Plant A", "Plant B", "Plant C" };
+            var spots = new List<(int, int)>();
+            // Plants go wherever a 2x2 patch is still clear, corners and wall edges first.
+            for (int iu = 0; iu < n - 1; iu++)
+            for (int iv = 0; iv < n - 1; iv++)
+            {
+                int walls = 0;
+                if (iu == 0 || !free[iu - 1, iv]) walls++;
+                if (iv == 0 || !free[iu, iv - 1]) walls++;
+                if (iu + 2 >= n || !free[iu + 2, iv]) walls++;
+                if (iv + 2 >= n || !free[iu, iv + 2]) walls++;
+                if (walls >= 2) spots.Add((iu, iv));
+            }
+            foreach ((int iu, int iv) in spots)
+            {
+                if (plants >= 4) break;
+                if (!Clear(iu, iv, 2, 2)) continue;
+                if (plantCells.Any(pc => Mathf.Abs(pc.Item1 - iu) + Mathf.Abs(pc.Item2 - iv) < 6)) continue;   // spread them out
+                plantCells.Add((iu, iv));
+                var plantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PropsFolder}/{plantNames[plants % plantNames.Length]}.prefab");
+                if (plantPrefab == null) break;
+                var plant = (GameObject)PrefabUtility.InstantiatePrefab(plantPrefab, fit);
+                plant.name = $"{name} - Plant {plants + 1}";
+                plant.transform.SetPositionAndRotation(new Vector3(0f, -600f, 0f), Quaternion.Euler(0f, plants * 70f, 0f));
+                Physics.SyncTransforms();
+                Bounds pb = SolidBounds(plant);
+                Vector3 foot = new Vector3(pb.center.x, pb.min.y, pb.center.z) - plant.transform.position;
+                plant.transform.position = Centre(iu, iv, 2, 2) - foot;
+                Take(iu, iv, 2, 2);
+                plants++;
+            }
+
+            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables, lounge booth {(booth ? "placed" : "had no room")}, {plants} plants.");
         }
 
         /// <summary>A dark display board with the nine pack wrappers in a 5 + 4 layout, lit from the front.</summary>
