@@ -225,15 +225,16 @@ namespace DuelGenesis.EditorTools
         {
             Vector3 right = Vector3.Cross(Vector3.up, normal).normalized;
             float plane = Vector3.Dot(centre, normal);
-            for (int ix = -2; ix <= 2; ix++)
-            for (int iy = -1; iy <= 1; iy++)
+            for (int ix = -3; ix <= 3; ix++)
+            for (int iy = -2; iy <= 2; iy++)
             {
-                Vector3 p = centre + right * (ix * width * 0.24f) + Vector3.up * (iy * height * 0.46f);
+                Vector3 p = centre + right * (ix * width * 0.16f) + Vector3.up * (iy * height * 0.23f);
                 Vector3 origin = p + normal * 3f;
                 if (!Physics.Raycast(origin, -normal, out RaycastHit hit, 6f, ~0, QueryTriggerInteraction.Ignore)) return false;
                 if (!hit.collider.transform.IsChildOf(map)) return false;
                 if (Vector3.Dot(hit.normal, normal) < 0.9f) return false;
                 if (Mathf.Abs(Vector3.Dot(hit.point, normal) - plane) > 0.7f) return false;
+                if (GenesisAdReplacer.IsAdPanel(hit)) return false;   // never cover the painted wall ads
             }
             return true;
         }

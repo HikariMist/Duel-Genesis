@@ -251,6 +251,36 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis exported {files.Length} city textures to Logs/CitySheets.");
         }
 
+        /// <summary>
+        /// True when a raycast hit lands on (or within a small margin of) one of the city's advertising panels,
+        /// original or repainted. Billboards use it so they never cover the painted wall ads.
+        /// </summary>
+        public static bool IsAdPanel(RaycastHit hit, int marginPx = 24)
+        {
+            if (!(hit.collider is MeshCollider mc) || mc.sharedMesh == null) return false;
+            Renderer renderer = hit.collider.GetComponent<Renderer>();
+            if (renderer == null) return false;
+            int sub = SubmeshOf(mc.sharedMesh, hit.triangleIndex);
+            Material m = sub >= 0 && sub < renderer.sharedMaterials.Length ? renderer.sharedMaterials[sub] : null;
+            Texture t = m == null ? null : m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : m.mainTexture;
+            if (t == null) return false;
+            string path = AssetDatabase.GetAssetPath(t);
+            string file = Path.GetFileNameWithoutExtension(path);
+            if (file.EndsWith("_dg")) file = file.Substring(0, file.Length - 3);
+
+            int w = t.width, h = t.height;
+            if (AssetImporter.GetAtPath(path) is TextureImporter importer) importer.GetSourceTextureWidthAndHeight(out w, out h);
+            Vector2 uv = hit.textureCoord;
+            float px = (uv.x - Mathf.Floor(uv.x)) * w;
+            float py = (1f - (uv.y - Mathf.Floor(uv.y))) * h;   // patches use a top-left origin
+            foreach (Patch p in Patches)
+            {
+                if (Path.GetFileNameWithoutExtension(p.Texture) != file) continue;
+                if (px >= p.X0 - marginPx && px <= p.X1 + marginPx && py >= p.Y0 - marginPx && py <= p.Y1 + marginPx) return true;
+            }
+            return false;
+        }
+
         private static string Surface(Ray ray, out Vector2 uv)
         {
             uv = Vector2.zero;
