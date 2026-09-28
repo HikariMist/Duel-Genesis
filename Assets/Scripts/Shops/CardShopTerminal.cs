@@ -1,5 +1,4 @@
 using DuelGenesis.Cards;
-using DuelGenesis.Economy;
 using DuelGenesis.Interaction;
 using UnityEngine;
 
@@ -11,21 +10,15 @@ namespace DuelGenesis.Shops
         public int boosterPackCost = 1000;
 
         public string InteractionPrompt => CardDatabase.IsReady
-            ? $"Buy Genesis Pack ({boosterPackCost:N0} GC)"
+            ? $"Browse booster packs ({GenesisPacks.All.Length} kinds)"
             : "Real card catalog required";
 
+        /// <summary>Opens the pack counter: nine boosters with their own wrapper art (see GenesisPacks).</summary>
         public void Interact(GameObject interactor)
         {
             if (!CardDatabase.IsReady)
             {
                 Debug.LogWarning("Cannot buy a pack: no production card catalog is loaded. Build the real DMO card catalog first.");
-                return;
-            }
-
-            GenesisWallet wallet = interactor.GetComponent<GenesisWallet>();
-            if (wallet == null)
-            {
-                Debug.LogWarning("Player has no GenesisWallet component.");
                 return;
             }
 
@@ -42,20 +35,7 @@ namespace DuelGenesis.Shops
                 packUI = systems.AddComponent<PackOpeningUI>();
             }
 
-            if (!wallet.Spend(boosterPackCost))
-            {
-                Debug.Log($"Not enough GC. Pack costs {boosterPackCost} GC and player has {wallet.GenesisCredits} GC.");
-                return;
-            }
-
-            if (!packUI.OpenPack(interactor))
-            {
-                wallet.Add(boosterPackCost);
-                Debug.LogWarning("Pack opening failed, so the purchase was refunded.");
-                return;
-            }
-
-            Debug.Log($"Purchased production booster pack for {boosterPackCost} GC.");
+            packUI.OpenShop(interactor, shopName);
         }
     }
 }
