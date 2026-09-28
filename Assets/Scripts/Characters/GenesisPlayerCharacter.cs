@@ -14,6 +14,7 @@ namespace DuelGenesis.Characters
         {
             GenesisAppearance look = GenesisAppearanceStore.HasSaved ? GenesisAppearanceStore.Load() : GenesisAppearance.CreateDefault(GenesisGender.Male);
             Rebuild(look);
+            if (FindAnyObjectByType<GenesisCharacterCreator>() == null) gameObject.AddComponent<GenesisCharacterCreator>();
         }
 
         public void Rebuild(GenesisAppearance look)

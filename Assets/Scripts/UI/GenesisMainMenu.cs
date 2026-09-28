@@ -177,6 +177,13 @@ namespace DuelGenesis.UI
             _seat.Interact(_player.gameObject);
         }
 
+        private void OpenCharacterCreator()
+        {
+            Resolve();
+            EnterGenesis();
+            FindAnyObjectByType<DuelGenesis.Characters.GenesisCharacterCreator>()?.Open();
+        }
+
         private void OpenDeckBuilder()
         {
             Resolve();
@@ -483,6 +490,7 @@ namespace DuelGenesis.UI
             AddItem(menu, "ENTER GENESIS CITY", "Explore, shop and find duelists", new Color(0.2f, 0.85f, 1f), EnterGenesis);
             AddItem(menu, "QUICK DUEL", "Sit straight down at the arena table", new Color(1f, 0.35f, 0.7f), QuickDuel);
             AddItem(menu, "DECK BUILDER", "Build and auto-build your deck", new Color(1f, 0.78f, 0.3f), OpenDeckBuilder);
+            AddItem(menu, "CHARACTER", "Create your duelist's look", new Color(0.35f, 1f, 0.85f), OpenCharacterCreator);
             AddItem(menu, "SETTINGS", "Volume, graphics, camera", new Color(0.7f, 0.45f, 1f), () => ShowPage(_settingsPanel));
             AddItem(menu, "CONTROLS", "Keys and how duels work", new Color(0.4f, 0.9f, 0.6f), () => ShowPage(_controlsPanel));
             AddItem(menu, "QUIT", "", new Color(1f, 0.35f, 0.35f), QuitGame);

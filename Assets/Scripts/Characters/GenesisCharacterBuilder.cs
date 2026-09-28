@@ -33,20 +33,7 @@ namespace DuelGenesis.Characters
                 if (!bones.ContainsKey(t.name)) bones.Add(t.name, t);
             SkinnedMeshRenderer[] figure = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
 
-            // Figure, body and face shaping (applied to every figure mesh that has the shape: body, brows, lashes, mouth).
             bool male = appearance.gender == GenesisGender.Male;
-            Shape(figure, GenesisMorphMap.FemaleFigure, male ? 0f : 100f);
-            Shape(figure, GenesisMorphMap.MaleFigure, male ? 100f : 0f);
-            Shape(figure, GenesisMorphMap.Youth, appearance.age);
-            if (appearance.bodyType > 0 && appearance.bodyType < GenesisMorphMap.BodyTypes.Length)
-                Shape(figure, GenesisMorphMap.BodyTypes[appearance.bodyType], appearance.bodyWeight);
-            if (!male) Shape(figure, GenesisMorphMap.BreastSize, appearance.breastSize);
-            foreach (var group in GenesisMorphMap.FaceGroups)
-            {
-                float[] values = group.values(appearance.face);
-                for (int i = 0; i < group.morphs.Length && i < values.Length; i++)
-                    if (Mathf.Abs(values[i]) > 0.01f) Shape(figure, group.morphs[i], values[i]);
-            }
 
             // Wardrobe, bound to the figure's skeleton; the body's fit shapes follow the tightest item.
             var fit = new Dictionary<string, float>();
@@ -66,6 +53,7 @@ namespace DuelGenesis.Characters
                 Max(fit, GenesisMorphMap.ScaleArms, f.arms);
                 Max(fit, GenesisMorphMap.HideFeet, f.hideFeet);
             }
+            ApplyShapes(root, appearance);   // after the wardrobe, so clothes with matching shapes follow the body
             if (body != null)
                 foreach (var kv in fit) Shape(new[] { body }, kv.Key, kv.Value);
 
@@ -96,6 +84,24 @@ namespace DuelGenesis.Characters
             }
             foreach (SkinnedMeshRenderer r in root.GetComponentsInChildren<SkinnedMeshRenderer>(true)) r.updateWhenOffscreen = true;
             return root;
+        }
+
+        /// <summary>Figure, body and face shaping on every mesh of the character that has the shape (live-safe).</summary>
+        public static void ApplyShapes(GameObject root, GenesisAppearance appearance)
+        {
+            SkinnedMeshRenderer[] all = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            bool male = appearance.gender == GenesisGender.Male;
+            Shape(all, GenesisMorphMap.FemaleFigure, male ? 0f : 100f);
+            Shape(all, GenesisMorphMap.MaleFigure, male ? 100f : 0f);
+            Shape(all, GenesisMorphMap.Youth, appearance.age);
+            for (int t = 1; t < GenesisMorphMap.BodyTypes.Length; t++)
+                Shape(all, GenesisMorphMap.BodyTypes[t], t == appearance.bodyType ? appearance.bodyWeight : 0f);
+            Shape(all, GenesisMorphMap.BreastSize, male ? 0f : appearance.breastSize);
+            foreach (var group in GenesisMorphMap.FaceGroups)
+            {
+                float[] values = group.values(appearance.face);
+                for (int i = 0; i < group.morphs.Length && i < values.Length; i++) Shape(all, group.morphs[i], values[i]);
+            }
         }
 
         private static readonly Color DefaultSkin = new Color(0.7725f, 0.4784f, 0.3765f, 1f);
