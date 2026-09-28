@@ -685,7 +685,7 @@ namespace DuelGenesis.Dueling
                     if (logo != null)
                     {
                         RawImage logoImage = Raw("Logo " + player, logo, new Color(1f, 1f, 1f, 0.55f));
-                        float logoW = 190f;
+                        float logoW = Mathf.Min(190f, 80f * logo.width / (float)logo.height);   // fits a 190 x 80 mm band
                         Place(logoImage.rectTransform, 0f, sign * (DuelMatLayout.MatDepthMm - 44f), logoW, logoW * logo.height / logo.width, rot);
                     }
 

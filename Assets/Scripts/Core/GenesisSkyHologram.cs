@@ -33,7 +33,9 @@ namespace DuelGenesis.Core
             Texture2D logo = Resources.Load<Texture2D>("DuelGenesis/DuelGenesisLogo") ?? Resources.Load<Texture2D>("UI/DuelGenesisLogo");
             if (logo == null) { enabled = false; return; }
             _home = transform.position;
-            float height = width * logo.height / logo.width;
+            float aspect = logo.width / (float)logo.height;
+            width = Mathf.Min(width, 22f * aspect);   // keep a square logo from towering 30 m high
+            float height = width / aspect;
 
             _spinner = new GameObject("Spinner").transform;
             _spinner.SetParent(transform, false);

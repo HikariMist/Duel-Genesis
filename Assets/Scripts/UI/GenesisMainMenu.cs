@@ -463,7 +463,9 @@ namespace DuelGenesis.UI
             _logo.raycastTarget = false;
             Texture2D logoTex = DuelVisualResources.Logo ?? Resources.Load<Texture2D>("UI/DuelGenesisLogo");
             _logo.texture = logoTex;
-            float logoW = 700f, logoH = logoTex != null ? logoW * logoTex.height / logoTex.width : 220f;
+            // Fit the logo inside a 700 x 340 box whatever its shape (the current logo is nearly square).
+            float logoAspect = logoTex != null ? logoTex.width / (float)logoTex.height : 3f;
+            float logoW = Mathf.Min(700f, 340f * logoAspect), logoH = logoTex != null ? logoW / logoAspect : 220f;
             UiKit.Place(_logo.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(90f, -60f), new Vector2(logoW, logoH));
             _logoGlow = UiKit.Glow(_logo, new Color(0.2f, 0.85f, 1f, 0.4f), 3f);
             if (logoTex == null)

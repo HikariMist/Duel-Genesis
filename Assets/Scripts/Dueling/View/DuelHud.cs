@@ -1118,7 +1118,9 @@ namespace DuelGenesis.Dueling
             RawImage logo = UiKit.Rect(_result, "Logo").gameObject.AddComponent<RawImage>();
             logo.texture = DuelVisualResources.Logo;
             logo.raycastTarget = false;
-            UiKit.Place(logo.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 270f), new Vector2(520f, 520f * 387f / 1024f));
+            float logoAspect = logo.texture != null ? logo.texture.width / (float)logo.texture.height : 2.65f;
+            float resultLogoW = Mathf.Min(520f, 250f * logoAspect);
+            UiKit.Place(logo.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 270f), new Vector2(resultLogoW, resultLogoW / logoAspect));
 
             Text title = UiKit.Label(_result, "Title", won ? "VICTORY" : draw ? "DRAW" : "DEFEAT", 110, color, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiKit.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), new Vector2(1200f, 140f));
