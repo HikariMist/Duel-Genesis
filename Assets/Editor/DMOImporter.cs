@@ -86,6 +86,14 @@ namespace DuelGenesis.EditorTools
         public const int CityShopCount = 3;          // plus the one on the plaza
         public const float MaxShopDistance = 200f;   // metres from the plaza, so shops stay within walking range
 
+        [MenuItem("Duel Genesis/DMO/2. Re-fix Imported Materials")]
+        public static void RefixMaterialsMenu()
+        {
+            var log = new StringBuilder();
+            FixMaterials(log);   // no export re-index needed: materials already point at real shaders
+            Debug.Log(log.ToString());
+        }
+
         [MenuItem("Duel Genesis/World/7. Place Kame Game Shops (Plaza + Across The City)")]
         public static void PlaceKameGameShop()
         {
@@ -309,34 +317,21 @@ namespace DuelGenesis.EditorTools
                 tables++;
             }
 
-            // 2. A lounge corner: DMO's Best Burger booth set, tried in both orientations.
-            bool booth = false;
-            var boothPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PropsFolder + "/Booth Set.prefab");
-            if (boothPrefab != null)
+            // 2. Hang-out tables: a Kenney round table with four cushioned chairs (CC0 Furniture Kit).
+            int sets = 0;
+            GameObject kTable = AssetDatabase.LoadAssetAtPath<GameObject>(GenesisAssetDownloads.FurnitureFolder + "/tableRound.fbx");
+            GameObject kChair = AssetDatabase.LoadAssetAtPath<GameObject>(GenesisAssetDownloads.FurnitureFolder + "/chairCushion.fbx");
+            if (kTable != null && kChair != null)
             {
-                var probe = (GameObject)PrefabUtility.InstantiatePrefab(boothPrefab, fit);
-                probe.transform.SetPositionAndRotation(new Vector3(0f, -600f, 0f), Quaternion.identity);
-                Physics.SyncTransforms();
-                Bounds bb = SolidBounds(probe);
-                Vector3 pivotToCentre = new Vector3(bb.center.x, bb.min.y, bb.center.z) - probe.transform.position;
-                int bw = Mathf.CeilToInt((bb.size.x + 0.4f) / cell), bd = Mathf.CeilToInt((bb.size.z + 0.4f) / cell);
-                Debug.Log($"Duel: Genesis booth set measures {bb.size.x:0.0} x {bb.size.z:0.0} m ({bw} x {bd} cells).");
-                for (int iu = 0; iu < n && !booth; iu++)
-                for (int iv = 0; iv < n && !booth; iv++)
+                int ss = Mathf.CeilToInt(2.6f / cell);   // table + chairs + room to pull them out
+                for (int iu = 0; iu < n && sets < 2; iu++)
+                for (int iv = 0; iv < n && sets < 2; iv++)
                 {
-                    for (int turn = 0; turn < 2 && !booth; turn++)
-                    {
-                        int w = turn == 0 ? bw : bd, d = turn == 0 ? bd : bw;
-                        if (!Clear(iu, iv, w, d)) continue;
-                        Vector3 at = Centre(iu, iv, w, d);
-                        Quaternion rot = shop.transform.rotation * Quaternion.Euler(0f, turn * 90f, 0f);
-                        probe.name = name + " - Lounge Booth";
-                        probe.transform.SetPositionAndRotation(at - rot * pivotToCentre, rot);
-                        Take(iu, iv, w, d);
-                        booth = true;
-                    }
+                    if (!Clear(iu, iv, ss, ss)) continue;
+                    BuildTableSet(fit, $"{name} - Table Set {sets + 1}", Centre(iu, iv, ss, ss), shop.transform.rotation, kTable, kChair);
+                    Take(iu, iv, ss, ss);
+                    sets++;
                 }
-                if (!booth) Object.DestroyImmediate(probe);
             }
 
             // 3. Potted plants in the free corners (and along the walls if corners are taken).
@@ -361,20 +356,99 @@ namespace DuelGenesis.EditorTools
                 if (!Clear(iu, iv, 2, 2)) continue;
                 if (plantCells.Any(pc => Mathf.Abs(pc.Item1 - iu) + Mathf.Abs(pc.Item2 - iv) < 6)) continue;   // spread them out
                 plantCells.Add((iu, iv));
-                var plantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PropsFolder}/{plantNames[plants % plantNames.Length]}.prefab");
+                var plantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(GenesisAssetDownloads.FurnitureFolder + "/pottedPlant.fbx")
+                                  ?? AssetDatabase.LoadAssetAtPath<GameObject>($"{PropsFolder}/{plantNames[plants % plantNames.Length]}.prefab");
                 if (plantPrefab == null) break;
                 var plant = (GameObject)PrefabUtility.InstantiatePrefab(plantPrefab, fit);
                 plant.name = $"{name} - Plant {plants + 1}";
                 plant.transform.SetPositionAndRotation(new Vector3(0f, -600f, 0f), Quaternion.Euler(0f, plants * 70f, 0f));
                 Physics.SyncTransforms();
                 Bounds pb = SolidBounds(plant);
+                if (plantPrefab.name == "pottedPlant" && pb.size.y > 0.01f)
+                {
+                    plant.transform.localScale *= 1.1f / pb.size.y;   // about 1.1 m tall
+                    Physics.SyncTransforms();
+                    pb = SolidBounds(plant);
+                }
                 Vector3 foot = new Vector3(pb.center.x, pb.min.y, pb.center.z) - plant.transform.position;
                 plant.transform.position = Centre(iu, iv, 2, 2) - foot;
                 Take(iu, iv, 2, 2);
                 plants++;
             }
 
-            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables, lounge booth {(booth ? "placed" : "had no room")}, {plants} plants.");
+            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables, {sets} table sets, {plants} plants.");
+        }
+
+        /// <summary>
+        /// A round table (scaled to 0.76 m tall) with four chairs around it, each turned so its seat faces the
+        /// table. Chair facing is worked out from the model itself: the backrest is where the tallest vertices are.
+        /// </summary>
+        private static void BuildTableSet(Transform parent, string name, Vector3 floorCentre, Quaternion shopRotation, GameObject tablePrefab, GameObject chairPrefab)
+        {
+            var set = new GameObject(name).transform;
+            set.SetParent(parent, false);
+            set.SetPositionAndRotation(floorCentre, shopRotation);
+
+            var table = (GameObject)PrefabUtility.InstantiatePrefab(tablePrefab, set);
+            table.transform.localPosition = Vector3.zero;
+            table.transform.localRotation = Quaternion.identity;
+            Physics.SyncTransforms();
+            Bounds tb = RenderBounds(table);
+            float scale = tb.size.y > 0.01f ? 0.76f / tb.size.y : 1f;
+            table.transform.localScale *= scale;
+            Physics.SyncTransforms();
+            tb = RenderBounds(table);
+            table.transform.position += new Vector3(floorCentre.x - tb.center.x, floorCentre.y - tb.min.y, floorCentre.z - tb.center.z);
+            Physics.SyncTransforms();
+            tb = RenderBounds(table);
+            float radius = Mathf.Max(tb.extents.x, tb.extents.z);
+
+            Vector3 chairForward = ChairFacing(chairPrefab);   // local direction the seat faces
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 outward = Quaternion.AngleAxis(i * 90f, Vector3.up) * (shopRotation * Vector3.forward);
+                var chair = (GameObject)PrefabUtility.InstantiatePrefab(chairPrefab, set);
+                chair.name = "Chair " + (i + 1);
+                chair.transform.localScale *= scale;
+                // Turn the chair so its seat faces back towards the table.
+                chair.transform.rotation = Quaternion.FromToRotation(chairForward, -outward);
+                chair.transform.rotation = Quaternion.Euler(0f, chair.transform.eulerAngles.y, 0f);
+                Physics.SyncTransforms();
+                Bounds cb = RenderBounds(chair);
+                float depth = Mathf.Max(cb.extents.x, cb.extents.z);
+                Vector3 target = new Vector3(floorCentre.x, floorCentre.y, floorCentre.z) + outward * (radius + depth * 0.55f);
+                chair.transform.position += new Vector3(target.x - cb.center.x, target.y - cb.min.y, target.z - cb.center.z);
+            }
+            foreach (Renderer r in set.GetComponentsInChildren<Renderer>())
+                if (r.GetComponent<Collider>() == null && r.GetComponent<MeshFilter>() != null) r.gameObject.AddComponent<MeshCollider>();
+        }
+
+        /// <summary>The local horizontal direction a chair model's seat faces (away from its backrest).</summary>
+        private static Vector3 ChairFacing(GameObject chairPrefab)
+        {
+            var points = new List<Vector3>();
+            foreach (MeshFilter mf in chairPrefab.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                Matrix4x4 m = chairPrefab.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                foreach (Vector3 v in mf.sharedMesh.vertices) points.Add(m.MultiplyPoint3x4(v));
+            }
+            if (points.Count == 0) return Vector3.forward;
+            float minY = points.Min(p => p.y), maxY = points.Max(p => p.y);
+            Vector3 centre = new Vector3(points.Average(p => p.x), 0f, points.Average(p => p.z));
+            var top = points.Where(p => p.y > minY + (maxY - minY) * 0.75f).ToList();
+            Vector3 back = new Vector3(top.Average(p => p.x), 0f, top.Average(p => p.z)) - centre;
+            if (back.sqrMagnitude < 1e-6f) return Vector3.forward;
+            return -back.normalized;
+        }
+
+        private static Bounds RenderBounds(GameObject go)
+        {
+            Renderer[] rs = go.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) return new Bounds(go.transform.position, Vector3.zero);
+            Bounds b = rs[0].bounds;
+            foreach (Renderer r in rs) b.Encapsulate(r.bounds);
+            return b;
         }
 
         /// <summary>A dark display board with the nine pack wrappers in a 5 + 4 layout, lit from the front.</summary>
@@ -648,7 +722,18 @@ namespace DuelGenesis.EditorTools
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (mat == null) continue;
-                if (mat.shader != null && mat.shader.name != "Hidden/InternalErrorShader" && mat.shader.isSupported) { kept++; continue; }
+                bool shaderOk = mat.shader != null && mat.shader.name != "Hidden/InternalErrorShader" && mat.shader.isSupported;
+                if (shaderOk)
+                {
+                    // Already on a real shader; still give Shader Graph materials (Texture2D_XXXX slots) their colour map.
+                    if (mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap") == null)
+                    {
+                        Texture guess = FirstTexture(mat, "_MainTex", "_BaseColorMap", "_Albedo", "_AlbedoMap", "_Diffuse", "_DiffuseMap", "_MainTexture");
+                        if (guess != null) { mat.SetTexture("_BaseMap", guess); EditorUtility.SetDirty(mat); fixedCount++; continue; }
+                    }
+                    kept++;
+                    continue;
+                }
 
                 string text = File.ReadAllText(Path.Combine(ProjectRoot, path));
                 Match sm = Regex.Match(text, @"m_Shader: \{fileID: -?\d+, guid: ([0-9a-f]{32})");
@@ -675,14 +760,24 @@ namespace DuelGenesis.EditorTools
             // Shader is missing, so HasProperty can fail: read the saved properties instead.
             var so = new SerializedObject(m);
             SerializedProperty envs = so.FindProperty("m_SavedProperties.m_TexEnvs");
+            Texture best = null;
+            int bestScore = int.MinValue;
             for (int i = 0; envs != null && i < envs.arraySize; i++)
             {
                 SerializedProperty e = envs.GetArrayElementAtIndex(i);
-                if (!names.Contains(e.FindPropertyRelative("first").stringValue)) continue;
-                Object t = e.FindPropertyRelative("second.m_Texture").objectReferenceValue;
-                if (t is Texture tex) return tex;
+                if (!(e.FindPropertyRelative("second.m_Texture").objectReferenceValue is Texture tex)) continue;
+                if (names.Contains(e.FindPropertyRelative("first").stringValue)) return tex;
+                // Shader Graph slots have generated names, so judge the texture by its own name instead.
+                string n = tex.name.ToLowerInvariant();
+                int score = 0;
+                if (n.Contains("base") || n.Contains("albedo") || n.Contains("diffuse") || n.Contains("color") || n.Contains("colour") ||
+                    n.EndsWith("_d") || n.EndsWith("_bc") || n.EndsWith("_c") || n.EndsWith("_a")) score += 10;
+                if (n.Contains("normal") || n.EndsWith("_n") || n.Contains("mask") || n.Contains("rough") || n.Contains("metal") ||
+                    n.Contains("_ao") || n.Contains("occlusion") || n.Contains("height") || n.Contains("emiss") || n.EndsWith("_m") ||
+                    n.EndsWith("_r") || n.EndsWith("_orm") || n.EndsWith("_mra")) score -= 20;
+                if (score > bestScore) { bestScore = score; best = tex; }
             }
-            return null;
+            return bestScore > -20 ? best : null;
         }
 
         private static Color FirstColour(Material m, params string[] names)
