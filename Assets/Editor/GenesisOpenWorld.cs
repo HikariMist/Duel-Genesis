@@ -154,6 +154,16 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis built the open city: {Half * 2f:0} m square, {plotCount} empty building plots, {trees} trees, {lamps} street lamps, Duel Center {(hall != null ? "placed" : "MISSING")}.\n{log}");
         }
 
+        [MenuItem("Duel Genesis/World/9c. Rebuild Just The Duel Center (open city)")]
+        public static void RebuildDuelCenter()
+        {
+            GameObject city = FindRoot(GenesisWorldBuilder.CityRootName);
+            if (city == null || city.transform.Find("Open World Marker") == null) { Debug.LogWarning("Duel: Genesis: build the open city first (World > 9)."); return; }
+            GenesisDuelCenter.BuildAt(city.transform, new Vector3(0f, 0f, 96f), 180f);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+        }
+
         [MenuItem("Duel Genesis/World/9b. Restore The Akihabara Map")]
         public static void Restore()
         {

@@ -312,12 +312,16 @@ namespace DuelGenesis.EditorTools
             root.SetParent(city, false);
             root.SetPositionAndRotation(lot.centre, Quaternion.Euler(0f, lot.yaw, 0f));
 
-            Material concrete = Mat("DC Concrete", new Color(0.8f, 0.8f, 0.82f), smooth: 0.25f);
+            Tiles.Clear();
+            Material concrete = TexMat("DC Concrete", "concrete_panels", new Color(0.92f, 0.92f, 0.94f), 0.25f, 4f);
             Material concreteDark = Mat("DC Concrete Dark", new Color(0.36f, 0.37f, 0.42f), smooth: 0.3f);
             Material metal = Mat("DC Dark Metal", new Color(0.1f, 0.11f, 0.14f), metallic: 0.8f, smooth: 0.6f);
             Material silver = Mat("DC Silver", new Color(0.72f, 0.74f, 0.78f), metallic: 0.85f, smooth: 0.72f);
             Material glass = GlassMat();
-            Material floor = Mat("DC Hall Floor", new Color(0.13f, 0.15f, 0.21f), smooth: 0.35f);
+            Material floor = TexMat("DC Hall Floor", "marble_01", new Color(0.55f, 0.58f, 0.66f), 0.55f, 3f);
+            Material wood = TexMat("DC Wood", "wooden_panels", new Color(0.95f, 0.9f, 0.85f), 0.35f, 2f);
+            Material inlay = Mat("DC Floor Inlay", Cyan, emission: Cyan * 0.9f);
+            Material screen = Mat("DC Screen", Color.white, smooth: 0.8f, emission: Color.white * 1.4f);
             Material paving = Mat("DC Plaza Paving", new Color(0.55f, 0.56f, 0.6f), smooth: 0.35f);
             Material stageMat = Mat("DC Stage", new Color(0.16f, 0.08f, 0.28f), smooth: 0.7f);
             Material seat = Mat("DC Seat Red", new Color(0.62f, 0.08f, 0.12f), smooth: 0.4f);
@@ -325,7 +329,7 @@ namespace DuelGenesis.EditorTools
             Material magenta = Mat("DC Glow Magenta", Magenta, emission: Magenta * 2f);
             Material gold = Mat("DC Glow Gold", Gold, emission: Gold * 1.6f);
             Material ceilingLight = Mat("DC Ceiling Light", Color.white, emission: new Color(1f, 0.96f, 0.9f) * 1.8f);
-            Material counterMat = Mat("DC Counter", new Color(0.93f, 0.93f, 0.95f), smooth: 0.6f);
+            Material counterMat = wood;
             Material boothBoard = Mat("DC Booth Board", new Color(0.05f, 0.06f, 0.1f), smooth: 0.5f);
             Material logo = LogoMat();
 
@@ -464,6 +468,8 @@ namespace DuelGenesis.EditorTools
             }
             if (logo != null)
                 Quad(root, "Back Wall Logo", new Vector3(0f, F + H * 0.62f, -hz + 0.08f), new Vector2(4.2f * 1.075f, 4.2f), 180f, logo);
+            foreach (float sx in new[] { -1f, 1f })
+                VideoWall(root, "Back Video Wall", new Vector3(sx * 7.2f, F + H * 0.6f, -hz + 0.05f), 180f, 5.2f, metal, screen, sx > 0f ? 1 : 2);
             Sign(root, "GENESIS CHAMPIONSHIP", new Vector3(0f, F + H * 0.62f - 2.8f, -hz + 0.1f), 180f, 0.06f, Gold);
 
             // ---- championship stage, bleachers and jumbotron (centre-back)
@@ -500,7 +506,12 @@ namespace DuelGenesis.EditorTools
                 for (int i = 0; i < 4; i++)
                 {
                     Quaternion r = Quaternion.Euler(0f, i * 90f, 0f);
-                    Quad(root, "Jumbotron Screen", jumbo + r * new Vector3(0f, 0f, 2.62f), new Vector2(2.6f * 1.075f, 2.6f), i * 90f + 180f, logo);
+                    if (i % 2 == 0) Quad(root, "Jumbotron Screen", jumbo + r * new Vector3(0f, 0f, 2.62f), new Vector2(2.6f * 1.075f, 2.6f), i * 90f + 180f, logo);
+                    else
+                    {
+                        GameObject q = Quad(root, "Jumbotron Video", jumbo + r * new Vector3(0f, 0f, 2.62f), new Vector2(2.6f, 2.6f), i * 90f + 180f, screen);
+                        q.AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = 3 + i;
+                    }
                 }
             Box(root, "Jumbotron Cable", jumbo + Vector3.up * ((F + H - jumbo.y) * 0.5f + 1.4f), new Vector3(0.12f, F + H - jumbo.y - 1.4f, 0.12f), metal, collider: false);
             int si = 0;
@@ -544,6 +555,64 @@ namespace DuelGenesis.EditorTools
                 }
             HangingSign(root, "TRADING HUB", new Vector3(hx - 4.5f, F + H - 3f, 0f), metal, magenta);
 
+            // ---- showpiece extras
+            // Glowing inlay lines in the marble floor (kept off the stage).
+            for (float lx = -hx + 4f; lx < hx - 2f; lx += 8f)
+                if (Mathf.Abs(lx) > R + 1.5f) Box(root, "Floor Inlay", new Vector3(lx, F + 0.004f, 0f), new Vector3(0.07f, 0.008f, D - 2f), inlay, collider: false);
+            for (float lz = -hz + 6f; lz < hz - 1f; lz += 8f)
+                if (Mathf.Abs(lz - stageZ) > R + 1.5f) Box(root, "Floor Inlay", new Vector3(0f, F + 0.004f, lz), new Vector3(W - 2f, 0.008f, 0.07f), inlay, collider: false);
+
+            // Vertical light strips up the side walls.
+            foreach (float sx in new[] { -1f, 1f })
+                for (float sz = -hz + 1.5f; sz < hz; sz += 6f)
+                    Box(root, "Wall Light Strip", new Vector3(sx * (hx - 0.05f), F + 1.3f + (H - 2.6f) * 0.5f, sz), new Vector3(0.05f, H - 2.6f, 0.12f), sx < 0f ? cyan : magenta, collider: false);
+
+            // Two holo rings spinning over the championship table.
+            for (int k = 0; k < 2; k++)
+            {
+                var ring = new GameObject("Stage Holo Ring " + (k + 1)).transform;
+                ring.SetParent(root, false);
+                ring.localPosition = stage + Vector3.up * (3.4f + k * 0.7f);
+                ring.localRotation = Quaternion.Euler(k == 0 ? 0f : 18f, 0f, 0f);
+                float rr = R - 1.2f - k * 0.8f;
+                for (int sgm = 0; sgm < 48; sgm++)
+                {
+                    float a = sgm * 7.5f;
+                    var b = Box(ring, "Segment", Quaternion.Euler(0f, a, 0f) * Vector3.forward * rr, new Vector3(2f * Mathf.PI * rr / 48f * 0.8f, 0.06f, 0.06f), k == 0 ? cyan : gold, collider: false);
+                    b.transform.localRotation = Quaternion.Euler(0f, a, 0f);
+                }
+                var spin = ring.gameObject.AddComponent<DuelGenesis.Core.GenesisSpin>();
+                spin.degreesPerSecond = new Vector3(0f, k == 0 ? 25f : -40f, 0f);
+                spin.bobHeight = 0.15f;
+                spin.bobSpeed = 1.3f + k * 0.4f;
+            }
+            foreach (Light spot in root.GetComponentsInChildren<Light>().Where(l => l.type == LightType.Spot))
+            {
+                var sweep = spot.gameObject.AddComponent<DuelGenesis.Core.GenesisSpin>();
+                sweep.sweep = true;
+                sweep.degreesPerSecond = Vector3.up;
+                sweep.sweepAngle = 12f;
+                sweep.bobSpeed = 0.7f + spot.transform.localPosition.x * 0.01f;
+            }
+
+            // The Genesis Cup in a glass case beside the stage.
+            Vector3 cup = new Vector3(R + 3.2f, F, stageZ - 1.5f);
+            Box(root, "Trophy Plinth", cup + new Vector3(0f, 0.55f, 0f), new Vector3(1.1f, 1.1f, 1.1f), metal);
+            Box(root, "Trophy Case", cup + new Vector3(0f, 1.8f, 0f), new Vector3(1f, 1.4f, 1f), glass);
+            Box(root, "Trophy Case Glow", cup + new Vector3(0f, 1.12f, 0f), new Vector3(1.12f, 0.04f, 1.12f), gold, collider: false);
+            var trophy = new GameObject("Genesis Cup").transform;
+            trophy.SetParent(root, false);
+            trophy.localPosition = cup + new Vector3(0f, 1.12f, 0f);
+            Disc(trophy, "Cup Base", new Vector3(0f, 0.06f, 0f), 0.22f, 0.12f, metal, collider: false);
+            Disc(trophy, "Cup Stem", new Vector3(0f, 0.3f, 0f), 0.05f, 0.36f, gold, collider: false);
+            Disc(trophy, "Cup Bowl", new Vector3(0f, 0.68f, 0f), 0.2f, 0.42f, gold, collider: false);
+            Disc(trophy, "Cup Rim", new Vector3(0f, 0.9f, 0f), 0.24f, 0.04f, gold, collider: false);
+            foreach (float hxs in new[] { -1f, 1f })
+                Box(trophy, "Cup Handle", new Vector3(hxs * 0.27f, 0.7f, 0f), new Vector3(0.06f, 0.26f, 0.04f), gold, collider: false);
+            trophy.gameObject.AddComponent<DuelGenesis.Core.GenesisSpin>().degreesPerSecond = new Vector3(0f, 35f, 0f);
+            PointLight(root, "Trophy Light", cup + new Vector3(0f, 3.2f, 0.6f), 4f, 8f, new Color(1f, 0.9f, 0.7f));
+            Sign(root, "GENESIS CUP", cup + new Vector3(0f, 0.75f, 0.57f), 180f, 0.02f, Gold);
+
             // ---- lobby: the pack counter on the left, a welcome screen on the right
             Vector3 counterAt = new Vector3(-hx + 2.4f, F, hz - 3.6f);
             Box(root, "Pack Counter", counterAt + new Vector3(0f, 0.55f, 0f), new Vector3(1.1f, 1.1f, 5f), counterMat);
@@ -559,13 +628,43 @@ namespace DuelGenesis.EditorTools
             PackWall(root, new Vector3(-hx + 0.05f, F, hz - 3.6f), 90f, boothBoard);
             HangingSign(root, "BOOSTER PACKS", new Vector3(-hx + 2.4f, F + 4.2f, hz - 3.6f), metal, gold, yaw: 90f, width: 5.2f);
 
-            if (logo != null)
+            // Tournament bracket board facing the entrance (the right side of the lobby as you walk in).
+            Vector3 board = new Vector3(hx - 4.5f, F, hz - 3.4f);
+            Box(root, "Bracket Board Legs", board + new Vector3(0f, 0.9f, 0f), new Vector3(0.25f, 1.8f, 0.25f), metal);
+            Box(root, "Bracket Board", board + new Vector3(0f, 3f, 0f), new Vector3(5.6f, 3.2f, 0.2f), boothBoard);
+            Box(root, "Bracket Board Frame Glow", board + new Vector3(0f, 4.62f, 0.11f), new Vector3(5.6f, 0.06f, 0.02f), cyan, collider: false);
+            Sign(root, "GENESIS CUP  \u2022  BRACKET", board + new Vector3(0f, 4.25f, 0.12f), 180f, 0.032f, Gold);
+            float[] ys = { 3.75f, 3.35f, 2.95f, 2.55f, 2.15f, 1.75f, 1.35f, 1.0f };
+            for (int b = 0; b < 8; b++)   // round of 8 -> 4 -> 2 -> champion, drawn as glowing lines
+                Box(root, "Bracket Line", board + new Vector3(-2.2f, ys[b] - 0.1f, 0.11f), new Vector3(0.9f, 0.035f, 0.02f), cyan, collider: false);
+            for (int b = 0; b < 4; b++)
             {
-                Vector3 kiosk = new Vector3(hx - 3.5f, F, hz - 3.2f);
-                Box(root, "Welcome Screen Stand", kiosk + new Vector3(0f, 1.3f, 0f), new Vector3(0.3f, 2.6f, 0.3f), metal);
-                Box(root, "Welcome Screen", kiosk + new Vector3(0f, 2.9f, 0f), new Vector3(3.4f, 2.2f, 0.18f), metal, collider: false);
-                Quad(root, "Welcome Screen Logo", kiosk + new Vector3(0f, 2.9f, 0.1f), new Vector2(2.1f, 1.95f), 180f, logo);
-                Quad(root, "Welcome Screen Logo Back", kiosk + new Vector3(0f, 2.9f, -0.1f), new Vector2(2.1f, 1.95f), 0f, logo);
+                float y0 = ys[b * 2] - 0.1f, y1 = ys[b * 2 + 1] - 0.1f, mid = (y0 + y1) * 0.5f;
+                Box(root, "Bracket Line", board + new Vector3(-1.75f, mid, 0.11f), new Vector3(0.035f, y0 - y1, 0.02f), cyan, collider: false);
+                Box(root, "Bracket Line", board + new Vector3(-1.1f, mid, 0.11f), new Vector3(1.3f, 0.035f, 0.02f), magenta, collider: false);
+            }
+            for (int b = 0; b < 2; b++)
+            {
+                float y0 = (ys[b * 4] + ys[b * 4 + 1]) * 0.5f - 0.1f, y1 = (ys[b * 4 + 2] + ys[b * 4 + 3]) * 0.5f - 0.1f, mid = (y0 + y1) * 0.5f;
+                Box(root, "Bracket Line", board + new Vector3(-0.45f, mid, 0.11f), new Vector3(0.035f, y0 - y1, 0.02f), magenta, collider: false);
+                Box(root, "Bracket Line", board + new Vector3(0.3f, mid, 0.11f), new Vector3(1.5f, 0.035f, 0.02f), gold, collider: false);
+            }
+            {
+                float y0 = (ys[0] + ys[3]) * 0.5f - 0.1f, y1 = (ys[4] + ys[7]) * 0.5f - 0.1f;
+                Box(root, "Bracket Line", board + new Vector3(1.05f, (y0 + y1) * 0.5f, 0.11f), new Vector3(0.035f, y0 - y1, 0.02f), gold, collider: false);
+                Box(root, "Bracket Line", board + new Vector3(1.6f, (y0 + y1) * 0.5f, 0.11f), new Vector3(1.1f, 0.05f, 0.02f), gold, collider: false);
+                if (logo != null) Quad(root, "Bracket Champion", board + new Vector3(2.35f, (y0 + y1) * 0.5f, 0.12f), new Vector2(0.9f, 0.84f), 180f, logo);
+            }
+
+            // A lounge by the trading hub: sofas round a coffee table.
+            GameObject sofa = LoadKenney("loungeSofa") ?? LoadKenney("loungeDesignSofa");
+            GameObject coffee = LoadKenney("tableCoffee") ?? LoadKenney("tableCoffeeSquare");
+            if (sofa != null && coffee != null)
+            {
+                Vector3 lounge = new Vector3(hx - 10.5f, F, hz - 3.6f);
+                PlaceSized(root, coffee, "Lounge Coffee Table", lounge, 0f, 0.45f);
+                PlaceSized(root, sofa, "Lounge Sofa", lounge + new Vector3(0f, 0f, -1.6f), 0f, 0.85f);
+                PlaceSized(root, sofa, "Lounge Sofa", lounge + new Vector3(-1.9f, 0f, 0f), 90f, 0.85f);
             }
 
             // Potted plants by the entrance, if the Kenney kit is in the project.
@@ -697,7 +796,63 @@ namespace DuelGenesis.EditorTools
             go.transform.localScale = size;
             go.GetComponent<Renderer>().sharedMaterial = m;
             if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());
+            if (m != null && Tiles.TryGetValue(m, out float tile)) TileUV(go, size, tile);
             return go;
+        }
+
+        /// <summary>Textured materials and the size in metres one texture repeat covers.</summary>
+        private static readonly Dictionary<Material, float> Tiles = new Dictionary<Material, float>();
+
+        /// <summary>
+        /// A material using a Poly Haven texture set (CC0) from Assets/ThirdParty/PolyHaven, downloaded with
+        /// Duel Genesis > Downloads. Without the download it falls back to the plain colour.
+        /// </summary>
+        private static Material TexMat(string name, string id, Color tint, float smooth, float tile)
+        {
+            Material m = Mat(name, tint, smooth: smooth);
+            string dir = $"{GenesisAssetDownloads.PolyHavenFolder}/{id}/";
+            var diff = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + id + "_diff_1k.jpg");
+            var nor = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + id + "_nor_gl_1k.jpg");
+            m.SetTexture("_BaseMap", diff);
+            if (nor != null)
+            {
+                m.SetTexture("_BumpMap", nor);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            else m.DisableKeyword("_NORMALMAP");
+            if (diff != null) Tiles[m] = tile;
+            else m.SetColor("_BaseColor", tint * 0.9f);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>Gives a scaled cube real-world UVs, so a texture repeats every <paramref name="tile"/> metres instead of stretching.</summary>
+        private static void TileUV(GameObject go, Vector3 size, float tile)
+        {
+            var mf = go.GetComponent<MeshFilter>();
+            Mesh mesh = Object.Instantiate(mf.sharedMesh);
+            mesh.name = "DC Tiled Box";
+            Vector3[] v = mesh.vertices, n = mesh.normals;
+            var uv = new Vector2[v.Length];
+            for (int i = 0; i < v.Length; i++)
+            {
+                Vector3 p = Vector3.Scale(v[i], size);
+                Vector3 a = new Vector3(Mathf.Abs(n[i].x), Mathf.Abs(n[i].y), Mathf.Abs(n[i].z));
+                uv[i] = a.x > 0.5f ? new Vector2(p.z, p.y) : a.y > 0.5f ? new Vector2(p.x, p.z) : new Vector2(p.x, p.y);
+                uv[i] /= tile;
+            }
+            mesh.uv = uv;
+            mf.sharedMesh = mesh;
+        }
+
+        /// <summary>A framed square screen that cycles the art of the rarest cards.</summary>
+        private static void VideoWall(Transform root, string name, Vector3 at, float yaw, float size, Material frame, Material screen, int offset)
+        {
+            Quaternion r = Quaternion.Euler(0f, yaw, 0f);
+            GameObject f = Box(root, name + " Frame", at, new Vector3(size + 0.4f, size + 0.4f, 0.12f), frame, collider: false);
+            f.transform.localRotation = r;
+            GameObject q = Quad(root, name, at + r * new Vector3(0f, 0f, -0.08f), new Vector2(size, size), yaw, screen);
+            q.AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = offset;
         }
 
         private static void Disc(Transform parent, string name, Vector3 centre, float radius, float height, Material m, bool collider = true)
@@ -712,7 +867,7 @@ namespace DuelGenesis.EditorTools
             if (collider) go.AddComponent<MeshCollider>().convex = true;
         }
 
-        private static void Quad(Transform parent, string name, Vector3 local, Vector2 size, float yaw, Material m)
+        private static GameObject Quad(Transform parent, string name, Vector3 local, Vector2 size, float yaw, Material m)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
             go.name = name;
@@ -724,6 +879,7 @@ namespace DuelGenesis.EditorTools
             var r = go.GetComponent<Renderer>();
             r.sharedMaterial = m;
             r.shadowCastingMode = ShadowCastingMode.Off;
+            return go;
         }
 
         /// <summary>A text sign, drawn with the depth-tested world-text material (hidden behind walls).</summary>
