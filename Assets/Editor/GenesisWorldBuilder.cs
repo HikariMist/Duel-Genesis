@@ -143,6 +143,7 @@ namespace DuelGenesis.EditorTools
             PlaceTraffic(root.transform, city.transform);
             int boards = GenesisBillboards.Place(root.transform, Log);
             Log.AppendLine($"Billboards: {boards} placed.");
+            GenesisAdReplacer.Replace(root.transform, Log);
 
             // ---------------- people
             Transform people = new GameObject("People").transform;
