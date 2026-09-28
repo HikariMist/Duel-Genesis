@@ -90,7 +90,7 @@ namespace DuelGenesis.EditorTools
             // 1. The plaza shop, where the old storefront stood, front to the plaza (-Z).
             Vector3 hubSpot = hadOld ? oldSpot : new Vector3(-6f, 0f, 5.2f);
             float hubGround = Physics.Raycast(hubSpot + Vector3.up * 50f, Vector3.down, out RaycastHit g, 120f, ~0, QueryTriggerInteraction.Ignore) ? g.point.y : 0f;
-            GameObject first = SpawnShop(prefab, city.transform, "Kame Game Shop", new Vector3(hubSpot.x, hubGround, hubSpot.z), 90f);
+            GameObject first = SpawnShop(prefab, city.transform, "Kame Game Shop", new Vector3(hubSpot.x, hubGround, hubSpot.z), StreetFacingYaw(city.transform, hubSpot, 9f, Vector3.back));
             placed.Add(hubSpot);
             log.AppendLine($"Plaza shop at {first.transform.position}.");
 
@@ -109,7 +109,7 @@ namespace DuelGenesis.EditorTools
                     if (d > bestDist) { bestDist = d; best = p; }
                 }
                 if (bestDist < radius * 2f + 20f) { log.AppendLine("No more lots far enough apart."); break; }
-                float yaw = Quaternion.LookRotation(new Vector3(-best.x, 0f, -best.z).normalized, Vector3.up).eulerAngles.y - 90f;
+                float yaw = StreetFacingYaw(city.transform, best, radius, new Vector3(-best.x, 0f, -best.z).normalized);
                 GameObject shop = SpawnShop(prefab, city.transform, $"Kame Game Shop {n + 2}", best, yaw);
                 placed.Add(best);
                 Physics.SyncTransforms();
@@ -146,6 +146,9 @@ namespace DuelGenesis.EditorTools
 
             Physics.SyncTransforms();
             Bounds placed = SolidBounds(shop);
+            AddDoorway(shop, city, name, ground.y);
+            FurnishInterior(shop, city, name, ground.y);
+
             var beacon = new GameObject("Beacon - GAME SHOP");
             beacon.transform.SetParent(shop.transform, false);
             beacon.transform.position = new Vector3(placed.center.x, placed.max.y, placed.center.z);
@@ -153,6 +156,256 @@ namespace DuelGenesis.EditorTools
             gb.label = "KAME GAME SHOP";
             gb.color = new Color(1f, 0.8f, 0.25f);
             return shop;
+        }
+
+        [MenuItem("Duel Genesis/DEV/Teleport Into Nearest Kame Game Shop (Play Mode)")]
+        public static void TeleportIntoShop()
+        {
+            if (!Application.isPlaying) { Debug.LogWarning("Duel: Genesis: enter Play mode first."); return; }
+            var player = Object.FindFirstObjectByType<DuelGenesis.Player.ThirdPersonPlayerController>();
+            if (player == null) return;
+            Transform spot = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None)
+                .Where(t => t.name.EndsWith(" - Inside Spot"))
+                .OrderBy(t => Vector3.Distance(t.position, player.transform.position)).FirstOrDefault();
+            if (spot != null) player.Teleport(spot.position, spot.rotation);
+        }
+
+        /// <summary>
+        /// Yaw that turns the shop front (local +X) towards the street: of the eight compass directions, the one
+        /// with the longest clear run at head height past the shop's own footprint (streets are long open
+        /// corridors, walls and alleys are short). Ties prefer <paramref name="preferred"/>.
+        /// </summary>
+        private static float StreetFacingYaw(Transform city, Vector3 spot, float radius, Vector3 preferred)
+        {
+            Vector3 best = preferred;
+            float bestScore = float.MinValue;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 dir = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
+                Vector3 origin = new Vector3(spot.x, spot.y + 1.6f, spot.z) + dir * (radius + 0.5f);
+                float free = Physics.Raycast(origin, dir, out RaycastHit hit, 120f, ~0, QueryTriggerInteraction.Ignore) ? hit.distance : 120f;
+                float score = free + Vector3.Dot(dir, preferred) * 4f;   // small bias towards the plaza
+                if (score > bestScore) { bestScore = score; best = dir; }
+            }
+            return Quaternion.LookRotation(best, Vector3.up).eulerAngles.y - 90f;   // local +X -> best
+        }
+
+        /// <summary>
+        /// Fills the shop floor with our own pieces: two playable duel tables and a wall of the nine Genesis
+        /// packs. Everything goes only where the floor is measured clear, so nothing clips into DMO's shelves.
+        /// </summary>
+        private static void FurnishInterior(GameObject shop, Transform city, string name, float groundY)
+        {
+            Transform fit = new GameObject(name + " - Interior").transform;
+            fit.SetParent(city, false);
+            Vector3 front = shop.transform.right, side = shop.transform.forward;
+            Bounds b = SolidBounds(shop);
+            Vector3 c = new Vector3(b.center.x, groundY, b.center.z);
+            float half = Mathf.Min(b.extents.x, b.extents.z) - 0.8f;
+
+            // Clear floor cells on a 0.5 m grid, in the shop's own axes (u along the front, v across).
+            const float cell = 0.5f;
+            int n = Mathf.Max(2, Mathf.FloorToInt(half * 2f / cell));
+            var free = new bool[n, n];
+            var floorY = new float[n, n];
+            Vector3 Cell(int iu, int iv) => c + front * (-half + (iu + 0.5f) * cell) + side * (-half + (iv + 0.5f) * cell);
+            for (int iu = 0; iu < n; iu++)
+            for (int iv = 0; iv < n; iv++)
+            {
+                Vector3 p = Cell(iu, iv);
+                if (!Physics.Raycast(new Vector3(p.x, groundY + 2.4f, p.z), Vector3.down, out RaycastHit h, 3.2f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                if (!h.collider.transform.IsChildOf(shop.transform) || h.normal.y < 0.9f || Mathf.Abs(h.point.y - groundY) > 0.8f) continue;
+                if (Physics.CheckBox(new Vector3(p.x, h.point.y + 1.0f, p.z), new Vector3(cell * 0.5f, 0.85f, cell * 0.5f), shop.transform.rotation, ~0, QueryTriggerInteraction.Collide)) continue;
+                free[iu, iv] = true;
+                floorY[iu, iv] = h.point.y;
+            }
+
+            bool Clear(int u0, int v0, int w, int d)
+            {
+                if (u0 < 0 || v0 < 0 || u0 + w > n || v0 + d > n) return false;
+                for (int iu = u0; iu < u0 + w; iu++)
+                for (int iv = v0; iv < v0 + d; iv++)
+                    if (!free[iu, iv]) return false;
+                return true;
+            }
+            void Take(int u0, int v0, int w, int d)
+            {
+                for (int iu = Mathf.Max(0, u0 - 1); iu < Mathf.Min(n, u0 + w + 1); iu++)
+                for (int iv = Mathf.Max(0, v0 - 1); iv < Mathf.Min(n, v0 + d + 1); iv++)
+                    free[iu, iv] = false;
+            }
+            Vector3 Centre(int u0, int v0, int w, int d)
+            {
+                Vector3 a = Cell(u0, v0), z = Cell(u0 + w - 1, v0 + d - 1);
+                return new Vector3((a.x + z.x) * 0.5f, floorY[u0 + w / 2, v0 + d / 2], (a.z + z.z) * 0.5f);
+            }
+
+            // Keep the doorway clear: the strip just inside the front wall stays empty.
+            for (int iu = n - 4; iu < n; iu++) for (int iv = 0; iv < n; iv++) if (iu >= 0) free[iu, iv] = false;
+
+            // 1. Two duel tables (table + both seats need about 2.5 x 3 m), deepest in the shop first.
+            int tables = 0;
+            int tw = Mathf.CeilToInt(2.5f / cell), td = Mathf.CeilToInt(3.0f / cell);
+            for (int iu = 0; iu < n && tables < 2; iu++)
+            for (int iv = 0; iv < n && tables < 2; iv++)
+            {
+                bool across = Clear(iu, iv, td, tw);   // try both orientations
+                bool along = !across && Clear(iu, iv, tw, td);
+                if (!across && !along) continue;
+                int w = across ? td : tw, d = across ? tw : td;
+                Vector3 at = Centre(iu, iv, w, d);
+                float yaw = Quaternion.LookRotation(across ? front : side, Vector3.up).eulerAngles.y;
+                var table = new GameObject($"{name} - Duel Table {tables + 1}");
+                table.transform.SetParent(fit, false);
+                table.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
+                var decor = table.AddComponent<DuelGenesis.Dueling.AmbientDuelTable>();
+                decor.seed = 90 + tables;
+                decor.dealCards = false;
+                var col = table.AddComponent<BoxCollider>();
+                col.center = new Vector3(0f, 0.38f, 0f);
+                col.size = new Vector3(1.24f, 0.76f, 0.94f);
+                var duel = table.AddComponent<DuelGenesis.Dueling.CityDuelTable>();
+                duel.opponentSeed = Mathf.Abs((name + tables).GetHashCode()) % 100000 + 7;
+                duel.tableName = $"{name} Table {tables + 1}";
+                Take(iu, iv, w, d);
+                tables++;
+            }
+
+            // 2. The pack wall: all nine Genesis packs on a lit display, back to the deepest free wall.
+            bool packs = false;
+            int pw = Mathf.CeilToInt(3.2f / cell);
+            for (int iu = 0; iu < n && !packs; iu++)
+            for (int iv = 0; iv < n && !packs; iv++)
+            {
+                if (!Clear(iu, iv, 2, pw)) continue;
+                Vector3 at = Centre(iu, iv, 2, pw);
+                BuildPackWall(fit, name, at, Quaternion.LookRotation(front, Vector3.up));
+                Take(iu, iv, 2, pw);
+                packs = true;
+            }
+            Debug.Log($"Duel: Genesis furnished {name}: {tables} duel tables, pack wall {(packs ? "placed" : "had no room")}.");
+        }
+
+        /// <summary>A dark display board with the nine pack wrappers in a 5 + 4 layout, lit from the front.</summary>
+        private static void BuildPackWall(Transform parent, string name, Vector3 foot, Quaternion facing)
+        {
+            var wall = new GameObject(name + " - Pack Wall").transform;
+            wall.SetParent(parent, false);
+            wall.SetPositionAndRotation(foot, facing);
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+
+            var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            board.name = "Board";
+            Object.DestroyImmediate(board.GetComponent<Collider>());
+            board.transform.SetParent(wall, false);
+            board.transform.localPosition = new Vector3(0f, 1.25f, -0.05f);
+            board.transform.localScale = new Vector3(3.1f, 1.9f, 0.08f);
+            board.GetComponent<Renderer>().sharedMaterial = SavedMaterial("DG Pack Wall Board", lit, new Color(0.05f, 0.06f, 0.1f), null, Color.black);
+            var col = wall.gameObject.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 1.25f, -0.05f);
+            col.size = new Vector3(3.1f, 1.9f, 0.3f);
+
+            string[] ids = { "monster", "spell", "trap", "dark", "light", "earth", "fire", "water", "wind" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Resources/DuelGenesis/Packs/pack_{ids[i]}.jpg");
+                if (tex == null) continue;
+                int row = i < 5 ? 0 : 1, col2 = i < 5 ? i : i - 5;
+                float count = row == 0 ? 5 : 4;
+                float x = (col2 - (count - 1) * 0.5f) * 0.58f;
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.name = "Pack " + ids[i];
+                Object.DestroyImmediate(quad.GetComponent<Collider>());
+                quad.transform.SetParent(wall, false);
+                quad.transform.localPosition = new Vector3(x, row == 0 ? 1.68f : 0.86f, 0.0f);
+                quad.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);   // quad front faces -Z; turn it to face out (+Z)
+                quad.transform.localScale = new Vector3(0.5f, 0.75f, 1f);
+                quad.GetComponent<Renderer>().sharedMaterial = SavedMaterial("DG Pack " + ids[i], lit, Color.white, tex, Color.white * 0.35f);
+            }
+
+            var lightGo = new GameObject("Pack Wall Light");
+            lightGo.transform.SetParent(wall, false);
+            lightGo.transform.localPosition = new Vector3(0f, 2.4f, 1.2f);
+            var light = lightGo.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = 4f;
+            light.intensity = 2.2f;
+            light.color = new Color(1f, 0.92f, 0.8f);
+        }
+
+        private static Material SavedMaterial(string matName, Shader shader, Color colour, Texture tex, Color emission)
+        {
+            const string folder = "Assets/Art/Generated/Shops";
+            if (!AssetDatabase.IsValidFolder("Assets/Art")) AssetDatabase.CreateFolder("Assets", "Art");
+            if (!AssetDatabase.IsValidFolder("Assets/Art/Generated")) AssetDatabase.CreateFolder("Assets/Art", "Generated");
+            if (!AssetDatabase.IsValidFolder(folder)) AssetDatabase.CreateFolder("Assets/Art/Generated", "Shops");
+            string path = $"{folder}/{matName}.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null) { m = new Material(shader) { name = matName }; AssetDatabase.CreateAsset(m, path); }
+            m.shader = shader;
+            m.SetColor("_BaseColor", colour);
+            if (tex != null) m.SetTexture("_BaseMap", tex);
+            if (emission.maxColorComponent > 0f)
+            {
+                m.EnableKeyword("_EMISSION");
+                if (tex != null) m.SetTexture("_EmissionMap", tex);
+                m.SetColor("_EmissionColor", emission);
+            }
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>
+        /// The model's front door is solid, so players go in the way DMO did it: press E at the shop front to
+        /// step inside, and E at the inner side of the front wall to step back out. The model's shop front is
+        /// its local +X side. Door objects sit under the city root (not the scaled shop) with the shop's name
+        /// as a prefix, so re-running the placement cleans them up.
+        /// </summary>
+        private static void AddDoorway(GameObject shop, Transform city, string name, float groundY)
+        {
+            Vector3 front = shop.transform.right;
+            Bounds b = SolidBounds(shop);
+            Vector3 centre = new Vector3(b.center.x, groundY + 1.1f, b.center.z);
+            float reach = Mathf.Max(b.extents.x, b.extents.z) + 4f;
+
+            Vector3 outerWall = centre + front * Mathf.Max(b.extents.x, b.extents.z) * 0.7f;
+            if (Physics.Raycast(centre + front * reach, -front, out RaycastHit outer, reach * 2f, ~0, QueryTriggerInteraction.Ignore) &&
+                outer.collider.transform.IsChildOf(shop.transform))
+                outerWall = outer.point;
+            Vector3 innerWall = outerWall - front * 0.4f;
+            if (Physics.Raycast(centre, front, out RaycastHit inner, reach, ~0, QueryTriggerInteraction.Ignore) &&
+                inner.collider.transform.IsChildOf(shop.transform))
+                innerWall = inner.point;
+
+            Vector3 insideSpot = innerWall - front * 2.2f;
+            if (Physics.Raycast(new Vector3(insideSpot.x, groundY + 2.2f, insideSpot.z), Vector3.down, out RaycastHit floor, 4f, ~0, QueryTriggerInteraction.Ignore))
+                insideSpot.y = floor.point.y + 0.05f;
+            else insideSpot.y = groundY + 0.05f;
+            Vector3 outsideSpot = new Vector3(outerWall.x, groundY + 0.05f, outerWall.z) + front * 2.2f;
+
+            Transform inside = new GameObject(name + " - Inside Spot").transform;
+            inside.SetParent(city, false);
+            inside.SetPositionAndRotation(insideSpot, Quaternion.LookRotation(-front, Vector3.up));
+            Transform outside = new GameObject(name + " - Outside Spot").transform;
+            outside.SetParent(city, false);
+            outside.SetPositionAndRotation(outsideSpot, Quaternion.LookRotation(front, Vector3.up));
+
+            Door(city, name + " - Door (enter)", new Vector3(outerWall.x, groundY, outerWall.z) + front * 0.7f, front, inside, "Enter the Kame Game Shop");
+            Door(city, name + " - Door (leave)", new Vector3(innerWall.x, insideSpot.y, innerWall.z) - front * 0.6f, front, outside, "Leave the shop");
+        }
+
+        private static void Door(Transform city, string name, Vector3 foot, Vector3 front, Transform destination, string prompt)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(city, false);
+            go.transform.SetPositionAndRotation(foot, Quaternion.LookRotation(front, Vector3.up));
+            var box = go.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.center = new Vector3(0f, 1.2f, 0f);
+            box.size = new Vector3(3f, 2.4f, 1.2f);
+            var door = go.AddComponent<DuelGenesis.Shops.ShopDoor>();
+            door.destination = destination;
+            door.prompt = prompt;
         }
 
         /// <summary>

@@ -149,9 +149,9 @@ namespace DuelGenesis.Core
             if (city)
             {
                 // Real-world sized signage for the Genesis City hub (letters ~25-40 cm tall).
-                CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 2.75f, 0.85f), Purple, 0.06f);
+                // The plaza's shop is now the Kame Game Shop (its own sign), so only the table and plaza get labels.
                 CreateSign(root.transform, "DUEL TABLE", new Vector3(6f, 2.55f, 3.6f), Cyan, 0.05f);
-                CreateSign(root.transform, "GENESIS CITY", new Vector3(0f, 0.03f, 7.8f), Mint, 0.07f, new Vector3(90f, 0f, 0f));
+                CreateSign(root.transform, "GENESIS CITY", new Vector3(0f, 0.03f, -7f), Mint, 0.07f, new Vector3(90f, 0f, 0f));
             }
             else
             {
