@@ -92,6 +92,19 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis built the {RootName} ({size.x:0} x {size.y:0} m).\n{log}");
         }
 
+        /// <summary>Builds the hall on a chosen spot (open-layout city): ground centre and the yaw its entrance faces.</summary>
+        public static GameObject BuildAt(Transform parent, Vector3 groundCentre, float yaw)
+        {
+            Transform old = parent.Find(RootName);
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            Physics.SyncTransforms();
+            var lot = new Lot { centre = groundCentre, yaw = yaw, fromHub = new Vector2(groundCentre.x, groundCentre.z).magnitude, frontRun = 40f };
+            var log = new StringBuilder();
+            GameObject hall = Build(parent, lot, Sizes[0], log);
+            Debug.Log($"Duel: Genesis built the {RootName} at {groundCentre} (yaw {yaw:0}).\n{log}");
+            return hall;
+        }
+
         [MenuItem("Duel Genesis/DEV/Teleport To Genesis Duel Center (Play Mode)")]
         public static void TeleportToCenter()
         {
