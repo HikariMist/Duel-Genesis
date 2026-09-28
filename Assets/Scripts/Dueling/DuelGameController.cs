@@ -29,6 +29,10 @@ namespace DuelGenesis.Dueling
         public string CpuDeckName { get; private set; } = "Genesis CPU";
 
         public bool IsActive => _active;
+
+        /// <summary>Set by a city duel table just before it starts a duel, so each table keeps its own opponent.</summary>
+        public int? NextCpuSeed;
+        private int _cpuSeed;
         public bool IsDuelOver => Engine != null && Engine.IsOver;
 
         // ---- compatibility surface used by existing systems and tests
@@ -124,7 +128,9 @@ namespace DuelGenesis.Dueling
             _wallet = player.GetComponent<GenesisWallet>();
             _playerController = player.GetComponent<ThirdPersonPlayerController>();
 
-            (List<CardData> cpuDeck, string deckName) = CpuDeckBuilder.Build(CardDatabase.All, UnityEngine.Random.Range(0, int.MaxValue));
+            _cpuSeed = NextCpuSeed ?? UnityEngine.Random.Range(0, int.MaxValue);
+            NextCpuSeed = null;
+            (List<CardData> cpuDeck, string deckName) = CpuDeckBuilder.Build(CardDatabase.All, _cpuSeed);
             _cpuCards = cpuDeck;
             CpuDeckName = deckName;
 
@@ -181,7 +187,7 @@ namespace DuelGenesis.Dueling
         {
             if (!_active) return;
             TearDownEngine();
-            (List<CardData> cpuDeck, string deckName) = CpuDeckBuilder.Build(CardDatabase.All, UnityEngine.Random.Range(0, int.MaxValue));
+            (List<CardData> cpuDeck, string deckName) = CpuDeckBuilder.Build(CardDatabase.All, _cpuSeed);   // same opponent again
             _cpuCards = cpuDeck;
             CpuDeckName = deckName;
             BeginEngine();

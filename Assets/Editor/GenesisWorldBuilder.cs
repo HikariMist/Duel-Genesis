@@ -104,6 +104,19 @@ namespace DuelGenesis.EditorTools
             return true;
         }
 
+        [MenuItem("Duel Genesis/World/6. Spread Card Shops & Duel Tables Across The City")]
+        public static void DistrictsMenu()
+        {
+            if (!OpenPlayableScene()) return;
+            GameObject root = GameObject.Find(CityRootName);
+            if (root == null) { EditorUtility.DisplayDialog("Genesis City", "Build Genesis City first (World > 3).", "OK"); return; }
+            Log.Clear();
+            PlaceDistricts(root.transform);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+            Debug.Log("Duel: Genesis spread shops and duel tables across the city.\n" + Log);
+        }
+
         // ================================================================== build
 
         public static void BuildCity()
@@ -150,6 +163,7 @@ namespace DuelGenesis.EditorTools
             people.SetParent(root.transform, false);
             SetupPlayerAvatar();
             SpawnNpcs(people);
+            PlaceDistricts(root.transform);
 
             // ---------------- atmosphere
             ApplyAtmosphere();
@@ -585,6 +599,169 @@ namespace DuelGenesis.EditorTools
             if (best > float.MinValue) groundY = best;
             go.transform.position += Vector3.up * (groundY - position.y);
             return go;
+        }
+
+        // ------------------------------------------------------------------ open world: shops + duel tables
+
+        public const string DistrictsRootName = "Genesis Districts";
+
+        private static readonly string[][] MaleOutfits =
+        {
+            new[] { "male_hoodie_grey_Recipe", "male_sportpants_alt_black_Recipe", "male_shoes_tall_Recipe", "Hair_MessyPomp_Recipe" },
+            new[] { "male_tanktop_yellow_Recipe", "male_shorts_hive_Recipe", "male_shoe_low_white.001_Recipe", "Hair_StraigntPulledBack_Recipe" },
+            new[] { "male_tshirt_white_Recipe", "male_sportpants_blueWhite_Recipe", "male_shoes_tall_turquoise_Recipe", "HairMessyUp_Recipe" },
+            new[] { "male_jacket_hive_Recipe", "male_sweatpants_black_Recipe", "male_shoes_tall_Recipe", "Hair_PulledBack_Recipe" },
+        };
+        private static readonly string[][] FemaleOutfits =
+        {
+            new[] { "sportswear_top_Recipe", "shorts_turquoise_Recipe", "shoes_tall_turquoise.001_Recipe", "Hair_Bun_Recipe" },
+            new[] { "jacket_hive.001_Recipe", "skirt_turquoise_Recipe", "shoes_tall_white_Recipe", "Hair_Bob_Recipe" },
+            new[] { "colors_top_Recipe", "colors_top_bottom_Recipe", "shoe_low_white_Recipe", "Hair_CurveUnder_Recipe" },
+            new[] { "Hoodie_turquoise_Recipe", "tights_gray_Recipe", "shoes_tall_white_Recipe", "HairPonytail_Recipe" },
+        };
+
+        /// <summary>
+        /// Turns the whole map into play space: finds flat, open street spots spread across the city
+        /// (farthest-point sampling from the hub) and puts a working card shop or a playable duel table,
+        /// each with a resident duelist and a light beacon, on each of them.
+        /// </summary>
+        private static void PlaceDistricts(Transform root)
+        {
+            Transform old = root.Find(DistrictsRootName);
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            Transform map = root.Find("Map");
+            if (map == null) { Log.AppendLine("Districts: no Map."); return; }
+            Transform districts = new GameObject(DistrictsRootName).transform;
+            districts.SetParent(root, false);
+            Physics.SyncTransforms();
+
+            Bounds b = RendererBounds(map.gameObject);
+            var open = new List<Vector3>();
+            const float step = 4f;
+            for (float x = b.min.x + 6f; x < b.max.x - 6f; x += step)
+            for (float z = b.min.z + 6f; z < b.max.z - 6f; z += step)
+            {
+                if (new Vector2(x, z).magnitude < 28f) continue;                 // the hub has its own shop and table
+                if (OpenSite(map, new Vector3(x, 0f, z), out float y)) open.Add(new Vector3(x, y, z));
+            }
+
+            // Spread sites as far from each other (and the hub) as possible.
+            var chosen = new List<Vector3>();
+            var anchors = new List<Vector3> { Vector3.zero };
+            while (chosen.Count < 12 && open.Count > 0)
+            {
+                Vector3 best = default;
+                float bestDist = -1f;
+                foreach (Vector3 p in open)
+                {
+                    float d = anchors.Min(a => Vector2.Distance(new Vector2(a.x, a.z), new Vector2(p.x, p.z)));
+                    if (d > bestDist) { bestDist = d; best = p; }
+                }
+                if (bestDist < 30f) break;
+                chosen.Add(best);
+                anchors.Add(best);
+            }
+
+            int shops = 0, tables = 0;
+            for (int i = 0; i < chosen.Count; i++)
+            {
+                Vector3 site = chosen[i];
+                Vector3 away = new Vector3(site.x, 0f, site.z).normalized;
+                float yaw = Quaternion.LookRotation(away, Vector3.up).eulerAngles.y;   // backs away from the hub
+                if (i % 3 == 1) BuildCityShop(districts, site, yaw, ++shops);
+                else BuildCityDuelTable(districts, site, yaw, ++tables);
+            }
+            Log.AppendLine($"Districts: {open.Count} open street spots, {tables} duel tables and {shops} card shops placed across the city.");
+        }
+
+        private static bool OpenSite(Transform map, Vector3 p, out float groundY)
+        {
+            groundY = 0f;
+            float? first = null;
+            for (int ix = -1; ix <= 1; ix++)
+            for (int iz = -1; iz <= 1; iz++)
+            {
+                Vector3 o = new Vector3(p.x + ix * 3.5f, 250f, p.z + iz * 3.5f);
+                RaycastHit[] hits = Physics.RaycastAll(o, Vector3.down, 500f, ~0, QueryTriggerInteraction.Ignore);
+                if (hits.Length == 0) return false;
+                System.Array.Sort(hits, (a, c) => a.distance.CompareTo(c.distance));
+                RaycastHit top = hits[0];
+                if (top.collider.name.Contains("Test_Ground") && hits.Length > 1) top = hits[1];
+                if (!top.collider.transform.IsChildOf(map)) return false;      // something built here already
+                if (top.point.y > 3f || top.point.y < -8f) return false;       // a roof, not the street
+                if (first == null) first = top.point.y;
+                else if (Mathf.Abs(top.point.y - first.Value) > 0.35f) return false;
+            }
+            groundY = first.Value;
+            // Nothing standing in a 7 x 7 m box from knee to head height.
+            Collider[] blockers = Physics.OverlapBox(new Vector3(p.x, groundY + 1.7f, p.z), new Vector3(3.6f, 1.3f, 3.6f), Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+            return blockers.All(c => c.name.Contains("Test_Ground"));
+        }
+
+        private static void BuildCityDuelTable(Transform parent, Vector3 site, float yaw, int number)
+        {
+            GameObject table = new GameObject($"City Duel Table {number}");
+            table.transform.SetParent(parent, false);
+            table.transform.SetPositionAndRotation(site, Quaternion.Euler(0f, yaw, 0f));
+            var decor = table.AddComponent<DuelGenesis.Dueling.AmbientDuelTable>();
+            decor.seed = 50 + number;
+            decor.dealCards = false;
+            BoxCollider col = table.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 0.38f, 0f);
+            col.size = new Vector3(1.24f, 0.76f, 0.94f);
+            var duel = table.AddComponent<DuelGenesis.Dueling.CityDuelTable>();
+            duel.opponentSeed = 7919 * number + 101;
+            duel.tableName = $"Street Duel Table {number}";
+
+            // The resident duelist waits on the far side (one avatar per table keeps UMA cost down).
+            Vector3 far = table.transform.TransformPoint(new Vector3(0f, 0f, 0.85f));
+            bool female = number % 2 == 0;
+            GameObject rival = SpawnUma(parent, far, yaw + 180f, female ? "Human Female 3.0" : "Human Male 3.0",
+                female ? FemaleOutfits[number % FemaleOutfits.Length] : MaleOutfits[number % MaleOutfits.Length], UmaIdle);
+            if (rival != null) rival.name = $"NPC - Resident Duelist (Table {number})";
+            Beacon(table.transform, new Vector3(-1.9f, 0f, 0.4f), "DUEL TABLE", new Color(1f, 0.3f, 0.75f));
+        }
+
+        private static void BuildCityShop(Transform parent, Vector3 site, float yaw, int number)
+        {
+            GameObject shop = new GameObject($"City Card Shop {number}");
+            shop.transform.SetParent(parent, false);
+            shop.transform.SetPositionAndRotation(site, Quaternion.Euler(0f, yaw, 0f));
+            Transform t = shop.transform;
+            float back = yaw + 180f;   // kiosks face the hub side
+
+            for (int k = -1; k <= 1; k += 2)
+            {
+                Vector3 pos = t.TransformPoint(new Vector3(k * 1.1f, 0f, 1.2f));
+                GameObject kiosk = SpawnSized(Atm + "ATM3.prefab", shop.transform, pos, back, height: 1.95f);
+                if (kiosk != null) kiosk.name = "Card Pack Kiosk";
+                var terminal = new GameObject("Pack Terminal - City Shop " + number);
+                terminal.transform.SetParent(shop.transform, false);
+                terminal.transform.SetPositionAndRotation(pos + Vector3.up * 1f, Quaternion.Euler(0f, back, 0f));
+                BoxCollider c = terminal.AddComponent<BoxCollider>();
+                c.size = new Vector3(1.1f, 2f, 1f);
+                var shopTerminal = terminal.AddComponent<DuelGenesis.Shops.CardShopTerminal>();
+                shopTerminal.shopName = $"Genesis Card Shop #{number + 1}";
+            }
+            SpawnSized(Polygon + "Props/ColaMachine prefab.prefab", shop.transform, t.TransformPoint(new Vector3(2.9f, 0f, 1.3f)), back, height: 1.85f);
+            SpawnSized(Polygon + "Props/bench prefab.prefab", shop.transform, t.TransformPoint(new Vector3(-2.8f, 0f, -1.2f)), yaw + 90f, length: 1.8f);
+            SpawnSized(Polygon + "Props/Bin prefab.prefab", shop.transform, t.TransformPoint(new Vector3(-2.9f, 0f, 1.3f)), back, height: 0.9f);
+
+            GameObject clerk = SpawnUma(parent, t.TransformPoint(new Vector3(0f, 0f, 2.2f)), back, number % 2 == 0 ? "Human Female 3.0" : "Human Male 3.0",
+                number % 2 == 0 ? FemaleOutfits[(number + 2) % FemaleOutfits.Length] : MaleOutfits[(number + 2) % MaleOutfits.Length], UmaIdle);
+            if (clerk != null) clerk.name = $"NPC - Card Shop Clerk (Shop {number})";
+
+            Beacon(shop.transform, new Vector3(0f, 0f, 2.6f), "CARD SHOP", new Color(0.2f, 0.85f, 1f));
+        }
+
+        private static void Beacon(Transform parent, Vector3 local, string label, Color color)
+        {
+            var go = new GameObject("Beacon - " + label);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = local;
+            var beacon = go.AddComponent<DuelGenesis.Core.GenesisBeacon>();
+            beacon.label = label;
+            beacon.color = color;
         }
 
         public static Bounds RendererBounds(GameObject go)

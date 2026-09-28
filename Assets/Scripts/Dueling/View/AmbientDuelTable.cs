@@ -14,6 +14,8 @@ namespace DuelGenesis.Dueling
     {
         [Tooltip("Random seed so each ambient table shows a different, stable board.")]
         public int seed = 1;
+        [Tooltip("Off for tables the player can duel at: they stay clear until a duel starts.")]
+        public bool dealCards = true;
 
         private readonly List<(DuelCard card, MeshRenderer renderer, MaterialPropertyBlock block)> _faces = new();
         private readonly List<(MonsterHologram hologram, Vector3 position, int player)> _holograms = new();
@@ -28,7 +30,7 @@ namespace DuelGenesis.Dueling
         private void Update()
         {
             if (_root == null) return;
-            if (_faces.Count == 0 && CardDatabase.All != null && CardDatabase.All.Count > 0)
+            if (dealCards && _faces.Count == 0 && CardDatabase.All != null && CardDatabase.All.Count > 0)
                 DealBoard();
 
             foreach (var f in _faces)
@@ -43,6 +45,12 @@ namespace DuelGenesis.Dueling
             }
             foreach (var h in _holograms)
                 if (h.hologram != null) h.hologram.SetPose(h.position, DuelMatLayout.Yaw(h.player), false);
+        }
+
+        /// <summary>Hides the decorative table while the real playable table stands in its place.</summary>
+        public void SetVisible(bool visible)
+        {
+            if (_root != null) _root.gameObject.SetActive(visible);
         }
 
         private void DealBoard()

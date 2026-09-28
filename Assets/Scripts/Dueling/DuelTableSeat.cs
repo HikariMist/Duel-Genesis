@@ -18,6 +18,8 @@ namespace DuelGenesis.Dueling
         private bool _hasReturnPoint;
         private bool _duelWasActive;
 
+        public bool IsOccupied => _seatedPlayer != null;
+
         public string InteractionPrompt
         {
             get

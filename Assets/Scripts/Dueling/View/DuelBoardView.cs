@@ -144,6 +144,34 @@ namespace DuelGenesis.Dueling
             HidePlayer(false);
         }
 
+        private bool _hasHome;
+        private Vector3 _homePosition;
+        private Quaternion _homeRotation;
+
+        /// <summary>Moves the playable table (and its seat) onto another table spot in the city for a duel there.</summary>
+        public bool MoveTableTo(Transform anchor)
+        {
+            EnsureTable();
+            if (_table == null || anchor == null) return false;
+            if (!_hasHome)
+            {
+                _homePosition = _table.position;
+                _homeRotation = _table.rotation;
+                _hasHome = true;
+            }
+            _table.SetPositionAndRotation(anchor.position, anchor.rotation);
+            Physics.SyncTransforms();
+            return true;
+        }
+
+        /// <summary>Puts the playable table back at its home spot in the hub.</summary>
+        public void ReturnTableHome()
+        {
+            if (_table == null || !_hasHome) return;
+            _table.SetPositionAndRotation(_homePosition, _homeRotation);
+            Physics.SyncTransforms();
+        }
+
         public void ToggleCameraView() => _zoomTarget = _zoomTarget < 0.5f ? 1f : 0f;
 
         // ============================================================== per-frame sync
