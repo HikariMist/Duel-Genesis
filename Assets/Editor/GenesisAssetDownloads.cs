@@ -17,6 +17,48 @@ namespace DuelGenesis.EditorTools
         private const string FurnitureUrl = "https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip";
         public const string FurnitureFolder = "Assets/ThirdParty/Kenney/FurnitureKit";
         public const string PolyHavenFolder = "Assets/ThirdParty/PolyHaven";
+        public const string CityKitFolder = "Assets/ThirdParty/Kenney/CityKitCommercial";
+        public const string NatureKitFolder = "Assets/ThirdParty/Kenney/NatureKit";
+
+        [MenuItem("Duel Genesis/Downloads/Kenney City Kit Commercial (CC0) - buildings for the open city")]
+        public static void DownloadCityKit() => DownloadKit("City Kit (Commercial)",
+            "https://kenney.nl/media/pages/assets/city-kit-commercial/a742d900eb-1753115042/kenney_city-kit-commercial_2.1.zip", CityKitFolder);
+
+        [MenuItem("Duel Genesis/Downloads/Kenney Nature Kit (CC0) - trees, rocks, flowers")]
+        public static void DownloadNatureKit() => DownloadKit("Nature Kit",
+            "https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip", NatureKitFolder);
+
+        /// <summary>Downloads a Kenney kit (CC0) and keeps only its FBX models and licence.</summary>
+        private static void DownloadKit(string title, string url, string folder)
+        {
+            string project = Directory.GetParent(Application.dataPath).FullName;
+            string zipPath = Path.Combine(project, "Temp", Path.GetFileName(url));
+            Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
+            using (var request = UnityWebRequest.Get(url))
+            {
+                request.downloadHandler = new DownloadHandlerFile(zipPath);
+                var op = request.SendWebRequest();
+                while (!op.isDone)
+                    if (EditorUtility.DisplayCancelableProgressBar("Duel: Genesis", $"Downloading Kenney {title}...", request.downloadProgress)) { request.Abort(); break; }
+                EditorUtility.ClearProgressBar();
+                if (request.result != UnityWebRequest.Result.Success) { Debug.LogError($"Duel: Genesis could not download {title}: {request.error}"); return; }
+            }
+            string dest = Path.Combine(project, folder);
+            Directory.CreateDirectory(dest);
+            int models = 0;
+            using (ZipArchive zip = ZipFile.OpenRead(zipPath))
+                foreach (ZipArchiveEntry e in zip.Entries)
+                {
+                    if (string.IsNullOrEmpty(e.Name)) continue;
+                    string lower = e.FullName.Replace('\\', '/').ToLowerInvariant();
+                    if (lower.EndsWith(".fbx")) { e.ExtractToFile(Path.Combine(dest, e.Name), true); models++; }
+                    else if (lower.EndsWith("license.txt")) e.ExtractToFile(Path.Combine(dest, "License.txt"), true);
+                    else if (lower.EndsWith(".png") && (lower.Contains("texture") || lower.Contains("colormap"))) e.ExtractToFile(Path.Combine(dest, e.Name), true);
+                }
+            long bytes = new FileInfo(zipPath).Length;
+            AssetDatabase.Refresh();
+            Debug.Log($"Duel: Genesis downloaded Kenney {title} (CC0, {bytes / 1048576f:0.0} MB): {models} models in {folder}.");
+        }
 
         /// <summary>Poly Haven texture sets (CC0) used by the Genesis Duel Center: colour + normal map, 1K.</summary>
         public static readonly string[] DuelCenterTextures = { "marble_01", "concrete_panels", "wooden_panels" };
