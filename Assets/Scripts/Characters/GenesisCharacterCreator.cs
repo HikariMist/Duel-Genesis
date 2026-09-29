@@ -8,7 +8,7 @@ using UnityEngine.InputSystem;
 namespace DuelGenesis.Characters
 {
     /// <summary>
-    /// The character creator. Press K in the city (or pick CHARACTER on the title screen): a camera turns to face
+    /// The character creator. Press Shift+K in the city (or pick CHARACTER on the title screen): a camera turns to face
     /// your character on the left while the right panel edits body, face, colours and outfit live. Save keeps the
     /// look (PlayerPrefs for now, network-ready JSON); Cancel puts the old look back.
     /// </summary>
@@ -49,7 +49,7 @@ namespace DuelGenesis.Characters
             Keyboard k = Keyboard.current;
             if (!IsOpen)
             {
-                if (k != null && k.kKey.wasPressedThisFrame && !AnyOtherUiOpen()) Open();
+                if (k != null && k.kKey.wasPressedThisFrame && k.shiftKey.isPressed && !AnyOtherUiOpen()) Open();
                 return;
             }
             if (k != null && k.escapeKey.wasPressedThisFrame) { Close(save: false); return; }

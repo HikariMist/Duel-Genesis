@@ -22,6 +22,7 @@ namespace DuelGenesis.Shops
         private readonly List<CardData> _lastPack = new();
         private readonly List<float> _flippedAt = new();   // when each card was turned face-up (for the rare-pull burst)
         private Stage _stage = Stage.Closed;
+        private bool _matsTab;
         private int _revealedCount;
         private GenesisPackType _pack;
         private float _stageStart;
@@ -119,6 +120,8 @@ namespace DuelGenesis.Shops
             switch (_stage)
             {
                 case Stage.Shop:
+                    if (keyboard.tabKey.wasPressedThisFrame) _matsTab = !_matsTab;
+                    if (_matsTab) break;
                     for (int i = 0; i < GenesisPacks.All.Length && i < 9; i++)
                         if (keyboard[Key.Digit1 + i].wasPressedThisFrame) Buy(GenesisPacks.All[i]);
                     break;
@@ -152,7 +155,7 @@ namespace DuelGenesis.Shops
             GUIStyle title = Style(30, FontStyle.Bold, TextAnchor.MiddleLeft, GenesisTheme.Cyan);
             GUIStyle small = Style(15, FontStyle.Normal, TextAnchor.MiddleCenter, Color.white);
             GUI.Label(new Rect(window.x + 28f, window.y + 16f, width - 300f, 44f),
-                _stage == Stage.Shop ? _shopName.ToUpperInvariant() + "  ·  BOOSTER PACKS" : (_pack?.displayName ?? "").ToUpperInvariant(), title);
+                _stage == Stage.Shop ? _shopName.ToUpperInvariant() : (_pack?.displayName ?? "").ToUpperInvariant(), title);
             if (_wallet != null)
                 GUI.Label(new Rect(window.xMax - 300f, window.y + 16f, 272f, 44f), $"{_wallet.GenesisCredits:N0} GC",
                     Style(24, FontStyle.Bold, TextAnchor.MiddleRight, GenesisTheme.Gold));
@@ -160,7 +163,14 @@ namespace DuelGenesis.Shops
             Rect body = new Rect(window.x + 24f, window.y + 70f, width - 48f, height - 130f);
             switch (_stage)
             {
-                case Stage.Shop: DrawShop(body); break;
+                case Stage.Shop:
+                    // Tabs: packs / duel mats.
+                    var tabPacks = new Rect(window.xMax - 690f, window.y + 20f, 180f, 38f);
+                    var tabMats = new Rect(window.xMax - 496f, window.y + 20f, 180f, 38f);
+                    if (GenesisTheme.Button(tabPacks, "BOOSTER PACKS", _matsTab ? GenesisTheme.Muted : GenesisTheme.Cyan)) _matsTab = false;
+                    if (GenesisTheme.Button(tabMats, "DUEL MATS", _matsTab ? GenesisTheme.Gold : GenesisTheme.Muted)) _matsTab = true;
+                    if (_matsTab) DrawMats(body); else DrawShop(body);
+                    break;
                 case Stage.Tearing: DrawTear(body); break;
                 case Stage.Reveal: DrawReveal(body); break;
             }
@@ -170,7 +180,9 @@ namespace DuelGenesis.Shops
 
             string help = _stage switch
             {
-                Stage.Shop => "Click a pack or press 1-9 to buy   •   ESC to leave the counter",
+                Stage.Shop => _matsTab
+                    ? "Click a mat to buy it, or to use one you own on your side of the duel table   •   TAB packs   •   ESC leave"
+                    : "Click a pack or press 1-9 to buy   •   TAB duel mats   •   ESC to leave the counter",
                 Stage.Tearing => "Opening...",
                 _ => _revealedCount < _lastPack.Count
                     ? "CLICK / SPACE flip the next card   •   R reveal all"
@@ -215,6 +227,66 @@ namespace DuelGenesis.Shops
 
             GUI.Label(new Rect(body.x, body.yMax - 22f, body.width, 22f), GenesisPacks.OddsText,
                 Style(13, FontStyle.Normal, TextAnchor.MiddleCenter, GenesisTheme.Muted));
+        }
+
+        private void DrawMats(Rect body)
+        {
+            GenesisMatType[] mats = GenesisMats.All;
+            GenesisMatType equipped = GenesisMats.Selected;
+            const int perRow = 3;
+            int rows = Mathf.CeilToInt(mats.Length / (float)perRow);
+            float labelH = 58f;
+            float cellW = (body.width - (perRow - 1) * 24f) / perRow;
+            float artH = Mathf.Min(cellW / 1.73f, (body.height - 30f) / rows - labelH - 14f);
+            float artW = artH * 1.73f;
+
+            for (int i = 0; i < mats.Length; i++)
+            {
+                GenesisMatType mat = mats[i];
+                int row = i / perRow, col = i % perRow;
+                float x = body.x + col * (cellW + 24f) + (cellW - artW) * 0.5f;
+                float y = body.y + 6f + row * (artH + labelH + 14f);
+                var rect = new Rect(x, y, artW, artH);
+                bool owned = GenesisMats.Owns(mat.id);
+                bool isEquipped = equipped.id == mat.id;
+                bool hover = rect.Contains(Event.current.mousePosition);
+
+                GenesisTheme.Box(Grow(rect, isEquipped ? 5f : hover ? 4f : 2f),
+                    isEquipped ? GenesisTheme.Gold : hover ? new Color(mat.accent.r, mat.accent.g, mat.accent.b, 0.9f) : new Color(1f, 1f, 1f, 0.15f));
+                Texture2D art = mat.Art;
+                if (art != null) GUI.DrawTexture(rect, art, ScaleMode.ScaleAndCrop);
+                else
+                {
+                    GenesisTheme.Box(rect, new Color(0.035f, 0.05f, 0.1f, 1f));
+                    GUI.Label(rect, "GENESIS\nCLASSIC", Style(22, FontStyle.Bold, TextAnchor.MiddleCenter, GenesisTheme.Cyan));
+                }
+                if (!owned) GenesisTheme.Box(new Rect(rect.x, rect.yMax - 28f, rect.width, 28f), new Color(0f, 0f, 0f, 0.6f));
+                if (!owned) GUI.Label(new Rect(rect.x, rect.yMax - 28f, rect.width, 28f), $"{mat.price:N0} GC",
+                    Style(16, FontStyle.Bold, TextAnchor.MiddleCenter, _wallet == null || _wallet.CanAfford(mat.price) ? GenesisTheme.Gold : GenesisTheme.Danger));
+
+                GUI.Label(new Rect(x - 10f, y + artH + 6f, artW + 20f, 24f), mat.displayName, Style(17, FontStyle.Bold, TextAnchor.MiddleCenter, mat.accent));
+                string status = isEquipped ? "IN USE" : owned ? "OWNED  ·  click to use" : mat.blurb;
+                GUI.Label(new Rect(x - 10f, y + artH + 30f, artW + 20f, 22f), status,
+                    Style(13, isEquipped ? FontStyle.Bold : FontStyle.Normal, TextAnchor.MiddleCenter, isEquipped ? GenesisTheme.Gold : Color.white));
+
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) BuyOrEquipMat(mat);
+            }
+        }
+
+        private void BuyOrEquipMat(GenesisMatType mat)
+        {
+            if (GenesisMats.Owns(mat.id))
+            {
+                GenesisMats.Equip(mat.id);
+                Flash($"{mat.displayName} will be on your side of the table in your next duel.");
+                return;
+            }
+            if (_wallet == null) { Flash("No wallet on this player."); return; }
+            if (!_wallet.CanAfford(mat.price)) { Flash($"Not enough GC for {mat.displayName} ({mat.price:N0} GC)."); return; }
+            if (!_wallet.Spend(mat.price)) return;
+            GenesisMats.Grant(mat.id);
+            GenesisMats.Equip(mat.id);
+            Flash($"Bought {mat.displayName}! It is now your duel mat.");
         }
 
         private void DrawTear(Rect body)

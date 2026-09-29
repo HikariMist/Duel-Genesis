@@ -50,6 +50,9 @@ namespace DuelGenesis.Dueling
             RegisterSummonTraps();
             RegisterCounterTraps();
             RegisterRituals();
+            FieldSpells.Register(Add);
+            CounterTraps.Register(Add);
+            QuickPlaySpells.Register(Add);
         }
 
         // ----------------------------------------------------------------------------- LP / burn
@@ -1536,6 +1539,7 @@ namespace DuelGenesis.Dueling
             Add("Black Magic Ritual", Fx.Ritual(x => x.Name == "Magician of Black Chaos", exact: false));
             Add("Contract with the Dark Master", Fx.Ritual(x => x.Name == "Dark Master - Zorc", exact: false));
             Add("Curse of the Masked Beast", Fx.Ritual(x => x.Name == "The Masked Beast", exact: false));
+            Add("Black Illusion Ritual", Fx.Ritual(x => x.Name == "Relinquished", exact: false));
             Add("Doriado's Blessing", Fx.Ritual(x => x.Name == "Elemental Mistress Doriado", exact: false));
             Add("Contract with the Abyss", Fx.Ritual(x => Fx.AttrIs(x.Data, "DARK"), exact: true));
             Add("Earth Chant", Fx.Ritual(x => Fx.AttrIs(x.Data, "EARTH"), exact: true));

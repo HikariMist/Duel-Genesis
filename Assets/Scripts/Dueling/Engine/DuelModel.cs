@@ -117,6 +117,15 @@ namespace DuelGenesis.Dueling
         public int ReturnControlTo = -1;  // Change of Heart / Brain Control
         public bool CannotAttackThisTurn;
         public bool CannotChangePosition;
+        public int PermAttack;         // lasting changes from effects (Slate Warrior, Rigorous Reaver)
+        public int PermDefense;
+        public DuelCard ControlHeldBy;   // Charmers: control returns when this card leaves the field or turns face-down
+        public bool WasFlipped;          // has been flipped face-up since it came to the field
+        public bool SpecialSummoned;
+        public bool CanAttackDirectly;   // Jowls of Dark Demise
+        public int LastSummonTurn;       // turn it was last Normal, Flip or Special Summoned
+        public int LastIgnitionTurn;     // "once per turn" monster effects
+        public bool CannotDeclareAttack; // Tricky Tokens
         public readonly List<DuelBackrowState> Equips = new();
 
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;
@@ -146,6 +155,7 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState LinkedMonster;   // Call of the Haunted, Spellbinding Circle, Premature Burial
         public int TurnsRemaining;               // Swords of Revealing Light
         public int Counter;                      // generic per-card counter (turns passed, stored value...)
+        public string Declared;                  // a declared Type / name (Array of Revealing Light)
         public bool Resolving;                   // a Normal Spell/Trap on the field only while it resolves
 
         public string Name => Card.Name;
@@ -163,6 +173,10 @@ namespace DuelGenesis.Dueling
     {
         public readonly int Index;
         public string Name;
+        /// <summary>"Once per Duel" cards this duelist has used (The Seal of Orichalcos).</summary>
+        public readonly HashSet<string> OncePerDuel = new();
+        /// <summary>Turn in which this duelist cannot Summon (Fires of Doomsday).</summary>
+        public int SummonLockTurn = -1;
         public int LifePoints = DuelRules.StartingLifePoints;
 
         /// <summary>Main Deck; the top of the deck is the LAST element.</summary>
@@ -277,7 +291,7 @@ namespace DuelGenesis.Dueling
     }
 
     /// <summary>What a response window is reacting to.</summary>
-    public enum DuelTriggerKind { AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase }
+    public enum DuelTriggerKind { AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase, MonsterEffectActivated }
 
     public sealed class DuelTrigger
     {
@@ -288,5 +302,7 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState Defender;  // null for a direct attack
         public bool Negated;
         public int Depth;
+        /// <summary>The cards the activated Spell/Trap targets (empty if it targets nothing).</summary>
+        public List<DuelCard> Targets = new();
     }
 }
