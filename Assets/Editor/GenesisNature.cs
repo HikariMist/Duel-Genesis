@@ -79,6 +79,25 @@ namespace DuelGenesis.EditorTools
                 for (int i = 0; i < 4; i++) { var p = Spot(4f); if (p != null) count += Put(park, Pick(rng, "log", "log_large", "stump_round", "stump_old", "mushroom_redGroup", "mushroom_tanGroup"), p.Value, rng.Next(360), 0.6f); }
             }
 
+            // ---- the spawn plaza: benches facing the centre, planters and bushes between them
+            count += DressPlaza(city.transform, root, rng);
+
+            // ---- green verges along the four boulevards: bushes and flowers between the trees
+            var verges = new GameObject("Boulevard Verges").transform;
+            verges.SetParent(root, false);
+            foreach (Vector2 dir in new[] { Vector2.up, Vector2.down, Vector2.left, Vector2.right })
+            {
+                Vector2 side = new Vector2(dir.y, -dir.x);
+                for (float d = 80f; d < Half - 20f; d += 11f)
+                    foreach (float sgn in new[] { -1f, 1f })
+                    {
+                        Vector2 p = dir * d + side * sgn * 16.5f;
+                        if (dir == Vector2.up && d < 140f) continue;   // Duel Center forecourt
+                        if (OnRoadGrid(p)) continue;
+                        count += Put(verges, Pick(rng, "plant_bush", "plant_bushDetailed", "plant_bushLarge", "flower_redA", "flower_yellowA", "flower_purpleA"), p, rng.Next(360), 0.9f);
+                    }
+            }
+
             // ---- pine forest round the map edge
             var forest = new GameObject("Forest Edge").transform;
             forest.SetParent(root, false);
@@ -95,6 +114,85 @@ namespace DuelGenesis.EditorTools
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
             Debug.Log($"Duel: Genesis planted the Nature Kit: {count} pieces (4 parks + the forest edge).");
+        }
+
+        private static bool OnRoadGrid(Vector2 p)
+        {
+            float[] lines = { -360f, -240f, -120f, 120f, 240f, 360f };
+            return lines.Any(l => Mathf.Abs(p.x - l) < 14f || Mathf.Abs(p.y - l) < 14f);
+        }
+
+        /// <summary>Replaces the plaza's benches with ones that face the centre, and adds planters and bushes.</summary>
+        private static int DressPlaza(Transform city, Transform nature, System.Random rng)
+        {
+            Transform plaza = city.Find("Central Plaza");
+            if (plaza == null) return 0;
+            foreach (Transform t in plaza.Cast<Transform>().Where(t => t.name.ToLowerInvariant().Contains("bench")).ToList())
+                Object.DestroyImmediate(t.gameObject);
+
+            var bench = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/POLYGON city pack/Prefabs/Props/bench prefab.prefab");
+            var dress = new GameObject("Plaza Dressing").transform;
+            dress.SetParent(nature, false);
+            int n = 0;
+            Vector3 seatFacing = bench != null ? SeatFacing(bench) : Vector3.forward;
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * 22.5f + 11.25f;
+                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 20f || Mathf.Abs(Mathf.DeltaAngle(a, 180f)) < 20f) continue;   // N/S walkways
+                Vector3 radial = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                Vector3 at = radial * 41f;
+                if (bench != null)
+                {
+                    var b = (GameObject)PrefabUtility.InstantiatePrefab(bench, dress);
+                    b.name = "Plaza Bench";
+                    b.transform.rotation = Quaternion.FromToRotation(seatFacing, -radial);   // sit looking into the plaza
+                    b.transform.rotation = Quaternion.Euler(0f, b.transform.eulerAngles.y, 0f);
+                    Bounds bb = GenesisWorldBuilder.RendererBounds(b);
+                    float len = Mathf.Max(bb.size.x, bb.size.z);
+                    if (len > 0.01f) b.transform.localScale *= 1.9f / len;
+                    bb = GenesisWorldBuilder.RendererBounds(b);
+                    b.transform.position += new Vector3(at.x - bb.center.x, -bb.min.y + 0.03f, at.z - bb.center.z);
+                    n++;
+                }
+                // Planter with a bush either side of each bench.
+                Vector3 tangent = Vector3.Cross(Vector3.up, radial);
+                foreach (float s in new[] { -1f, 1f })
+                {
+                    Vector3 p = at + tangent * s * 2.2f;
+                    n += Put(dress, "pot_large", new Vector2(p.x, p.z), rng.Next(360), 0.7f, solid: true);
+                    n += Put(dress, Pick(rng, "plant_bushSmall", "plant_bush", "flower_redB", "flower_yellowB", "flower_purpleB"), new Vector2(p.x, p.z) + Vector2.zero, rng.Next(360), 1.1f);
+                }
+            }
+            // Flower ring on the edge of the paving.
+            for (int i = 0; i < 48; i++)
+            {
+                float a = i * 7.5f;
+                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 12f || Mathf.Abs(Mathf.DeltaAngle(a, 180f)) < 12f || Mathf.Abs(Mathf.DeltaAngle(a, 90f)) < 6f || Mathf.Abs(Mathf.DeltaAngle(a, 270f)) < 6f) continue;
+                Vector3 p = Quaternion.Euler(0f, a, 0f) * Vector3.forward * 48.3f;
+                n += Put(dress, Pick(rng, "flower_redA", "flower_redC", "flower_yellowA", "flower_yellowC", "flower_purpleA", "flower_purpleC", "plant_bushSmall"), new Vector2(p.x, p.z), rng.Next(360), 0.55f);
+            }
+            return n;
+        }
+
+        /// <summary>The horizontal direction a seat model faces (away from its backrest, the tallest part).</summary>
+        private static Vector3 SeatFacing(GameObject prefab)
+        {
+            var pts = new List<Vector3>();
+            foreach (MeshFilter mf in prefab.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                Matrix4x4 m = prefab.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                foreach (Vector3 v in mf.sharedMesh.vertices) pts.Add(m.MultiplyPoint3x4(v));
+            }
+            if (pts.Count == 0) return Vector3.forward;
+            float minY = pts.Min(p => p.y), maxY = pts.Max(p => p.y);
+            Vector3 c = new Vector3(pts.Average(p => p.x), 0f, pts.Average(p => p.z));
+            var top = pts.Where(p => p.y > minY + (maxY - minY) * 0.75f).ToList();
+            Vector3 back = new Vector3(top.Average(p => p.x), 0f, top.Average(p => p.z)) - c;
+            if (back.sqrMagnitude < 1e-6f) return Vector3.forward;
+            // Snap to the model's nearest axis: benches are authored square to their axes.
+            back = Mathf.Abs(back.x) > Mathf.Abs(back.z) ? new Vector3(Mathf.Sign(back.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(back.z));
+            return -back;
         }
 
         /// <summary>True on the boulevards and avenues that run out to the map edge (kept clear).</summary>

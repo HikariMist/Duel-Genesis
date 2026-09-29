@@ -149,6 +149,7 @@ namespace DuelGenesis.Characters
             // Items can carry extra bones the figure doesn't have (the Millennium Puzzle's chain and pendant, the
             // Ring's swing bones). Graft those onto the figure's matching parent bone so they keep their place.
             var bonesHere = new Dictionary<string, Transform>(bones);   // this item's grafts stay its own
+            AddBoneAliases(bonesHere);
             GraftExtraBones(item, bonesHere);
 
             int colour = 0;
@@ -188,6 +189,21 @@ namespace DuelGenesis.Characters
         /// For every bone an item's skin uses that the figure lacks, moves that bone (with its children) under the
         /// figure bone its item-side parent corresponds to, keeping its local pose, and registers it by name.
         /// </summary>
+        /// <summary>Genesis 8 / generic names used by some items, pointed at the matching Genesis 9 bones.</summary>
+        private static void AddBoneAliases(Dictionary<string, Transform> bones)
+        {
+            void Alias(string alias, params string[] targets)
+            {
+                if (bones.ContainsKey(alias)) return;
+                foreach (string t in targets)
+                    if (bones.TryGetValue(t, out Transform b)) { bones[alias] = b; return; }
+            }
+            Alias("neckLower", "neck1"); Alias("neckUpper", "neck2"); Alias("neck", "neck1");
+            Alias("chestUpper", "spine4"); Alias("chestLower", "spine3");
+            Alias("abdomenUpper", "spine2"); Alias("abdomenLower", "spine1");
+            Alias("lCollar", "l_shoulder"); Alias("rCollar", "r_shoulder");
+        }
+
         private static void GraftExtraBones(GameObject item, Dictionary<string, Transform> bones)
         {
             var extras = new HashSet<Transform>();
