@@ -700,6 +700,11 @@ namespace DuelGenesis.Dueling
                         _engine.OpponentCannotAttack(_me) ? "Attacks are prevented this turn." : "Cannot attack now.";
                     list.Add((_engine.Me(_cpu).MonsterCount == 0 ? "Attack Directly" : "Attack", can, can ? "" : why, () => BeginAttack(m)));
                 }
+                if (m.IsFaceUp && MonsterAbilities.Get(card, MonsterAbilityKind.Ignition) != null)
+                {
+                    bool can = _engine.CanUseMonsterEffect(_me, m);
+                    list.Add(("Use Effect", can, can ? "" : "Once per turn, in your Main Phase, when it has a target.", () => _engine.UseMonsterEffect(_me, m)));
+                }
                 if (m.IsFaceDown)
                 {
                     bool can = _engine.CanFlipSummon(_me, m);

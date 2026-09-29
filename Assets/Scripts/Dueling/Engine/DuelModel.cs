@@ -124,6 +124,7 @@ namespace DuelGenesis.Dueling
         public bool SpecialSummoned;
         public bool CanAttackDirectly;   // Jowls of Dark Demise
         public int LastSummonTurn;       // turn it was last Normal, Flip or Special Summoned
+        public int LastIgnitionTurn;     // "once per turn" monster effects
         public readonly List<DuelBackrowState> Equips = new();
 
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;

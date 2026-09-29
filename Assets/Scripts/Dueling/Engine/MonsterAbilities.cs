@@ -18,7 +18,9 @@ namespace DuelGenesis.Dueling
         /// <summary>Sent to the Graveyard after having been flipped face-up (Spear Cretin).</summary>
         SentToGraveyardAfterFlip,
         /// <summary>Sent from the hand to the Graveyard (discarded).</summary>
-        Discarded
+        Discarded,
+        /// <summary>"Once per turn: You can ..." — used by its controller from the field in their Main Phase.</summary>
+        Ignition
     }
 
     /// <summary>One triggered monster effect. <see cref="Do"/> must end with <c>c.Finish()</c> (use <c>Fx.Sync</c>).</summary>
@@ -367,6 +369,19 @@ namespace DuelGenesis.Dueling
                 }
             });
 
+            // ---- ignition effects ("Once per turn: You can ...")
+            Add("Relinquished", MonsterAbilityKind.Ignition, new MonsterAbility
+            {
+                Can = c => SelfFaceUp(c) && !Self(c).Equips.Any(s => s.Card.IsMonster) && c.Opp.MonsterCount > 0 && c.Me.HasFreeSpellTrapZone,
+                Tgt = c => CardEffects.Request(c.Opp.MonstersOnField.Select(m => m.Card), "Relinquished: equip 1 monster your opponent controls to this card.", "control"),
+                Do = Fx.Sync(c =>
+                {
+                    DuelMonsterState me = Self(c);
+                    if (me == null || me.IsFaceDown || c.Target?.Zone != DuelZone.Monster) return;
+                    c.Engine.EquipMonsterCard(c.Target, me);
+                })
+            });
+
             // ---- summon triggers ("When this card is Normal or Flip Summoned")
             var dragonSeeker = new MonsterAbility
             {
@@ -407,6 +422,16 @@ namespace DuelGenesis.Dueling
     {
         public override int AuraAttackModifier(DuelEngine engine, DuelMonsterState source, DuelMonsterState target) =>
             target.Card.Controller == source.Card.Controller && Fx.AttrIs(target.Card.Data, "WATER") ? 200 : 0;
+    }
+
+    /// <summary>Relinquished: ATK/DEF become the equipped monster's; the equipped monster is destroyed in its place in battle.</summary>
+    internal sealed class RelinquishedStats : MonsterEffect
+    {
+        private static DuelBackrowState Absorbed(DuelMonsterState self) => self.Equips.FirstOrDefault(s => s.Card.IsMonster);
+        public override int SelfAttackModifier(DuelEngine engine, DuelMonsterState self) => Absorbed(self)?.Card.Data.attack ?? 0;
+        public override int SelfDefenseModifier(DuelEngine engine, DuelMonsterState self) => Absorbed(self)?.Card.Data.defense ?? 0;
+        public override DuelCard BattleSubstitute(DuelEngine engine, DuelMonsterState self) => Absorbed(self)?.Card;
+        public override bool MirrorsBattleDamage(DuelEngine engine, DuelMonsterState self) => Absorbed(self) != null;
     }
 
     /// <summary>Blade Knight: gains 400 ATK while you have 1 or fewer cards in your hand.</summary>

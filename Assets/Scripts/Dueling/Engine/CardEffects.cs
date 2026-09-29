@@ -101,6 +101,10 @@ namespace DuelGenesis.Dueling
         public virtual int SelfDefenseModifier(DuelEngine engine, DuelMonsterState self) => 0;
         /// <summary>Change this face-up monster (<paramref name="source"/>) applies to another monster (<paramref name="target"/>).</summary>
         public virtual int AuraAttackModifier(DuelEngine engine, DuelMonsterState source, DuelMonsterState target) => 0;
+        /// <summary>A card destroyed instead of this monster when it would be destroyed by battle.</summary>
+        public virtual DuelCard BattleSubstitute(DuelEngine engine, DuelMonsterState self) => null;
+        /// <summary>Battle damage its controller takes from battles involving it is also dealt to the opponent.</summary>
+        public virtual bool MirrorsBattleDamage(DuelEngine engine, DuelMonsterState self) => false;
     }
 
     /// <summary>Registry of implemented card effects, looked up by card name.</summary>
@@ -169,6 +173,7 @@ namespace DuelGenesis.Dueling
             Monsters["Buster Blader"] = new BusterBlader();
             Monsters["Nightmare Penguin"] = new NightmarePenguinAura();
             Monsters["Blade Knight"] = new BladeKnight();
+            Monsters["Relinquished"] = new RelinquishedStats();
         }
 
         public static CardEffect Get(CardData card)

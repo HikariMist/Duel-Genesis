@@ -73,7 +73,7 @@ namespace DuelGenesis.Dueling
             switch (e.Phase)
             {
                 case DuelPhase.Main1:
-                    return ActivateBestSpell(e, 60) || NormalSummon(e) || ActivateBestSpell(e, 45) ||
+                    return ActivateBestSpell(e, 60) || NormalSummon(e) || UseMonsterEffects(e) || ActivateBestSpell(e, 45) ||
                            FlipSummon(e) || ImprovePositions(e, attacking: true) || SetBackrow(e);
                 case DuelPhase.Battle:
                     return Attack(e);
@@ -153,6 +153,13 @@ namespace DuelGenesis.Dueling
 
             if (bestCard == null) return false;
             return e.NormalSummon(_me, bestCard, bestSet);
+        }
+
+        private bool UseMonsterEffects(DuelEngine e)
+        {
+            foreach (DuelMonsterState m in Me(e).MonstersOnField.ToList())
+                if (e.CanUseMonsterEffect(_me, m)) return e.UseMonsterEffect(_me, m);
+            return false;
         }
 
         private bool FlipSummon(DuelEngine e)

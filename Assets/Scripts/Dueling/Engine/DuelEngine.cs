@@ -494,6 +494,16 @@ namespace DuelGenesis.Dueling
         public void Destroy(DuelCard card, DuelCard cause)
         {
             if (card == null) return;
+            if (_battleDestroying && card.Zone == DuelZone.Monster)
+            {
+                DuelMonsterState self = FindMonster(card);
+                DuelCard substitute = self != null ? CardEffects.GetMonster(card.Data)?.BattleSubstitute(this, self) : null;
+                if (substitute != null && substitute.OnField)
+                {
+                    Raise(DuelEventType.Message, card.Controller, card, text: $"{substitute.Name} was destroyed instead of {card.Name}.");
+                    card = substitute;
+                }
+            }
             DuelBackrowState backrow = FindBackrow(card);
             if (backrow != null && !backrow.FaceDown && cause != card &&
                 CardEffects.Get(card.Data)?.ResistsDestruction(this, backrow, cause) == true)
@@ -872,6 +882,44 @@ namespace DuelGenesis.Dueling
                     return;
                 }
             DealDamage(player, amount, source, battle: true);
+            if (ownMonster != null && CardEffects.GetMonster(ownMonster.Card.Data)?.MirrorsBattleDamage(this, ownMonster) == true)
+                DealDamage(1 - player, amount, ownMonster.Card, battle: false);
+        }
+
+        /// <summary>Equips a monster card to <paramref name="holder"/> as an Equip Card (Relinquished).</summary>
+        public DuelBackrowState EquipMonsterCard(DuelCard card, DuelMonsterState holder)
+        {
+            int player = holder.Card.Controller;
+            if (card == null || !Duelists[player].HasFreeSpellTrapZone) return null;
+            DuelBackrowState s = PlaceBackrow(card, player, -1, faceDown: false);
+            if (s == null) return null;
+            s.EquippedTo = holder;
+            holder.Equips.Add(s);
+            Raise(DuelEventType.Message, player, card, text: $"{card.Name} was equipped to {holder.Name}.");
+            return s;
+        }
+
+        // ------------------------------------------------------------------ monster ignition effects
+
+        public bool CanUseMonsterEffect(int player, DuelMonsterState m)
+        {
+            if (IsBusy || HasQueuedMonsterAbilities || m == null || player != TurnPlayer || !IsMainPhase) return false;
+            if (m.Card.Controller != player || m.IsFaceDown || m.LastIgnitionTurn == TurnNumber) return false;
+            MonsterAbility ability = MonsterAbilities.Get(m.Card, MonsterAbilityKind.Ignition);
+            if (ability == null) return false;
+            var ctx = new EffectContext(this, player, m.Card, null);
+            if (ability.Can != null && !ability.Can(ctx)) return false;
+            TargetRequest request = ability.Tgt?.Invoke(ctx);
+            return request == null || request.Candidates.Count >= Math.Max(1, request.Min);
+        }
+
+        public bool UseMonsterEffect(int player, DuelMonsterState m)
+        {
+            if (!CanUseMonsterEffect(player, m)) return false;
+            m.LastIgnitionTurn = TurnNumber;
+            QueueMonsterAbility(MonsterAbilityKind.Ignition, m.Card, player);
+            RunQueuedMonsterAbilities();
+            return true;
         }
 
         public bool CanFlipSummon(int player, DuelMonsterState m)
