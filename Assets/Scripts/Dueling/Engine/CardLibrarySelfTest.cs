@@ -99,7 +99,7 @@ namespace DuelGenesis.Dueling
                         DuelCard testCard = e.Me(0).Deck.Concat(e.Me(0).Hand).FirstOrDefault(c => c.Data == card);
                         if (testCard == null || MonsterAbilities.Get(testCard, kind) == null) continue;
                         any = true;
-                        int total = e.AllCards().Count();
+                        int total = e.AllCards().Count(c => !DuelRules.IsToken(c.Data));
                         DuelCard other = e.Me(1).MonstersOnField.Select(m => m.Card).FirstOrDefault();
                         if (kind != MonsterAbilityKind.Discarded && kind != MonsterAbilityKind.DestroyedByBattle && kind != MonsterAbilityKind.SentToGraveyardAfterFlip)
                         {
@@ -133,7 +133,7 @@ namespace DuelGenesis.Dueling
                 DuelEngine e = BusyBoard(card, catalog, monsters, extra, seed, firstPlayer: 0);
                 DuelCard testCard = e.Me(0).Deck.Concat(e.Me(0).Hand).First(c => c.Data == card);
                 CardEffect effect = CardEffects.Get(card);
-                int total = e.AllCards().Count();
+                int total = e.AllCards().Count(c => !DuelRules.IsToken(c.Data));
                 DuelBackrowState source = e.PlaceBackrow(testCard, 0, -1, faceDown: false);
                 if (source == null) { report.Failures.Add($"{card.cardName}: no free zone in test setup."); return; }
                 var ctx = new EffectContext(e, 0, testCard, null) { Source = source };
@@ -156,7 +156,7 @@ namespace DuelGenesis.Dueling
                         DuelEngine e = BusyBoard(card, catalog, monsters, extra, seed, firstPlayer: 1);
                         DuelCard testCard = e.Me(0).Deck.Concat(e.Me(0).Hand).First(c => c.Data == card);
                         CardEffect effect = CardEffects.Get(card);
-                        int total = e.AllCards().Count();
+                        int total = e.AllCards().Count(c => !DuelRules.IsToken(c.Data));
                         DuelTrigger trigger = MakeTrigger(e, kind);
                         if (trigger == null) continue;
                         DuelBackrowState source = e.PlaceBackrow(testCard, 0, -1, faceDown: false);
@@ -346,7 +346,7 @@ namespace DuelGenesis.Dueling
                 var ai = new[] { new DuelAi(0), new DuelAi(1) };
                 e.Deciders[0] = ai[0];
                 e.Deciders[1] = ai[1];
-                int total = e.AllCards().Count();
+                int total = e.AllCards().Count(c => !DuelRules.IsToken(c.Data));
                 report.DuelsRun++;
 
                 try
@@ -399,7 +399,7 @@ namespace DuelGenesis.Dueling
 
         private static string Invariants(DuelEngine e, int totalCards)
         {
-            var cards = e.AllCards().ToList();
+            var cards = e.AllCards().Where(c => !DuelRules.IsToken(c.Data)).ToList();
             if (cards.Count != totalCards) return $"card count changed ({cards.Count} vs {totalCards}).";
             if (cards.Select(c => c.Uid).Distinct().Count() != cards.Count) return "a card is in two places at once.";
             foreach (DuelistState d in e.Duelists)

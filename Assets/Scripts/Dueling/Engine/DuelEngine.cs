@@ -410,6 +410,12 @@ namespace DuelGenesis.Dueling
 
         private void MoveToList(DuelCard card, DuelZone zone, bool toBottom = false)
         {
+            if (DuelRules.IsToken(card.Data))
+            {
+                Detach(card);
+                card.Zone = DuelZone.None;   // Tokens cease to exist once they leave the field
+                return;
+            }
             bool wasOnField = card.OnField;
             bool wasFaceUp = card.FaceUp;
             Detach(card);
@@ -711,6 +717,7 @@ namespace DuelGenesis.Dueling
             if (IsBusy || player != TurnPlayer || !IsMainPhase) return false;
             DuelistState d = Duelists[player];
             if (d.NormalSummonUsed || card == null || card.Zone != DuelZone.Hand || card.Owner != player) return false;
+            if (!set && d.SummonLockTurn == TurnNumber) return false;   // Fires of Doomsday
             if (!DuelRules.CanEverBeNormalSummoned(card.Data)) return false;
             int tributes = TributesRequired(card);
             if (tributes == 0) return d.HasFreeMonsterZone;
@@ -800,6 +807,7 @@ namespace DuelGenesis.Dueling
                     Raise(DuelEventType.Message, player, card, text: $"{state.Card.Name}: that monster cannot be Special Summoned.");
                     return null;
                 }
+            if (Duelists[player].SummonLockTurn == TurnNumber) return null;
             if (SpecialSummonsLocked)
             {
                 Raise(DuelEventType.Message, player, card, text: "Fossil Dyna Pachycephalo: neither player can Special Summon.");
@@ -922,8 +930,28 @@ namespace DuelGenesis.Dueling
             return true;
         }
 
+        /// <summary>Anti-Magic Arrows: no Spell/Trap activations for the rest of this turn.</summary>
+        public int SpellTrapLockTurn = -1;
+
+        /// <summary>Special Summons a Token. Tokens vanish when they leave the field.</summary>
+        public DuelMonsterState SummonToken(int player, string name, string typeLine, string attribute, int level, int atk, int def,
+                                            DuelMonsterPosition position, DuelCard cause)
+        {
+            DuelistState d = Duelists[player];
+            if (!d.HasFreeMonsterZone || SpecialSummonsLocked || d.SummonLockTurn == TurnNumber) return null;
+            var data = new CardData("token-" + name, name, CardKind.Monster, CardRarity.Common, attribute, typeLine + " / Token", level, atk, def, "", CardFrameKind.Token);
+            var card = new DuelCard(_nextUid++, data, player);
+            DuelMonsterState monster = PlaceMonster(card, player, -1, position);
+            if (monster == null) return null;
+            monster.SpecialSummoned = true;
+            monster.LastSummonTurn = TurnNumber;
+            Raise(DuelEventType.SpecialSummon, player, card, cause, text: $"{d.Name} Special Summoned a {name}.");
+            return monster;
+        }
+
         public bool CanFlipSummon(int player, DuelMonsterState m)
         {
+            if (m != null && Duelists[player].SummonLockTurn == TurnNumber) return false;
             return !IsBusy && player == TurnPlayer && IsMainPhase && m != null && m.Card.Controller == player &&
                    m.IsFaceDown && m.PositionSetTurn < TurnNumber && !m.HasChangedPosition;
         }
@@ -1010,9 +1038,12 @@ namespace DuelGenesis.Dueling
             if (effect == null) return false;
             EffectContext ctx = new EffectContext(this, player, card, null);
 
+            if (SpellTrapLockTurn == TurnNumber) return false;   // Anti-Magic Arrows
+            bool quickTime = player == TurnPlayer && (IsMainPhase || DuelRules.IsQuickPlay(card.Data) && Phase == DuelPhase.Battle && CurrentAttacker == null);
+
             if (card.Zone == DuelZone.Hand)
             {
-                if (!card.IsSpell || player != TurnPlayer || !IsMainPhase) return false;
+                if (!card.IsSpell || !quickTime) return false;
                 if (!DuelRules.IsFieldSpell(card.Data) && !Duelists[player].HasFreeSpellTrapZone) return false;
                 return effect.CanActivate(ctx) && HasTargetsIfNeeded(effect, ctx);
             }
@@ -1031,7 +1062,7 @@ namespace DuelGenesis.Dueling
             if (card.IsTrap || DuelRules.IsQuickPlay(card.Data))
             {
                 if (set.SetTurn >= TurnNumber) return false;   // cannot activate the turn it was Set
-                if (player != TurnPlayer || !IsMainPhase) return false;
+                if (!quickTime) return false;
             }
             else
             {
@@ -1199,6 +1230,7 @@ namespace DuelGenesis.Dueling
         public List<DuelCard> ResponseCandidates(int responder, DuelTrigger trigger)
         {
             var result = new List<DuelCard>();
+            if (SpellTrapLockTurn == TurnNumber) return result;
             foreach (DuelBackrowState set in Duelists[responder].SpellTrapsOnField)
             {
                 if (!set.FaceDown || set.SetTurn >= TurnNumber) continue;
@@ -1248,7 +1280,7 @@ namespace DuelGenesis.Dueling
         {
             return !IsBusy && player == TurnPlayer && Phase == DuelPhase.Battle && Step == BattleStep.Battle &&
                    m != null && m.Card.Controller == player && m.IsAttackPosition && !m.HasAttacked &&
-                   !m.CannotAttackThisTurn && !OpponentCannotAttack(player) && !IsLockedBySpell(m) && !ForbiddenToAttack(m);
+                   !m.CannotAttackThisTurn && !m.CannotDeclareAttack && !OpponentCannotAttack(player) && !IsLockedBySpell(m) && !ForbiddenToAttack(m);
         }
 
         /// <summary>Face-up cards on either side that stop this particular monster attacking.</summary>

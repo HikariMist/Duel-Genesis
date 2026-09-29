@@ -125,6 +125,7 @@ namespace DuelGenesis.Dueling
         public bool CanAttackDirectly;   // Jowls of Dark Demise
         public int LastSummonTurn;       // turn it was last Normal, Flip or Special Summoned
         public int LastIgnitionTurn;     // "once per turn" monster effects
+        public bool CannotDeclareAttack; // Tricky Tokens
         public readonly List<DuelBackrowState> Equips = new();
 
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;
@@ -174,6 +175,8 @@ namespace DuelGenesis.Dueling
         public string Name;
         /// <summary>"Once per Duel" cards this duelist has used (The Seal of Orichalcos).</summary>
         public readonly HashSet<string> OncePerDuel = new();
+        /// <summary>Turn in which this duelist cannot Summon (Fires of Doomsday).</summary>
+        public int SummonLockTurn = -1;
         public int LifePoints = DuelRules.StartingLifePoints;
 
         /// <summary>Main Deck; the top of the deck is the LAST element.</summary>

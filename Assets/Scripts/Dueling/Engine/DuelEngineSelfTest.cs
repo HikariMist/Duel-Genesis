@@ -318,7 +318,7 @@ namespace DuelGenesis.Dueling
                 Random random = new Random(1000 + game);
                 DuelEngine e = NewEngine(StapleDeck(random), StapleDeck(random), 2000 + game, aiBoth: true);
                 var ai = new[] { (DuelAi)e.Deciders[0], (DuelAi)e.Deciders[1] };
-                int totalCards = e.AllCards().Count();
+                int totalCards = e.AllCards().Count(c => !DuelRules.IsToken(c.Data));
                 e.StartDuel(game % 2);
 
                 int steps = 0;
@@ -352,7 +352,7 @@ namespace DuelGenesis.Dueling
 
         private static string CheckInvariants(DuelEngine e, int totalCards)
         {
-            var cards = e.AllCards().ToList();
+            var cards = e.AllCards().Where(c => !DuelRules.IsToken(c.Data)).ToList();
             if (cards.Count != totalCards) return $"card count changed ({cards.Count} vs {totalCards}).";
             if (cards.Select(c => c.Uid).Distinct().Count() != cards.Count) return "a card is in two places at once.";
             foreach (DuelistState d in e.Duelists)
