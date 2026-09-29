@@ -5,11 +5,6 @@ using UnityEngine.Rendering;
 
 namespace DuelGenesis.Characters
 {
-    /// <summary>
-    /// Builds a player character from a <see cref="GenesisAppearance"/>: the Genesis 9 figure with its body and face
-    /// morphs, the equipped wardrobe skinned onto the same skeleton (bones matched by name), clothing-fit shapes so
-    /// the body never pokes through, colours, and a humanoid locomotion animator. The player only; never NPCs.
-    /// </summary>
     public static class GenesisCharacterBuilder
     {
         public const string BodyMeshName = "Genesis9.Shape";
@@ -36,10 +31,10 @@ namespace DuelGenesis.Characters
                 if (!bones.ContainsKey(t.name)) bones.Add(t.name, t);
 
             bool male = appearance.gender == GenesisGender.Male;
-
             var fit = new Dictionary<string, float>();
             var authoredOffsets = new Dictionary<string, float>();
             GenesisCharacterLibrary library = GenesisCharacterLibrary.Instance;
+
             foreach (GenesisEquip equip in appearance.equipment)
             {
                 if (equip == null || equip.id < 0) continue;
@@ -89,8 +84,12 @@ namespace DuelGenesis.Characters
                     string n = m.name.ToLowerInvariant();
                     if (iris) Tint(m, appearance.leftEyeColor);
                     else if (r == body && (n.Contains("skin") || n.Contains("body") || n.Contains("face") || n.Contains("head") || n.Contains("arm") || n.Contains("leg") || n.Contains("torso")))
+                    {
                         Tint(m, Color.Lerp(Color.white, new Color(
-                            appearance.skinColor.r / DefaultSkin.r, appearance.skinColor.g / DefaultSkin.g, appearance.skinColor.b / DefaultSkin.b, 1f), 0.85f));
+                            appearance.skinColor.r / DefaultSkin.r,
+                            appearance.skinColor.g / DefaultSkin.g,
+                            appearance.skinColor.b / DefaultSkin.b, 1f), 0.85f));
+                    }
                 }
             }
 
@@ -106,6 +105,7 @@ namespace DuelGenesis.Characters
                 animator.runtimeAnimatorController = animator.avatar != null && animator.avatar.isHuman ? assets.locomotion : null;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             }
+
             foreach (SkinnedMeshRenderer r in root.GetComponentsInChildren<SkinnedMeshRenderer>(true)) r.updateWhenOffscreen = true;
             return root;
         }
@@ -145,20 +145,18 @@ namespace DuelGenesis.Characters
         private static void Wear(Transform root, GameObject prefab, Dictionary<string, Transform> bones, GenesisSlot slot, int id, Color[] colors, float proportion)
         {
             GameObject item = Object.Instantiate(prefab);
-            int colour = 0;
             float itemScale = ItemScale(proportion);
             bool millenniumPuzzle = slot == GenesisSlot.Neck && id == 6;
 
+            if (millenniumPuzzle && WearMillenniumPuzzle(root, item, bones, colors, itemScale))
+            {
+                Object.Destroy(item);
+                return;
+            }
+
+            int colour = 0;
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                // Some accessories are authored with a meaningful renderer offset/rotation. Most clothing is at the
-                // figure origin, but the Millennium Puzzle is not: throwing this transform away makes it hang at the waist.
-                Matrix4x4 authored = item.transform.worldToLocalMatrix * smr.transform.localToWorldMatrix;
-                Vector3 authoredPosition = authored.GetColumn(3);
-                Quaternion authoredRotation = authored.rotation;
-                Vector3 authoredScale = authored.lossyScale;
-                Vector3? puzzleNeckPivot = millenniumPuzzle ? FindSourceNeckAnchorLocal(smr) : null;
-
                 Transform[] mapped = smr.bones.Select(b => b != null && bones.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
                 if (mapped.Any(b => b == null) && mapped.Count(b => b == null) > mapped.Length / 3) continue;
                 for (int i = 0; i < mapped.Length; i++)
@@ -167,29 +165,10 @@ namespace DuelGenesis.Characters
                 smr.bones = mapped;
                 if (smr.rootBone != null && bones.TryGetValue(smr.rootBone.name, out Transform rb)) smr.rootBone = rb;
                 smr.transform.SetParent(root, false);
-
-                if (millenniumPuzzle)
-                {
-                    // Keep DMO's authored necklace placement. The chain/neck contact stays where the original asset put it.
-                    smr.transform.localPosition = authoredPosition;
-                    smr.transform.localRotation = authoredRotation;
-                    smr.transform.localScale = authoredScale;
-                }
-                else
-                {
-                    smr.transform.localPosition = Vector3.zero;
-                    smr.transform.localRotation = Quaternion.identity;
-                    smr.transform.localScale = Vector3.one;
-                }
-
-                // Size the Puzzle around its neck bone rather than its centre. That keeps the chain locked to the neck
-                // while the pendant grows/shrinks, then gives the hanging portion a modest anime-style outward pitch.
-                TransformSkinnedGeometry(
-                    smr,
-                    itemScale,
-                    millenniumPuzzle ? -12f : 0f,
-                    0f,
-                    puzzleNeckPivot);
+                smr.transform.localPosition = Vector3.zero;
+                smr.transform.localRotation = Quaternion.identity;
+                smr.transform.localScale = Vector3.one;
+                TransformSkinnedGeometry(smr, itemScale);
 
                 if (colors != null)
                     foreach (Material m in smr.materials)
@@ -200,86 +179,157 @@ namespace DuelGenesis.Characters
             {
                 Transform p = mr.transform.parent;
                 while (p != null && !bones.ContainsKey(p.name)) p = p.parent;
-                if (p != null)
-                {
-                    mr.transform.SetParent(bones[p.name], true);
-                    mr.transform.localScale *= itemScale;
-                    if (millenniumPuzzle) TiltRigidMillenniumPuzzle(mr, root);
-                }
+                if (p == null) continue;
+                mr.transform.SetParent(bones[p.name], true);
+                mr.transform.localScale *= itemScale;
             }
+
             Object.Destroy(item);
         }
 
-        private static Vector3? FindSourceNeckAnchorLocal(SkinnedMeshRenderer smr)
+        private static bool WearMillenniumPuzzle(Transform root, GameObject sourceItem, Dictionary<string, Transform> bones, Color[] colors, float scale)
         {
-            if (smr == null || smr.bones == null) return null;
-            Transform neck = smr.bones.FirstOrDefault(b => b != null && IsNeckBoneName(b.name));
-            if (neck == null) return null;
-            return smr.transform.InverseTransformPoint(neck.position);
-        }
+            Transform neck = FindCharacterNeck(bones);
+            if (root == null || sourceItem == null || neck == null) return false;
 
-        private static bool IsNeckBoneName(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return false;
-            string n = new string(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
-            return n == "neck" || n == "necklower" || n == "neckupper" || n.EndsWith("necklower") || n.EndsWith("neckupper");
-        }
+            Renderer[] sourceRenderers = sourceItem.GetComponentsInChildren<Renderer>(true);
+            if (sourceRenderers.Length == 0) return false;
 
-        private static void TransformSkinnedGeometry(SkinnedMeshRenderer smr, float scale, float pitchDegrees, float forwardOffset, Vector3? pivotOverride = null)
-        {
-            if (smr == null || smr.sharedMesh == null) return;
-            bool resize = Mathf.Abs(scale - 1f) >= 0.001f;
-            bool tilt = Mathf.Abs(pitchDegrees) >= 0.001f || Mathf.Abs(forwardOffset) >= 0.0001f;
-            if (!resize && !tilt) return;
-
-            Mesh source = smr.sharedMesh;
-            Mesh copy = Object.Instantiate(source);
-            copy.name = source.name + " (Duel Genesis Adjusted)";
-            Vector3[] vertices = copy.vertices;
-            Bounds bounds = copy.bounds;
-            Vector3 pivot = pivotOverride ?? bounds.center;
-            Quaternion rotation = Quaternion.Euler(pitchDegrees, 0f, 0f);
-
-            for (int i = 0; i < vertices.Length; i++)
+            bool haveBounds = false;
+            Bounds itemBounds = default;
+            foreach (Renderer r in sourceRenderers)
             {
-                Vector3 v = pivot + (vertices[i] - pivot) * scale;
-                if (tilt)
+                Bounds b = r.bounds;
+                Vector3 min = b.min;
+                Vector3 max = b.max;
+                for (int x = 0; x < 2; x++)
+                for (int y = 0; y < 2; y++)
+                for (int z = 0; z < 2; z++)
                 {
-                    v = pivot + rotation * (v - pivot);
-                    v.z += forwardOffset;
+                    Vector3 world = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y, z == 0 ? min.z : max.z);
+                    Vector3 local = sourceItem.transform.InverseTransformPoint(world);
+                    if (!haveBounds)
+                    {
+                        itemBounds = new Bounds(local, Vector3.zero);
+                        haveBounds = true;
+                    }
+                    else itemBounds.Encapsulate(local);
                 }
-                vertices[i] = v;
             }
 
+            if (!haveBounds) return false;
+            Vector3 sourceAnchor = new Vector3(itemBounds.center.x, itemBounds.max.y, itemBounds.center.z);
+
+            GameObject holderObject = new GameObject("Millennium Puzzle Wearable");
+            Transform holder = holderObject.transform;
+            holder.SetParent(neck, true);
+            holder.position = neck.position + root.forward * 0.055f - root.up * 0.025f;
+            holder.rotation = root.rotation * Quaternion.Euler(-14f, 0f, 0f);
+            holder.localScale = Vector3.one;
+
+            GameObject geometryObject = new GameObject("Puzzle Geometry");
+            Transform geometry = geometryObject.transform;
+            geometry.SetParent(holder, false);
+            geometry.localRotation = Quaternion.identity;
+            geometry.localScale = Vector3.one * scale;
+            geometry.localPosition = -sourceAnchor * scale;
+
+            int colour = 0;
+
+            foreach (SkinnedMeshRenderer smr in sourceItem.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                Mesh baked = new Mesh();
+                smr.BakeMesh(baked, true);
+                baked.name = smr.sharedMesh != null ? smr.sharedMesh.name + " (Millennium Puzzle Baked)" : "Millennium Puzzle Baked";
+
+                Matrix4x4 relative = sourceItem.transform.worldToLocalMatrix * smr.transform.localToWorldMatrix;
+                GameObject part = new GameObject(smr.name);
+                part.transform.SetParent(geometry, false);
+                part.transform.localPosition = relative.GetColumn(3);
+                part.transform.localRotation = relative.rotation;
+                part.transform.localScale = relative.lossyScale;
+
+                MeshFilter filter = part.AddComponent<MeshFilter>();
+                filter.sharedMesh = baked;
+                MeshRenderer renderer = part.AddComponent<MeshRenderer>();
+                Material[] mats = smr.materials;
+                if (colors != null)
+                    foreach (Material m in mats)
+                        if (colour < colors.Length && colors[colour].a > 0.01f) Tint(m, colors[colour++]);
+                renderer.materials = mats;
+
+                GenesisRuntimeMeshCleanup cleanup = part.AddComponent<GenesisRuntimeMeshCleanup>();
+                cleanup.mesh = baked;
+            }
+
+            foreach (MeshRenderer mr in sourceItem.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                MeshFilter sourceFilter = mr.GetComponent<MeshFilter>();
+                if (sourceFilter == null || sourceFilter.sharedMesh == null) continue;
+
+                Matrix4x4 relative = sourceItem.transform.worldToLocalMatrix * mr.transform.localToWorldMatrix;
+                GameObject part = new GameObject(mr.name);
+                part.transform.SetParent(geometry, false);
+                part.transform.localPosition = relative.GetColumn(3);
+                part.transform.localRotation = relative.rotation;
+                part.transform.localScale = relative.lossyScale;
+
+                MeshFilter filter = part.AddComponent<MeshFilter>();
+                filter.sharedMesh = sourceFilter.sharedMesh;
+                MeshRenderer renderer = part.AddComponent<MeshRenderer>();
+                Material[] mats = mr.materials;
+                if (colors != null)
+                    foreach (Material m in mats)
+                        if (colour < colors.Length && colors[colour].a > 0.01f) Tint(m, colors[colour++]);
+                renderer.materials = mats;
+            }
+
+            return true;
+        }
+
+        private static Transform FindCharacterNeck(Dictionary<string, Transform> bones)
+        {
+            if (bones == null || bones.Count == 0) return null;
+            Transform lower = bones.Values.FirstOrDefault(t => t != null && NormalizeBoneName(t.name).EndsWith("necklower"));
+            if (lower != null) return lower;
+            Transform exact = bones.Values.FirstOrDefault(t => t != null && NormalizeBoneName(t.name) == "neck");
+            if (exact != null) return exact;
+            Transform upper = bones.Values.FirstOrDefault(t => t != null && NormalizeBoneName(t.name).EndsWith("neckupper"));
+            if (upper != null) return upper;
+            return bones.Values.FirstOrDefault(t => t != null && NormalizeBoneName(t.name).Contains("neck"));
+        }
+
+        private static string NormalizeBoneName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        }
+
+        private static void TransformSkinnedGeometry(SkinnedMeshRenderer smr, float scale)
+        {
+            if (smr == null || smr.sharedMesh == null || Mathf.Abs(scale - 1f) < 0.001f) return;
+            Mesh source = smr.sharedMesh;
+            Mesh copy = Object.Instantiate(source);
+            copy.name = source.name + " (Duel Genesis Sized)";
+            Vector3[] vertices = copy.vertices;
+            Vector3 pivot = copy.bounds.center;
+            for (int i = 0; i < vertices.Length; i++) vertices[i] = pivot + (vertices[i] - pivot) * scale;
             copy.vertices = vertices;
             copy.RecalculateBounds();
             smr.sharedMesh = copy;
-
             GenesisRuntimeMeshCleanup cleanup = smr.gameObject.AddComponent<GenesisRuntimeMeshCleanup>();
             cleanup.mesh = copy;
         }
 
-        private static void TiltRigidMillenniumPuzzle(MeshRenderer renderer, Transform characterRoot)
-        {
-            if (renderer == null || characterRoot == null) return;
-            Bounds b = renderer.bounds;
-            Vector3 pivot = new Vector3(b.center.x, b.max.y, b.center.z);
-            renderer.transform.RotateAround(pivot, characterRoot.right, -12f);
-            renderer.transform.position += characterRoot.forward * 0.01f;
-        }
-
-        private static float ItemScale(float proportion) =>
-            Mathf.Lerp(0.70f, 1.30f, Mathf.InverseLerp(-100f, 100f, Mathf.Clamp(proportion, -100f, 100f)));
+        private static float ItemScale(float proportion) => Mathf.Lerp(0.70f, 1.30f, Mathf.InverseLerp(-100f, 100f, Mathf.Clamp(proportion, -100f, 100f)));
 
         private static void FixFaceOverlayMaterials(IEnumerable<SkinnedMeshRenderer> renderers, GenesisAppearance appearance)
         {
             if (renderers == null || appearance == null) return;
-
             foreach (SkinnedMeshRenderer r in renderers)
             {
                 if (r == null) continue;
-                Material[] mats = r.materials;
-                foreach (Material m in mats)
+                foreach (Material m in r.materials)
                 {
                     if (m == null) continue;
                     string key = (r.name + " " + m.name).ToLowerInvariant();
@@ -288,10 +338,7 @@ namespace DuelGenesis.Characters
                     bool liner = key.Contains("eyeliner") || key.Contains("eye liner");
                     bool paint = key.Contains("facepaint") || key.Contains("face paint") || key.Contains("makeup") || key.Contains("make up");
                     if (!brow && !lash && !liner && !paint) continue;
-
-                    Color tint = brow ? appearance.eyebrowColor :
-                                 lash ? appearance.eyelashColor :
-                                 liner ? appearance.eyelinerColor : appearance.paintColor;
+                    Color tint = brow ? appearance.eyebrowColor : lash ? appearance.eyelashColor : liner ? appearance.eyelinerColor : appearance.paintColor;
                     if (tint.a < 0.01f && (brow || lash)) tint.a = 1f;
                     Tint(m, tint);
                     MakeTransparentOverlay(m);
@@ -335,9 +382,7 @@ namespace DuelGenesis.Characters
             {
                 if (r == null || r.sharedMesh == null) continue;
                 if (SetShapeOnRenderer(r, shape, weight)) continue;
-
-                foreach (string converted in ConvertedMorphs(shape))
-                    SetShapeOnRenderer(r, converted, weight);
+                foreach (string converted in ConvertedMorphs(shape)) SetShapeOnRenderer(r, converted, weight);
             }
         }
 
@@ -353,7 +398,6 @@ namespace DuelGenesis.Characters
                     r.SetBlendShapeWeight(direct, r.GetBlendShapeWeight(direct) + delta);
                     continue;
                 }
-
                 foreach (string converted in ConvertedMorphs(shape))
                 {
                     int i = ShapeIndex(r.sharedMesh, converted);
@@ -377,14 +421,8 @@ namespace DuelGenesis.Characters
                 yield return "GU Head";
                 yield return "GU Body";
             }
-            else if (shape == GenesisMorphMap.FemaleFigure)
-            {
-                yield return "BaseAnimeF_body_bs_BodyFeminine";
-            }
-            else if (shape == GenesisMorphMap.MaleFigure)
-            {
-                yield return "BaseAnimeM_body_bs_BodyMasculine";
-            }
+            else if (shape == GenesisMorphMap.FemaleFigure) yield return "BaseAnimeF_body_bs_BodyFeminine";
+            else if (shape == GenesisMorphMap.MaleFigure) yield return "BaseAnimeM_body_bs_BodyMasculine";
         }
 
         private static readonly Dictionary<Mesh, Dictionary<string, int>> ShapeNames = new Dictionary<Mesh, Dictionary<string, int>>();
@@ -400,7 +438,6 @@ namespace DuelGenesis.Characters
                     string n = mesh.GetBlendShapeName(i) ?? string.Empty;
                     AddShapeKey(map, n, i);
                     AddShapeKey(map, NormalizeShapeName(n), i);
-
                     int cut = LastShapeSeparator(n);
                     if (cut >= 0 && cut < n.Length - 1)
                     {
@@ -411,11 +448,9 @@ namespace DuelGenesis.Characters
                 }
                 ShapeNames[mesh] = map;
             }
-
             if (map.TryGetValue(shape, out int index)) return index;
             string normalized = NormalizeShapeName(shape);
             if (map.TryGetValue(normalized, out index)) return index;
-
             for (int i = 0; i < mesh.blendShapeCount; i++)
             {
                 string candidate = NormalizeShapeName(mesh.GetBlendShapeName(i));
@@ -459,7 +494,11 @@ namespace DuelGenesis.Characters
             var baked = new Mesh();
             body.BakeMesh(baked, true);
             Vector3[] v = baked.vertices;
-            if (v.Length == 0) { Object.Destroy(baked); return; }
+            if (v.Length == 0)
+            {
+                Object.Destroy(baked);
+                return;
+            }
             float min = float.MaxValue, max = float.MinValue;
             Matrix4x4 toRoot = root.worldToLocalMatrix * Matrix4x4.TRS(body.transform.position, body.transform.rotation, Vector3.one);
             for (int i = 0; i < v.Length; i += 7)
@@ -480,7 +519,6 @@ namespace DuelGenesis.Characters
     internal sealed class GenesisRuntimeMeshCleanup : MonoBehaviour
     {
         public Mesh mesh;
-
         private void OnDestroy()
         {
             if (mesh != null) Destroy(mesh);
