@@ -24,7 +24,7 @@ namespace DuelGenesis.EditorTools
     ///   - a pack counter (the nine boosters) in the lobby.
     /// Re-running it removes the old hall first.
     /// </summary>
-    public static class GenesisDuelCenter
+    public static partial class GenesisDuelCenter
     {
         public const string RootName = "Genesis Duel Center";
         private const string MatFolder = "Assets/Art/Generated/DuelCenter";

@@ -134,6 +134,7 @@ namespace DuelGenesis.EditorTools
 
             // 7. The Genesis Duel Center closes the north boulevard, entrance to the plaza.
             GameObject hall = GenesisDuelCenter.BuildAt(city, new Vector3(0f, 0f, 96f), 180f);
+            GenesisDuelCenter.BuildCardShop(city, GenesisDuelCenter.CardShopSpot, GenesisDuelCenter.CardShopYaw);
             Box(map, "Duel Center Forecourt", new Vector3(0f, 0.012f, 71f), new Vector3(40f, 0.024f, 18f), _paving);
 
             // 8. Spawn: the plaza's south side, looking north across it to the Duel Center.

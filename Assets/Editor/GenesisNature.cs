@@ -44,7 +44,8 @@ namespace DuelGenesis.EditorTools
                 bool Allowed(Vector2 p) =>
                     p.magnitude > 68f &&                                         // clear of the ring road
                     !(Mathf.Abs(p.x) < 28f && p.y > 58f && p.y < 128f) &&        // clear of the Duel Center and its forecourt
-                    Vector2.Distance(p, centre) > 9f;                            // the obelisk clearing
+                    Vector2.Distance(p, centre) > 9f &&
+                    !GenesisDuelCenter.InCardShopLot(p);                         // the obelisk clearing and the card shop's lot
                 Vector2 Rand() => new Vector2(sx * Mathf.Lerp(x0, x1, (float)rng.NextDouble()), sz * Mathf.Lerp(x0, x1, (float)rng.NextDouble()));
                 var used = new List<Vector2>();
                 Vector2? Spot(float gap)
@@ -95,7 +96,7 @@ namespace DuelGenesis.EditorTools
                     {
                         Vector2 p = dir * d + side * sgn * 16.5f;
                         if (dir == Vector2.up && d < 140f) continue;   // Duel Center forecourt
-                        if (OnRoadGrid(p)) continue;
+                        if (OnRoadGrid(p) || GenesisDuelCenter.InCardShopLot(p)) continue;
                         count += Put(verges, Pick(rng, "plant_bush", "plant_bushDetailed", "plant_bushLarge", "flower_redA", "flower_yellowA", "flower_purpleA"), p, rng.Next(360), 0.9f);
                     }
             }
@@ -207,7 +208,10 @@ namespace DuelGenesis.EditorTools
         }
 
         /// <summary>The Poly Haven scanned trees that are in the project (empty until Downloads > Poly Haven Realistic Trees).</summary>
-        private static string[] RealTrees(params string[] ids) =>
+        /// <summary>Off for now: the raw scans are film-resolution; they need game-ready versions first.</summary>
+        private const bool UseRealTrees = false;
+
+        private static string[] RealTrees(params string[] ids) => !UseRealTrees ? new string[0] :
             ids.Select(id => $"{GenesisAssetDownloads.TreesFolder}/{id}/{id}.fbx").Where(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null).ToArray();
 
         private static string Pick(System.Random rng, params string[] names) => names[rng.Next(names.Length)];
