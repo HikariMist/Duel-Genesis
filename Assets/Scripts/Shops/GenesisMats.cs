@@ -31,11 +31,11 @@ namespace DuelGenesis.Shops
         public static readonly GenesisMatType[] All =
         {
             new() { id = ClassicId, displayName = "Genesis Classic", price = 0, blurb = "The standard printed mat", accent = new Color(0.25f, 0.8f, 1f) },
-            new() { id = "blue_eyes", displayName = "Blue-Eyes Hieroglyph", price = 4000, blurb = "Blue-Eyes over an ancient tablet", accent = new Color(0.35f, 0.75f, 1f) },
-            new() { id = "pharaoh", displayName = "The Pharaoh's Duel", price = 4500, blurb = "The King of Games and Dark Magician", accent = new Color(0.8f, 0.35f, 1f) },
-            new() { id = "egyptian_gods", displayName = "Egyptian Gods", price = 6000, blurb = "Ra, Obelisk and Slifer", accent = new Color(1f, 0.78f, 0.3f) },
-            new() { id = "dark_magician_girl", displayName = "Dark Magician Girl", price = 3500, blurb = "Her own wallpaper mat", accent = new Color(1f, 0.45f, 0.75f) },
-            new() { id = "emerald_seal", displayName = "Emerald Seal", price = 2500, blurb = "A glowing seal among the stars", accent = new Color(0.3f, 1f, 0.55f) },
+            new() { id = "blue_eyes", displayName = "Blue-Eyes Hieroglyph", price = 25000, blurb = "Blue-Eyes over an ancient tablet", accent = new Color(0.35f, 0.75f, 1f) },
+            new() { id = "pharaoh", displayName = "The Pharaoh's Duel", price = 25000, blurb = "The King of Games and Dark Magician", accent = new Color(0.8f, 0.35f, 1f) },
+            new() { id = "egyptian_gods", displayName = "Egyptian Gods", price = 25000, blurb = "Ra, Obelisk and Slifer", accent = new Color(1f, 0.78f, 0.3f) },
+            new() { id = "dark_magician_girl", displayName = "Dark Magician Girl", price = 25000, blurb = "Her own wallpaper mat", accent = new Color(1f, 0.45f, 0.75f) },
+            new() { id = "emerald_seal", displayName = "Emerald Seal", price = 25000, blurb = "A glowing seal among the stars", accent = new Color(0.3f, 1f, 0.55f) },
         };
 
         public static GenesisMatType Get(string id) => All.FirstOrDefault(m => m.id == id) ?? All[0];
