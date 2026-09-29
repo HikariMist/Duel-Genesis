@@ -129,7 +129,7 @@ namespace DuelGenesis.Characters
             if (_character != null && _character.Current != null) GenesisCharacterBuilder.ApplyShapes(_character.Current, _look);
         }
 
-        private void RebuildSoon() => _rebuildAt = Time.unscaledTime + 0.3f;
+        private void RebuildSoon() => _rebuildAt = Time.unscaledTime + 0.12f;
 
         // ------------------------------------------------------------------ UI
 
@@ -167,6 +167,9 @@ namespace DuelGenesis.Characters
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+
+            // Apply body/face morph sliders immediately after IMGUI has written their new values.
+            FlushLiveShapes();
 
             float by = Screen.height - 76f, bw = (w - 60f) / 4f;
             if (GUI.Button(new Rect(x + 24f, by, bw, 48f), "RANDOM", Button(false))) Randomize();
@@ -259,6 +262,10 @@ namespace DuelGenesis.Characters
                 GUILayout.Label(label, Style(15, FontStyle.Normal, Color.white), GUILayout.Height(34), GUILayout.ExpandWidth(true));
                 if (GUILayout.Button("▶", Button(false), GUILayout.Width(44), GUILayout.Height(34))) Step(slot, choices, index, +1);
                 GUILayout.EndHorizontal();
+
+                if (equip.id >= 0)
+                    equip.proportion = ItemSizeSlider(equip.proportion);
+                GUILayout.Space(6);
             }
             GUILayout.Space(8);
             GUILayout.Label($"{assets.items.Count} items in the wardrobe.", Style(13, FontStyle.Normal, GenesisTheme.Muted));
@@ -271,6 +278,7 @@ namespace DuelGenesis.Characters
             int pos = index < 0 ? choices.Count : index;
             pos = ((pos + dir) % count + count) % count;
             GenesisEquip e = _look.Get(slot);
+            e.proportion = 0f;   // each newly selected item starts at its authored 100% size
             if (pos >= choices.Count) e.id = -1;
             else
             {
@@ -300,7 +308,13 @@ namespace DuelGenesis.Characters
                 foreach (GenesisSlot slot in new[] { GenesisSlot.Hairstyle, GenesisSlot.Shirt, GenesisSlot.Pants, GenesisSlot.Shoes })
                 {
                     var choices = assets.items.Where(i => i.slot == slot && i.prefab != null).ToList();
-                    if (choices.Count > 0) { var e = _look.Get(slot); e.id = choices[r.Next(choices.Count)].id; e.colors = new[] { ColourPresets[r.Next(ColourPresets.Length)] }; }
+                    if (choices.Count > 0)
+                    {
+                        var e = _look.Get(slot);
+                        e.id = choices[r.Next(choices.Count)].id;
+                        e.colors = new[] { ColourPresets[r.Next(ColourPresets.Length)] };
+                        e.proportion = 0f;
+                    }
                 }
             Rebuild();
         }
@@ -316,19 +330,37 @@ namespace DuelGenesis.Characters
             GUILayout.EndHorizontal();
             if (!Mathf.Approximately(v, value))
             {
-                if (live) { ApplyLater(); }
+                if (live) ApplyLater();
                 else RebuildSoon();
             }
+            return v;
+        }
+
+        private float ItemSizeSlider(float value)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(110);
+            GUILayout.Label("Size", Style(13, FontStyle.Normal, Color.white), GUILayout.Width(48));
+            float v = GUILayout.HorizontalSlider(value, -100f, 100f, GUILayout.Height(22), GUILayout.ExpandWidth(true));
+            int percent = Mathf.RoundToInt(Mathf.Lerp(75f, 125f, Mathf.InverseLerp(-100f, 100f, v)));
+            GUILayout.Label(percent + "%", Style(13, FontStyle.Normal, GenesisTheme.Muted), GUILayout.Width(46));
+            if (GUILayout.Button("RESET", Button(false), GUILayout.Width(58), GUILayout.Height(24))) v = 0f;
+            GUILayout.EndHorizontal();
+            if (!Mathf.Approximately(v, value)) RebuildSoon();
             return v;
         }
 
         private bool _liveDirty;
         private void ApplyLater() => _liveDirty = true;
 
-        private void LateUpdate()
+        private void FlushLiveShapes()
         {
-            if (_liveDirty) { _liveDirty = false; LiveShapes(); }
+            if (!_liveDirty) return;
+            _liveDirty = false;
+            LiveShapes();
         }
+
+        private void LateUpdate() => FlushLiveShapes();
 
         private Color Rgb(Color c)
         {
