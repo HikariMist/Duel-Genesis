@@ -129,7 +129,11 @@ namespace DuelGenesis.Characters
             if (_character != null && _character.Current != null) GenesisCharacterBuilder.ApplyShapes(_character.Current, _look);
         }
 
-        private void RebuildSoon() => _rebuildAt = Time.unscaledTime + 0.12f;
+        private void RebuildSoon()
+        {
+            float next = Time.unscaledTime + 0.04f;
+            if (_rebuildAt < 0f || _rebuildAt > next) _rebuildAt = next;
+        }
 
         // ------------------------------------------------------------------ UI
 
@@ -137,17 +141,32 @@ namespace DuelGenesis.Characters
         {
             if (!IsOpen) return;
             GUI.depth = -40;
-            float w = Screen.width * 0.45f, x = Screen.width - w;
-            var panel = new Rect(x, 0f, w, Screen.height);
-            GenesisTheme.Box(panel, GenesisTheme.Background);
-            GUI.Label(new Rect(x + 24f, 16f, w - 48f, 40f), "CHARACTER CREATOR", Style(28, FontStyle.Bold, GenesisTheme.Cyan));
+
+            float previewW = Screen.width * 0.55f;
+            float w = Screen.width - previewW;
+            float x = previewW;
+
+            // Preview side: subtle HUD framing without obscuring the character.
+            GenesisTheme.Box(new Rect(0f, 0f, previewW, 72f), new Color(0.025f, 0.035f, 0.07f, 0.78f));
+            GenesisTheme.Box(new Rect(previewW - 3f, 0f, 3f, Screen.height), GenesisTheme.Cyan);
+            GUI.Label(new Rect(26f, 15f, previewW - 52f, 28f), "LIVE DUELIST PREVIEW", Style(18, FontStyle.Bold, Color.white));
+            GUI.Label(new Rect(26f, 42f, previewW - 52f, 22f), "Turn the model • switch face/full-body view • changes preview live", Style(12, FontStyle.Normal, GenesisTheme.Muted));
+
+            // Main creator panel.
+            GenesisTheme.Box(new Rect(x, 0f, w, Screen.height), GenesisTheme.Background);
+            GenesisTheme.Box(new Rect(x, 0f, w, 5f), GenesisTheme.Purple);
+            GenesisTheme.Box(new Rect(x, 5f, w, 92f), GenesisTheme.PanelAlt);
+            GUI.Label(new Rect(x + 24f, 16f, w - 48f, 18f), "DUEL : GENESIS", Style(12, FontStyle.Bold, GenesisTheme.Gold));
+            GUI.Label(new Rect(x + 24f, 34f, w - 48f, 36f), "CHARACTER CREATOR", Style(27, FontStyle.Bold, Color.white));
+            GUI.Label(new Rect(x + 24f, 67f, w - 48f, 20f), "Build the duelist you want to take into Genesis City.", Style(12, FontStyle.Normal, GenesisTheme.Muted));
 
             string[] tabs = { "BODY", "FACE", "COLOURS", "OUTFIT" };
             float tw = (w - 48f) / tabs.Length;
             for (int i = 0; i < tabs.Length; i++)
             {
                 bool on = (int)_tab == i;
-                if (GUI.Button(new Rect(x + 24f + i * tw, 64f, tw - 6f, 36f), tabs[i], Button(on)))
+                Rect tabRect = new Rect(x + 24f + i * tw, 105f, tw - 6f, 38f);
+                if (TabButton(tabRect, tabs[i], on))
                 {
                     _tab = (Tab)i;
                     _scroll = Vector2.zero;
@@ -155,9 +174,13 @@ namespace DuelGenesis.Characters
                 }
             }
 
-            var body = new Rect(x + 24f, 112f, w - 48f, Screen.height - 200f);
+            Rect contentCard = new Rect(x + 18f, 153f, w - 36f, Screen.height - 247f);
+            GenesisTheme.Box(contentCard, GenesisTheme.Panel);
+            GenesisTheme.Box(new Rect(contentCard.x, contentCard.y, 3f, contentCard.height), new Color(GenesisTheme.Purple.r, GenesisTheme.Purple.g, GenesisTheme.Purple.b, 0.75f));
+
+            var body = new Rect(contentCard.x + 14f, contentCard.y + 12f, contentCard.width - 28f, contentCard.height - 24f);
             GUILayout.BeginArea(body);
-            _scroll = GUILayout.BeginScrollView(_scroll);
+            _scroll = GUILayout.BeginScrollView(_scroll, false, true);
             switch (_tab)
             {
                 case Tab.Body: DrawBody(); break;
@@ -168,79 +191,94 @@ namespace DuelGenesis.Characters
             GUILayout.EndScrollView();
             GUILayout.EndArea();
 
-            // Apply body/face morph sliders immediately after IMGUI has written their new values.
             FlushLiveShapes();
 
-            float by = Screen.height - 76f, bw = (w - 60f) / 4f;
-            if (GUI.Button(new Rect(x + 24f, by, bw, 48f), "RANDOM", Button(false))) Randomize();
-            if (GUI.Button(new Rect(x + 30f + bw, by, bw, 48f), _faceView ? "FULL BODY" : "FACE VIEW", Button(false))) _faceView = !_faceView;
-            if (GUI.Button(new Rect(x + 36f + bw * 2f, by, bw, 48f), "CANCEL", Button(false))) Close(save: false);
-            if (GUI.Button(new Rect(x + 42f + bw * 3f, by, bw, 48f), "SAVE", Button(true))) Close(save: true);
+            // Persistent action bar.
+            float by = Screen.height - 82f;
+            GenesisTheme.Box(new Rect(x, by - 8f, w, 90f), new Color(0.045f, 0.055f, 0.09f, 0.99f));
+            float bw = (w - 66f) / 4f;
+            if (ActionButton(new Rect(x + 24f, by, bw, 50f), "RANDOMIZE", GenesisTheme.PanelAlt)) Randomize();
+            if (ActionButton(new Rect(x + 30f + bw, by, bw, 50f), _faceView ? "FULL BODY" : "FACE VIEW", GenesisTheme.Purple)) _faceView = !_faceView;
+            if (ActionButton(new Rect(x + 36f + bw * 2f, by, bw, 50f), "CANCEL", GenesisTheme.Danger)) Close(save: false);
+            if (ActionButton(new Rect(x + 42f + bw * 3f, by, bw, 50f), "SAVE", GenesisTheme.Green)) Close(save: true);
 
-            // Turn the character with the arrows under the preview.
-            float px = Screen.width * 0.55f * 0.5f;
-            if (GUI.RepeatButton(new Rect(px - 130f, Screen.height - 70f, 110f, 44f), "◀ TURN", Button(false))) _spin -= 120f * Time.unscaledDeltaTime;
-            if (GUI.RepeatButton(new Rect(px + 20f, Screen.height - 70f, 110f, 44f), "TURN ▶", Button(false))) _spin += 120f * Time.unscaledDeltaTime;
+            float px = previewW * 0.5f;
+            if (ActionButton(new Rect(px - 134f, Screen.height - 68f, 114f, 42f), "◀ TURN", GenesisTheme.PanelAlt)) _spin -= 120f * Time.unscaledDeltaTime;
+            if (ActionButton(new Rect(px + 20f, Screen.height - 68f, 114f, 42f), "TURN ▶", GenesisTheme.PanelAlt)) _spin += 120f * Time.unscaledDeltaTime;
         }
 
         private void DrawBody()
         {
-            Header("GENDER");
+            Header("GENDER", "Choose the base figure. Your other settings remain editable.");
             GUILayout.BeginHorizontal();
             foreach (GenesisGender g in new[] { GenesisGender.Female, GenesisGender.Male })
-                if (GUILayout.Button(g.ToString().ToUpperInvariant(), Button(_look.gender == g), GUILayout.Height(40)) && _look.gender != g)
+            {
+                Color old = GUI.backgroundColor;
+                GUI.backgroundColor = _look.gender == g ? GenesisTheme.Purple : GenesisTheme.PanelAlt;
+                if (GUILayout.Button(g.ToString().ToUpperInvariant(), Button(_look.gender == g), GUILayout.Height(42)) && _look.gender != g)
                 {
                     string name = _look.name;
                     _look = GenesisAppearance.CreateDefault(g);
                     _look.name = name;
                     Rebuild();
                 }
+                GUI.backgroundColor = old;
+            }
             GUILayout.EndHorizontal();
 
-            Header("BODY");
+            Header("BODY SHAPE", "Adjust height, age and overall build.");
             _look.age = Slider("Youth", _look.age, 0f, 100f, live: true);
             _look.height = Slider("Height", _look.height, -100f, 100f, live: false);
-            GUILayout.Label("Build", Style(15, FontStyle.Bold, Color.white));
-            int sel = GUILayout.SelectionGrid(_look.bodyType, BodyTypeNames, 3, Button(false));
+            GUILayout.Space(6);
+            GUILayout.Label("BUILD PRESET", Style(12, FontStyle.Bold, GenesisTheme.Muted));
+            int sel = GUILayout.SelectionGrid(_look.bodyType, BodyTypeNames, 3, Button(false), GUILayout.Height(102));
             if (sel != _look.bodyType) { _look.bodyType = sel; if (_look.bodyWeight < 1f) _look.bodyWeight = 60f; LiveShapes(); }
-            _look.bodyWeight = Slider("Build strength", _look.bodyWeight, 0f, 100f, live: true);
+            _look.bodyWeight = Slider("Build Strength", _look.bodyWeight, 0f, 100f, live: true);
             if (_look.gender == GenesisGender.Female) _look.breastSize = Slider("Bust", _look.breastSize, 0f, 100f, live: true);
         }
 
         private void DrawFace()
         {
+            Header("FACE SCULPT", "Pick a region, then shape it with the sliders below.");
             var groups = GenesisMorphMap.FaceGroups;
-            _faceGroup = GUILayout.SelectionGrid(_faceGroup, groups.Select(g => g.label.ToUpperInvariant()).ToArray(), 5, Button(false));
+            _faceGroup = GUILayout.SelectionGrid(_faceGroup, groups.Select(g => g.label.ToUpperInvariant()).ToArray(), 5, Button(false), GUILayout.Height(72));
             var group = groups[Mathf.Clamp(_faceGroup, 0, groups.Length - 1)];
             float[] values = group.values(_look.face);
-            Header(group.label.ToUpperInvariant());
+            Header(group.label.ToUpperInvariant(), "Changes apply directly to the character preview.");
             for (int i = 0; i < group.morphs.Length && i < values.Length; i++)
                 values[i] = Slider(Pretty(group.morphs[i]), values[i], -100f, 100f, live: true);
-            if (GUILayout.Button("RESET " + group.label.ToUpperInvariant(), Button(false), GUILayout.Height(34)))
+            GUILayout.Space(8);
+            Color old = GUI.backgroundColor;
+            GUI.backgroundColor = GenesisTheme.PanelAlt;
+            if (GUILayout.Button("RESET " + group.label.ToUpperInvariant(), Button(false), GUILayout.Height(36)))
             {
                 for (int i = 0; i < values.Length; i++) values[i] = 0f;
                 LiveShapes();
             }
+            GUI.backgroundColor = old;
         }
 
         private void DrawColours()
         {
-            Header("SKIN");
+            Header("SKIN", "Choose a preset or fine-tune the RGB sliders.");
             Swatches(SkinPresets, c => { _look.skinColor = c; RebuildSoon(); });
             _look.skinColor = Rgb(_look.skinColor);
-            Header("EYES");
+
+            Header("EYES", "Eye colour updates on the live character.");
             Swatches(ColourPresets, c => { _look.leftEyeColor = _look.rightEyeColor = c; RebuildSoon(); });
             Color eye = Rgb(_look.leftEyeColor);
             _look.leftEyeColor = _look.rightEyeColor = eye;
+
             GenesisEquip hair = _look.Get(GenesisSlot.Hairstyle);
             if (hair != null && hair.id >= 0)
             {
-                Header("HAIR");
+                Header("HAIR", "Tint the currently equipped hairstyle.");
                 if (hair.colors == null || hair.colors.Length == 0) hair.colors = new[] { ColourPresets[0] };
                 Swatches(ColourPresets, c => { hair.colors[0] = c; if (hair.colors.Length > 1) hair.colors[1] = c; RebuildSoon(); });
                 hair.colors[0] = Rgb(hair.colors[0]);
             }
-            Header("BROWS");
+
+            Header("BROWS", "Brow colour is applied to the face overlay.");
             Swatches(ColourPresets, c => { _look.eyebrowColor = c; RebuildSoon(); });
         }
 
@@ -249,36 +287,43 @@ namespace DuelGenesis.Characters
             GenesisCharacterAssets assets = GenesisCharacterAssets.Instance;
             GenesisCharacterLibrary library = GenesisCharacterLibrary.Instance;
             if (assets == null) { GUILayout.Label("No wardrobe imported yet.", Style(16, FontStyle.Normal, Color.white)); return; }
+
+            Header("WARDROBE", "Cycle each slot and resize the equipped piece independently.");
             foreach (GenesisSlot slot in System.Enum.GetValues(typeof(GenesisSlot)))
             {
                 List<GenesisCharacterAssets.Item> choices = assets.items.Where(i => i.slot == slot && i.prefab != null).OrderBy(i => i.id).ToList();
                 if (choices.Count == 0) continue;
                 GenesisEquip equip = _look.Get(slot);
-                int index = choices.FindIndex(i => i.id == equip.id);   // -1 = none
+                int index = choices.FindIndex(i => i.id == equip.id);
                 string label = index >= 0 ? (library?.Find(slot, equip.id)?.name ?? choices[index].name) : "None";
+
+                Color old = GUI.backgroundColor;
+                GUI.backgroundColor = new Color(GenesisTheme.PanelAlt.r, GenesisTheme.PanelAlt.g, GenesisTheme.PanelAlt.b, 0.82f);
+                GUILayout.BeginVertical(GUI.skin.box);
+                GUI.backgroundColor = old;
+
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(slot.ToString().ToUpperInvariant(), Style(15, FontStyle.Bold, GenesisTheme.Gold), GUILayout.Width(110));
-                if (GUILayout.Button("◀", Button(false), GUILayout.Width(44), GUILayout.Height(34))) Step(slot, choices, index, -1);
-                GUILayout.Label(label, Style(15, FontStyle.Normal, Color.white), GUILayout.Height(34), GUILayout.ExpandWidth(true));
-                if (GUILayout.Button("▶", Button(false), GUILayout.Width(44), GUILayout.Height(34))) Step(slot, choices, index, +1);
+                GUILayout.Label(slot.ToString().ToUpperInvariant(), Style(14, FontStyle.Bold, GenesisTheme.Gold), GUILayout.Width(105));
+                if (GUILayout.Button("◀", Button(false), GUILayout.Width(42), GUILayout.Height(34))) Step(slot, choices, index, -1);
+                GUILayout.Label(label, Style(14, FontStyle.Bold, Color.white), GUILayout.Height(34), GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("▶", Button(false), GUILayout.Width(42), GUILayout.Height(34))) Step(slot, choices, index, +1);
                 GUILayout.EndHorizontal();
 
-                if (equip.id >= 0)
-                    equip.proportion = ItemSizeSlider(equip.proportion);
+                if (equip.id >= 0) equip.proportion = ItemSizeSlider(equip.proportion);
+                GUILayout.EndVertical();
                 GUILayout.Space(6);
             }
-            GUILayout.Space(8);
-            GUILayout.Label($"{assets.items.Count} items in the wardrobe.", Style(13, FontStyle.Normal, GenesisTheme.Muted));
+            GUILayout.Label($"{assets.items.Count} wardrobe pieces available", Style(12, FontStyle.Normal, GenesisTheme.Muted));
         }
 
         private void Step(GenesisSlot slot, List<GenesisCharacterAssets.Item> choices, int index, int dir)
         {
             bool required = slot == GenesisSlot.Hairstyle || slot == GenesisSlot.Shirt || slot == GenesisSlot.Pants;
-            int count = choices.Count + (required ? 0 : 1);   // optional slots can also be empty
+            int count = choices.Count + (required ? 0 : 1);
             int pos = index < 0 ? choices.Count : index;
             pos = ((pos + dir) % count + count) % count;
             GenesisEquip e = _look.Get(slot);
-            e.proportion = 0f;   // each newly selected item starts at its authored 100% size
+            e.proportion = 0f;
             if (pos >= choices.Count) e.id = -1;
             else
             {
@@ -323,28 +368,36 @@ namespace DuelGenesis.Characters
 
         private float Slider(string label, float value, float min, float max, bool live)
         {
+            GUILayout.Space(3);
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, Style(14, FontStyle.Normal, Color.white), GUILayout.Width(170));
-            float v = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(22), GUILayout.ExpandWidth(true));
-            GUILayout.Label(Mathf.RoundToInt(v).ToString(), Style(13, FontStyle.Normal, GenesisTheme.Muted), GUILayout.Width(40));
+            GUILayout.Label(label, Style(14, FontStyle.Normal, Color.white), GUILayout.Width(154));
+            Color old = GUI.backgroundColor;
+            GUI.backgroundColor = GenesisTheme.Cyan;
+            float v = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(24), GUILayout.ExpandWidth(true));
+            GUI.backgroundColor = old;
+            GUILayout.Label(Mathf.RoundToInt(v).ToString(), ValueStyle(), GUILayout.Width(48), GUILayout.Height(24));
             GUILayout.EndHorizontal();
             if (!Mathf.Approximately(v, value))
             {
                 if (live) ApplyLater();
                 else RebuildSoon();
             }
+            GUILayout.Space(3);
             return v;
         }
 
         private float ItemSizeSlider(float value)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Space(110);
-            GUILayout.Label("Size", Style(13, FontStyle.Normal, Color.white), GUILayout.Width(48));
-            float v = GUILayout.HorizontalSlider(value, -100f, 100f, GUILayout.Height(22), GUILayout.ExpandWidth(true));
-            int percent = Mathf.RoundToInt(Mathf.Lerp(75f, 125f, Mathf.InverseLerp(-100f, 100f, v)));
-            GUILayout.Label(percent + "%", Style(13, FontStyle.Normal, GenesisTheme.Muted), GUILayout.Width(46));
-            if (GUILayout.Button("RESET", Button(false), GUILayout.Width(58), GUILayout.Height(24))) v = 0f;
+            GUILayout.Space(105);
+            GUILayout.Label("SIZE", Style(11, FontStyle.Bold, GenesisTheme.Muted), GUILayout.Width(42));
+            Color old = GUI.backgroundColor;
+            GUI.backgroundColor = GenesisTheme.Purple;
+            float v = GUILayout.HorizontalSlider(value, -100f, 100f, GUILayout.Height(24), GUILayout.ExpandWidth(true));
+            GUI.backgroundColor = old;
+            int percent = Mathf.RoundToInt(Mathf.Lerp(70f, 130f, Mathf.InverseLerp(-100f, 100f, v)));
+            GUILayout.Label(percent + "%", ValueStyle(), GUILayout.Width(52), GUILayout.Height(24));
+            if (GUILayout.Button("RESET", Button(false), GUILayout.Width(58), GUILayout.Height(26))) v = 0f;
             GUILayout.EndHorizontal();
             if (!Mathf.Approximately(v, value)) RebuildSoon();
             return v;
@@ -364,10 +417,20 @@ namespace DuelGenesis.Characters
 
         private Color Rgb(Color c)
         {
-            GUILayout.BeginHorizontal();
-            float r = GUILayout.HorizontalSlider(c.r, 0f, 1f), g = GUILayout.HorizontalSlider(c.g, 0f, 1f), b = GUILayout.HorizontalSlider(c.b, 0f, 1f);
-            GUILayout.EndHorizontal();
-            var n = new Color(r, g, b, 1f);
+            string[] labels = { "R", "G", "B" };
+            float[] values = { c.r, c.g, c.b };
+            for (int i = 0; i < 3; i++)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(labels[i], Style(11, FontStyle.Bold, GenesisTheme.Muted), GUILayout.Width(18));
+                Color old = GUI.backgroundColor;
+                GUI.backgroundColor = GenesisTheme.Cyan;
+                values[i] = GUILayout.HorizontalSlider(values[i], 0f, 1f, GUILayout.Height(22), GUILayout.ExpandWidth(true));
+                GUI.backgroundColor = old;
+                GUILayout.Label(Mathf.RoundToInt(values[i] * 255f).ToString(), ValueStyle(), GUILayout.Width(44), GUILayout.Height(22));
+                GUILayout.EndHorizontal();
+            }
+            var n = new Color(values[0], values[1], values[2], 1f);
             if (n != new Color(c.r, c.g, c.b, 1f)) RebuildSoon();
             return n;
         }
@@ -377,17 +440,43 @@ namespace DuelGenesis.Characters
             GUILayout.BeginHorizontal();
             foreach (Color c in colours)
             {
-                Rect r = GUILayoutUtility.GetRect(34, 34, GUILayout.Width(34), GUILayout.Height(34));
+                Rect r = GUILayoutUtility.GetRect(36, 36, GUILayout.Width(36), GUILayout.Height(36));
+                GenesisTheme.Box(new Rect(r.x - 2f, r.y - 2f, r.width + 4f, r.height + 4f), new Color(1f, 1f, 1f, 0.15f));
                 GenesisTheme.Box(r, c);
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) pick(c);
             }
             GUILayout.EndHorizontal();
+            GUILayout.Space(5);
         }
 
-        private static void Header(string text)
+        private static void Header(string text, string hint = null)
         {
-            GUILayout.Space(10);
-            GUILayout.Label(text, Style(17, FontStyle.Bold, GenesisTheme.Cyan));
+            GUILayout.Space(12);
+            GUILayout.Label(text, Style(16, FontStyle.Bold, GenesisTheme.Cyan));
+            if (!string.IsNullOrEmpty(hint))
+                GUILayout.Label(hint, Style(11, FontStyle.Normal, GenesisTheme.Muted));
+            Rect line = GUILayoutUtility.GetRect(1f, 2f, GUILayout.ExpandWidth(true));
+            GenesisTheme.Box(line, new Color(GenesisTheme.Cyan.r, GenesisTheme.Cyan.g, GenesisTheme.Cyan.b, 0.24f));
+            GUILayout.Space(6);
+        }
+
+        private static bool TabButton(Rect rect, string label, bool active)
+        {
+            Color old = GUI.backgroundColor;
+            GUI.backgroundColor = active ? GenesisTheme.Purple : new Color(0.16f, 0.18f, 0.25f, 1f);
+            bool pressed = GUI.Button(rect, label, Button(active));
+            GUI.backgroundColor = old;
+            if (active) GenesisTheme.Box(new Rect(rect.x + 6f, rect.yMax - 3f, rect.width - 12f, 3f), GenesisTheme.Cyan);
+            return pressed;
+        }
+
+        private static bool ActionButton(Rect rect, string label, Color color)
+        {
+            Color old = GUI.backgroundColor;
+            GUI.backgroundColor = color;
+            bool pressed = GUI.Button(rect, label, Button(false));
+            GUI.backgroundColor = old;
+            return pressed;
         }
 
         private static string Pretty(string morph)
@@ -398,12 +487,36 @@ namespace DuelGenesis.Characters
         }
 
         private static GUIStyle Style(int size, FontStyle style, Color colour) =>
-            new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = style, wordWrap = true, normal = { textColor = colour } };
+            new GUIStyle(GUI.skin.label)
+            {
+                fontSize = size,
+                fontStyle = style,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = colour }
+            };
+
+        private static GUIStyle ValueStyle() =>
+            new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = GenesisTheme.Cyan }
+            };
 
         private static GUIStyle Button(bool on)
         {
-            var s = new GUIStyle(GUI.skin.button) { fontSize = 14, fontStyle = FontStyle.Bold };
-            s.normal.textColor = on ? GenesisTheme.Cyan : Color.white;
+            var s = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(8, 8, 4, 4)
+            };
+            s.normal.textColor = on ? Color.white : new Color(0.92f, 0.95f, 1f, 1f);
+            s.hover.textColor = Color.white;
+            s.active.textColor = Color.white;
             return s;
         }
     }
