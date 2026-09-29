@@ -123,6 +123,7 @@ namespace DuelGenesis.Dueling
         public bool WasFlipped;          // has been flipped face-up since it came to the field
         public bool SpecialSummoned;
         public bool CanAttackDirectly;   // Jowls of Dark Demise
+        public int LastSummonTurn;       // turn it was last Normal, Flip or Special Summoned
         public readonly List<DuelBackrowState> Equips = new();
 
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;
@@ -152,6 +153,7 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState LinkedMonster;   // Call of the Haunted, Spellbinding Circle, Premature Burial
         public int TurnsRemaining;               // Swords of Revealing Light
         public int Counter;                      // generic per-card counter (turns passed, stored value...)
+        public string Declared;                  // a declared Type / name (Array of Revealing Light)
         public bool Resolving;                   // a Normal Spell/Trap on the field only while it resolves
 
         public string Name => Card.Name;
@@ -169,6 +171,8 @@ namespace DuelGenesis.Dueling
     {
         public readonly int Index;
         public string Name;
+        /// <summary>"Once per Duel" cards this duelist has used (The Seal of Orichalcos).</summary>
+        public readonly HashSet<string> OncePerDuel = new();
         public int LifePoints = DuelRules.StartingLifePoints;
 
         /// <summary>Main Deck; the top of the deck is the LAST element.</summary>

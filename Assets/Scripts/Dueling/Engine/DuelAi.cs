@@ -100,11 +100,14 @@ namespace DuelGenesis.Dueling
             DuelCard best = null;
             int bestValue = threshold - 1;
             IEnumerable<DuelCard> options = Me(e).Hand.Where(c => c.IsSpell)
-                .Concat(Me(e).SpellTrapsOnField.Where(s => s.FaceDown).Select(s => s.Card));
+                .Concat(Me(e).SpellTrapsOnField.Where(s => s.FaceDown).Select(s => s.Card))
+                .Concat(Me(e).AllBackrow.Where(s => !s.FaceDown && CardEffects.Get(s.Card.Data)?.HasFaceUpEffect == true).Select(s => s.Card));
             foreach (DuelCard card in options)
             {
                 if (!e.CanActivate(_me, card)) continue;
-                int value = CardEffects.Get(card.Data).AiValue(new EffectContext(e, _me, card, null));
+                DuelBackrowState onField = e.FindBackrow(card);
+                var aiCtx = new EffectContext(e, _me, card, null) { FromFaceUp = onField != null && !onField.FaceDown, Source = onField };
+                int value = CardEffects.Get(card.Data).AiValue(aiCtx);
                 if (value > bestValue)
                 {
                     bestValue = value;
@@ -128,7 +131,7 @@ namespace DuelGenesis.Dueling
             foreach (DuelCard card in me.Hand.Where(c => c.IsMonster))
             {
                 if (!e.CanNormalSummon(_me, card, false)) continue;
-                int tributes = DuelRules.TributesRequired(card.Data);
+                int tributes = e.TributesRequired(card);
                 int tributeCost = me.MonstersOnField.Select(m => MonsterValue(e, m)).OrderBy(v => v).Take(tributes).Sum();
                 int atk = card.Data.attack;
                 int def = card.Data.defense;

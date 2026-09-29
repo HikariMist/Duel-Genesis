@@ -23,6 +23,8 @@ namespace DuelGenesis.Dueling
         public readonly DuelTrigger Trigger;
         public readonly List<DuelCard> Targets = new();
         public DuelBackrowState Source;
+        /// <summary>The card was already face-up on the field: this is its on-field effect, not its activation.</summary>
+        public bool FromFaceUp;
         public Action Done;
         /// <summary>Whatever a cost paid with (the Tributed / discarded card), for effects that depend on it.</summary>
         public DuelCard Paid;
@@ -72,6 +74,21 @@ namespace DuelGenesis.Dueling
         public virtual void OnStandby(DuelEngine engine, DuelBackrowState source, int turnPlayer) { }
         public virtual void OnLeaveField(DuelEngine engine, DuelBackrowState source) { }
         public virtual void OnSentToGraveyardFromField(DuelEngine engine, DuelCard card) { }
+
+        /// <summary>The face-up card has an effect its controller can use in their Main Phase (Fusion Gate).</summary>
+        public virtual bool HasFaceUpEffect => false;
+        /// <summary>Battle damage to <paramref name="player"/> from a battle involving their <paramref name="ownMonster"/> becomes 0.</summary>
+        public virtual bool PreventsBattleDamage(DuelEngine engine, DuelBackrowState source, int player, DuelMonsterState ownMonster) => false;
+        /// <summary>This monster cannot be chosen as an attack target.</summary>
+        public virtual bool ProtectsFromAttack(DuelEngine engine, DuelBackrowState source, DuelMonsterState defender) => false;
+        /// <summary>This face-up card survives an attempt to destroy it (e.g. once per turn).</summary>
+        public virtual bool ResistsDestruction(DuelEngine engine, DuelBackrowState source, DuelCard cause) => false;
+        /// <summary>A monster was Normal, Flip or Special Summoned while this card is face-up.</summary>
+        public virtual void OnMonsterSummoned(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster, int player, bool special) { }
+        /// <summary>A monster on the field was destroyed by a card effect (not by battle).</summary>
+        public virtual void OnMonsterDestroyedByEffect(DuelEngine engine, DuelBackrowState source, DuelCard monster) { }
+        /// <summary>Stops <paramref name="player"/> Special Summoning <paramref name="card"/>.</summary>
+        public virtual bool BlocksSpecialSummon(DuelEngine engine, DuelBackrowState source, int player, DuelCard card) => false;
 
         /// <summary>How much the CPU wants to use this card right now (0 or less = don't).</summary>
         public virtual int AiValue(EffectContext ctx) => 40;

@@ -675,7 +675,7 @@ namespace DuelGenesis.Dueling
                 {
                     bool summon = _engine.CanNormalSummon(_me, card, false);
                     string why = summon ? "" : _engine.WhyCannotNormalSummon(_me, card);
-                    int tributes = DuelRules.TributesRequired(card.Data);
+                    int tributes = _engine.TributesRequired(card);
                     list.Add((tributes > 0 ? $"Tribute Summon ({tributes})" : "Normal Summon", summon, why, () => BeginSummon(card, false)));
                     list.Add((tributes > 0 ? $"Tribute Set ({tributes})" : "Set (face-down DEF)", summon, why, () => BeginSummon(card, true)));
                 }
@@ -719,6 +719,11 @@ namespace DuelGenesis.Dueling
                 {
                     bool can = _engine.CanActivate(_me, card);
                     list.Add(("Activate", can, can ? "" : _engine.WhyCannotActivate(_me, card), () => _engine.Activate(_me, card)));
+                }
+                else if (s != null && CardEffects.Get(card.Data)?.HasFaceUpEffect == true)
+                {
+                    bool can = _engine.CanActivate(_me, card);
+                    list.Add(("Use Effect", can, can ? "" : "Only during your Main Phase, when its requirements are met.", () => _engine.Activate(_me, card)));
                 }
             }
             return list;
@@ -775,7 +780,7 @@ namespace DuelGenesis.Dueling
 
         private void BeginSummon(DuelCard card, bool set)
         {
-            int tributes = DuelRules.TributesRequired(card.Data);
+            int tributes = _engine.TributesRequired(card);
             if (tributes > 0)
             {
                 _engine.NormalSummon(_me, card, set);   // the engine asks which monsters to Tribute
@@ -851,6 +856,12 @@ namespace DuelGenesis.Dueling
                 CancelMode();
                 _shownChoice = choice;
                 _selected.Clear();
+                if (choice.Kind == DuelChoiceKind.SelectOption)
+                {
+                    ShowOptionPrompt(choice);
+                    return;
+                }
+                _promptConfirm.gameObject.SetActive(true);
                 ShowPromptFor(choice.Title, choice.Prompt + SelectionHint(choice), choice.Candidates, selectable: true);
                 _promptPass.gameObject.SetActive(choice.IsResponseWindow || choice.MinCount == 0);
                 UiKit.SetButtonLabel(_promptPass, choice.IsResponseWindow ? "DON'T ACTIVATE" : "SKIP");
@@ -859,9 +870,35 @@ namespace DuelGenesis.Dueling
                 if (choice.IsResponseWindow) PushBanner("CHAIN?", choice.Prompt, DuelVisualResources.Gold);
             }
 
+            if (choice.Kind == DuelChoiceKind.SelectOption) return;
             _promptConfirm.interactable = _selected.Count >= Mathf.Max(1, choice.MinCount) && _selected.Count <= choice.MaxCount;
             foreach (var (card, frame) in _stripItems)
                 frame.color = _selected.Contains(card) ? DuelVisualResources.Cyan : new Color(1f, 0.78f, 0.3f, 0.5f);
+        }
+
+        /// <summary>"Choose an effect" style choices: one button per option.</summary>
+        private void ShowOptionPrompt(DuelChoice choice)
+        {
+            ShowPromptFor(choice.Title, choice.Prompt, new List<DuelCard>(), selectable: false);
+            _promptConfirm.gameObject.SetActive(false);
+            _promptPass.gameObject.SetActive(false);
+            _promptCancel.gameObject.SetActive(false);
+            int count = choice.Options?.Count ?? 0;
+            const float w = 300f, h = 52f, gap = 14f;
+            int perRow = Mathf.Min(3, Mathf.Max(1, count));
+            for (int i = 0; i < count; i++)
+            {
+                int index = i;
+                Button b = UiKit.Button(_promptStrip, "Option " + i, choice.Options[i], DuelVisualResources.Cyan, () =>
+                {
+                    if (_engine.PendingChoice == choice) _engine.SubmitOption(index);
+                }, 17);
+                int row = i / perRow, col = i % perRow;
+                int inRow = Mathf.Min(perRow, count - row * perRow);
+                float x = -(inRow * (w + gap) - gap) * 0.5f + col * (w + gap) + w * 0.5f;
+                float y = (count > perRow ? 34f : 0f) - row * (h + gap);
+                UiKit.Place((RectTransform)b.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(x, y), new Vector2(w, h));
+            }
         }
 
         private static string SelectionHint(DuelChoice choice)

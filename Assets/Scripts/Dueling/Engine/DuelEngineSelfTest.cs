@@ -26,6 +26,7 @@ namespace DuelGenesis.Dueling
                 CheckHandLimit(failures);
                 CheckEffects(failures);
                 CheckFlipEffects(failures);
+                CheckFieldSpells(failures);
                 SimulateDuels(simulatedDuels, failures);
             }
             catch (Exception exception)
@@ -179,6 +180,43 @@ namespace DuelGenesis.Dueling
             Expect(failures, e.Me(0).Hand.Count == 7, $"Hand should be 7 before the End Phase (was {e.Me(0).Hand.Count}).");
             e.EndTurn(0);
             Expect(failures, e.Me(0).Hand.Count == DuelRules.HandSizeLimit, $"End Phase should discard down to 6 (was {e.Me(0).Hand.Count}).");
+        }
+
+        private static void CheckFieldSpells(List<string> failures)
+        {
+            // Fusion Gate: activate from the hand, then use it face-up to Fusion Summon by banishing the materials.
+            {
+                List<CardData> a = VanillaDeck();
+                a[39] = Spell("Fusion Gate", "Field", "While this card is on the field: The turn player can Fusion Summon 1 Fusion Monster from their Extra Deck, by banishing Fusion Materials listed on it from their hand or field.");
+                a[38] = Monster("Baby Dragon", 3, 1200, 700, "Dragon / Normal", "WIND");
+                a[37] = Monster("Alligator's Sword", 4, 1500, 1200, "Beast / Normal", "EARTH");
+                a.Add(new CardData((_id++).ToString(), "Alligator's Sword Dragon", CardKind.Monster, CardRarity.Common, "WIND", "Dragon / Fusion / Effect", 5, 1700, 1500,
+                    "\"Baby Dragon\" + \"Alligator's Sword\"\nThis card can attack directly...", CardFrameKind.FusionMonster));
+                DuelEngine e = NewEngine(a, VanillaDeck(), 21, aiBoth: true);
+                e.StartDuel(0);
+                DuelCard gate = e.DebugPutInHand(0, "Fusion Gate");
+                e.DebugPutInHand(0, "Baby Dragon");
+                e.DebugPutInHand(0, "Alligator's Sword");
+                Expect(failures, e.Activate(0, gate), "Fusion Gate could not be activated from the hand.");
+                Expect(failures, e.FindBackrow(gate) != null, "Fusion Gate should stay on the field.");
+                Expect(failures, e.CanActivate(0, gate), "Fusion Gate's on-field Fusion Summon should be usable.");
+                e.Activate(0, gate);
+                Expect(failures, e.Me(0).MonstersOnField.Any(m => m.Name == "Alligator's Sword Dragon"), "Fusion Gate should Fusion Summon Alligator's Sword Dragon.");
+                Expect(failures, e.Me(0).Banished.Count == 2, $"Both materials should be banished (banished {e.Me(0).Banished.Count}).");
+            }
+            // A Legendary Ocean: a Level 5 WATER monster needs no Tribute.
+            {
+                List<CardData> a = VanillaDeck();
+                a[39] = Spell("A Legendary Ocean", "Field", "All WATER monsters on the field gain 200 ATK/DEF. Reduce the Level of all WATER monsters in both players' hands and on the field by 1.");
+                a[38] = Monster("Big Fish", 5, 1900, 1200, "Fish / Normal", "WATER");
+                DuelEngine e = NewEngine(a, VanillaDeck(), 22, aiBoth: true);
+                e.StartDuel(0);
+                DuelCard fish = e.DebugPutInHand(0, "Big Fish");
+                Expect(failures, e.TributesRequired(fish) == 1, "A Level 5 needs 1 Tribute without A Legendary Ocean.");
+                e.Activate(0, e.DebugPutInHand(0, "A Legendary Ocean"));
+                Expect(failures, e.TributesRequired(fish) == 0, "A Legendary Ocean should make the Level 5 WATER monster a Level 4.");
+                Expect(failures, e.NormalSummon(0, fish, set: false) && e.GetAttack(e.FindMonster(fish)) == 2100, "Big Fish should be summoned without Tribute with 2100 ATK.");
+            }
         }
 
         private static void CheckFlipEffects(List<string> failures)
