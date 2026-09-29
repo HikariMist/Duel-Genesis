@@ -143,25 +143,26 @@ namespace DuelGenesis.Characters
         {
             if (!IsOpen) return;
             GUI.depth = -40;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(UiScale, UiScale, 1f));   // same size on any screen
             GUI.backgroundColor = new Color(0.22f, 0.26f, 0.4f, 1f);   // rounded buttons: deep blue unless a caller tints them
 
-            float previewW = Screen.width * 0.55f;
-            float w = Screen.width - previewW;
+            float previewW = VW * 0.55f;
+            float w = VW - previewW;
             float x = previewW;
 
             GenesisTheme.Box(new Rect(0f, 0f, previewW, 72f), new Color(0.025f, 0.035f, 0.07f, 0.78f));
-            GenesisTheme.Box(new Rect(previewW - 3f, 0f, 3f, Screen.height), GenesisTheme.Cyan);
+            GenesisTheme.Box(new Rect(previewW - 3f, 0f, 3f, VH), GenesisTheme.Cyan);
             GUI.Label(new Rect(26f, 15f, previewW - 52f, 28f), "LIVE DUELIST PREVIEW", Style(18, FontStyle.Bold, Color.white));
             GUI.Label(new Rect(26f, 42f, previewW - 52f, 22f), "Drag a control and watch the character update.", Style(12, FontStyle.Normal, GenesisTheme.Muted));
             DrawPreviewCorners(previewW);
             if (Event.current.type == EventType.Repaint)
             {
-                GUI.DrawTexture(new Rect(0f, 72f, previewW - 3f, Screen.height - 72f), Vignette(), ScaleMode.StretchToFill, true);
+                GUI.DrawTexture(new Rect(0f, 72f, previewW - 3f, VH - 72f), Vignette(), ScaleMode.StretchToFill, true);
                 Texture2D logo = Logo();
-                if (logo != null) GUI.DrawTexture(new Rect(previewW * 0.5f - 60f, Screen.height - 190f, 120f, 112f), logo, ScaleMode.ScaleToFit, true);
+                if (logo != null) GUI.DrawTexture(new Rect(previewW * 0.5f - 60f, VH - 190f, 120f, 112f), logo, ScaleMode.ScaleToFit, true);
             }
 
-            GenesisTheme.Box(new Rect(x, 0f, w, Screen.height), GenesisTheme.Background);
+            GenesisTheme.Box(new Rect(x, 0f, w, VH), GenesisTheme.Background);
             GenesisTheme.Box(new Rect(x, 0f, w, 5f), GenesisTheme.Purple);
             GenesisTheme.Box(new Rect(x, 5f, w, 92f), GenesisTheme.PanelAlt);
             GUI.Label(new Rect(x + 24f, 16f, w - 48f, 18f), "DUEL : GENESIS", Style(12, FontStyle.Bold, GenesisTheme.Gold));
@@ -183,7 +184,7 @@ namespace DuelGenesis.Characters
                 }
             }
 
-            Rect contentCard = new Rect(x + 18f, 153f, w - 36f, Screen.height - 247f);
+            Rect contentCard = new Rect(x + 18f, 153f, w - 36f, VH - 247f);
             GenesisTheme.Box(contentCard, GenesisTheme.Panel);
             GenesisTheme.Box(new Rect(contentCard.x, contentCard.y, 3f, contentCard.height), new Color(GenesisTheme.Purple.r, GenesisTheme.Purple.g, GenesisTheme.Purple.b, 0.75f));
             DrawHudOverlay(contentCard);
@@ -203,7 +204,7 @@ namespace DuelGenesis.Characters
 
             FlushLiveShapes();
 
-            float by = Screen.height - 82f;
+            float by = VH - 82f;
             GenesisTheme.Box(new Rect(x, by - 8f, w, 90f), new Color(0.045f, 0.055f, 0.09f, 0.99f));
             float bw = (w - 66f) / 4f;
             if (ActionButton(new Rect(x + 24f, by, bw, 50f), "RANDOMIZE", GenesisTheme.PanelAlt)) Randomize();
@@ -212,8 +213,8 @@ namespace DuelGenesis.Characters
             if (ActionButton(new Rect(x + 42f + bw * 3f, by, bw, 50f), "SAVE", GenesisTheme.Green)) Close(save: true);
 
             float px = previewW * 0.5f;
-            if (ActionButton(new Rect(px - 134f, Screen.height - 68f, 114f, 42f), "◀ TURN", GenesisTheme.PanelAlt)) _spin -= 120f * Time.unscaledDeltaTime;
-            if (ActionButton(new Rect(px + 20f, Screen.height - 68f, 114f, 42f), "TURN ▶", GenesisTheme.PanelAlt)) _spin += 120f * Time.unscaledDeltaTime;
+            if (ActionButton(new Rect(px - 134f, VH - 68f, 114f, 42f), "◀ TURN", GenesisTheme.PanelAlt)) _spin -= 120f * Time.unscaledDeltaTime;
+            if (ActionButton(new Rect(px + 20f, VH - 68f, 114f, 42f), "TURN ▶", GenesisTheme.PanelAlt)) _spin += 120f * Time.unscaledDeltaTime;
         }
 
         private void DrawBody()
@@ -709,6 +710,11 @@ namespace DuelGenesis.Characters
             // ------------------------------------------------------------------ look and feel
 
         private GameObject _studio;
+
+        /// <summary>The creator is laid out for 1080p and scaled to the real screen, so it keeps its size on any monitor.</summary>
+        private static float UiScale => Mathf.Max(0.5f, UnityEngine.Screen.height / 1080f);
+        private static float VW => UnityEngine.Screen.width / UiScale;
+        private static float VH => UnityEngine.Screen.height / UiScale;
         private static Texture2D _round, _roundBright, _vignette, _logo;
 
         /// <summary>Studio lighting on the duelist (key, fill and a coloured rim) and a spinning holo ring at their feet.</summary>
