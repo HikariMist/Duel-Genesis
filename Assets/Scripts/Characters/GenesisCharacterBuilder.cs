@@ -146,24 +146,22 @@ namespace DuelGenesis.Characters
         {
             GameObject item = Object.Instantiate(prefab);
             float itemScale = ItemScale(proportion);
-            bool millenniumPuzzle = slot == GenesisSlot.Neck && id == 6;
-
-            if (millenniumPuzzle && WearMillenniumPuzzle(root, item, bones, colors, itemScale))
-            {
-                Object.Destroy(item);
-                return;
-            }
+            // Items can carry extra bones the figure doesn't have (the Millennium Puzzle's chain and pendant, the
+            // Ring's swing bones). Graft those onto the figure's matching parent bone so they keep their place.
+            var bonesHere = new Dictionary<string, Transform>(bones);   // this item's grafts stay its own
+            AddBoneAliases(bonesHere);
+            GraftExtraBones(item, bonesHere);
 
             int colour = 0;
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                Transform[] mapped = smr.bones.Select(b => b != null && bones.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
+                Transform[] mapped = smr.bones.Select(b => b != null && bonesHere.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
                 if (mapped.Any(b => b == null) && mapped.Count(b => b == null) > mapped.Length / 3) continue;
                 for (int i = 0; i < mapped.Length; i++)
-                    if (mapped[i] == null) mapped[i] = bones.TryGetValue("hip", out Transform hip) ? hip : root;
+                    if (mapped[i] == null) mapped[i] = bonesHere.TryGetValue("hip", out Transform hip) ? hip : root;
 
                 smr.bones = mapped;
-                if (smr.rootBone != null && bones.TryGetValue(smr.rootBone.name, out Transform rb)) smr.rootBone = rb;
+                if (smr.rootBone != null && bonesHere.TryGetValue(smr.rootBone.name, out Transform rb)) smr.rootBone = rb;
                 smr.transform.SetParent(root, false);
                 smr.transform.localPosition = Vector3.zero;
                 smr.transform.localRotation = Quaternion.identity;
@@ -178,13 +176,56 @@ namespace DuelGenesis.Characters
             foreach (MeshRenderer mr in item.GetComponentsInChildren<MeshRenderer>(true))
             {
                 Transform p = mr.transform.parent;
-                while (p != null && !bones.ContainsKey(p.name)) p = p.parent;
+                while (p != null && !bonesHere.ContainsKey(p.name)) p = p.parent;
                 if (p == null) continue;
-                mr.transform.SetParent(bones[p.name], true);
+                mr.transform.SetParent(bonesHere[p.name], true);
                 mr.transform.localScale *= itemScale;
             }
 
             Object.Destroy(item);
+        }
+
+        /// <summary>
+        /// For every bone an item's skin uses that the figure lacks, moves that bone (with its children) under the
+        /// figure bone its item-side parent corresponds to, keeping its local pose, and registers it by name.
+        /// </summary>
+        /// <summary>Genesis 8 / generic names used by some items, pointed at the matching Genesis 9 bones.</summary>
+        private static void AddBoneAliases(Dictionary<string, Transform> bones)
+        {
+            void Alias(string alias, params string[] targets)
+            {
+                if (bones.ContainsKey(alias)) return;
+                foreach (string t in targets)
+                    if (bones.TryGetValue(t, out Transform b)) { bones[alias] = b; return; }
+            }
+            Alias("neckLower", "neck1"); Alias("neckUpper", "neck2"); Alias("neck", "neck1");
+            Alias("chestUpper", "spine4"); Alias("chestLower", "spine3");
+            Alias("abdomenUpper", "spine2"); Alias("abdomenLower", "spine1");
+            Alias("lCollar", "l_shoulder"); Alias("rCollar", "r_shoulder");
+        }
+
+        private static void GraftExtraBones(GameObject item, Dictionary<string, Transform> bones)
+        {
+            var extras = new HashSet<Transform>();
+            foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                foreach (Transform b in smr.bones)
+                    if (b != null && !bones.ContainsKey(b.name)) extras.Add(b);
+            foreach (Transform b in extras.ToList())
+            {
+                // Graft at the topmost unknown ancestor so chains of extra bones move together.
+                Transform top = b;
+                while (top.parent != null && !bones.ContainsKey(top.parent.name) && top.parent != item.transform) top = top.parent;
+                if (top.parent == null || !bones.TryGetValue(top.parent.name, out Transform anchor)) continue;
+                Vector3 lp = top.localPosition;
+                Quaternion lr = top.localRotation;
+                Vector3 ls = top.localScale;
+                top.SetParent(anchor, false);
+                top.localPosition = lp;
+                top.localRotation = lr;
+                top.localScale = ls;
+                foreach (Transform t in top.GetComponentsInChildren<Transform>(true))
+                    if (!bones.ContainsKey(t.name)) bones[t.name] = t;
+            }
         }
 
         private static bool WearMillenniumPuzzle(Transform root, GameObject sourceItem, Dictionary<string, Transform> bones, Color[] colors, float scale)

@@ -78,6 +78,7 @@ namespace DuelGenesis.Characters
 
             var go = new GameObject("Character Creator Camera");
             _camera = go.AddComponent<Camera>();
+            BuildStudio();
             _camera.depth = 50;
             _camera.fieldOfView = 30f;
             _camera.nearClipPlane = 0.05f;
@@ -100,6 +101,7 @@ namespace DuelGenesis.Characters
             else if (_character != null) _character.Rebuild(_before);
             if (_character != null) _character.transform.localRotation = _avatarRest;
             if (_camera != null) Destroy(_camera.gameObject);
+            if (_studio != null) Destroy(_studio);
             _controller?.SetMovementEnabled(true);
             _thirdPerson?.SetLookEnabled(true);
         }
@@ -141,22 +143,32 @@ namespace DuelGenesis.Characters
         {
             if (!IsOpen) return;
             GUI.depth = -40;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(UiScale, UiScale, 1f));   // same size on any screen
+            GUI.backgroundColor = GenesisSciFiSkin.Ready ? new Color(0.35f, 0.48f, 0.85f, 1f) : new Color(0.22f, 0.26f, 0.4f, 1f);
 
-            float previewW = Screen.width * 0.55f;
-            float w = Screen.width - previewW;
+            float previewW = VW * 0.55f;
+            float w = VW - previewW;
             float x = previewW;
 
             GenesisTheme.Box(new Rect(0f, 0f, previewW, 72f), new Color(0.025f, 0.035f, 0.07f, 0.78f));
-            GenesisTheme.Box(new Rect(previewW - 3f, 0f, 3f, Screen.height), GenesisTheme.Cyan);
+            GenesisTheme.Box(new Rect(previewW - 3f, 0f, 3f, VH), GenesisTheme.Cyan);
             GUI.Label(new Rect(26f, 15f, previewW - 52f, 28f), "LIVE DUELIST PREVIEW", Style(18, FontStyle.Bold, Color.white));
             GUI.Label(new Rect(26f, 42f, previewW - 52f, 22f), "Drag a control and watch the character update.", Style(12, FontStyle.Normal, GenesisTheme.Muted));
             DrawPreviewCorners(previewW);
+            if (Event.current.type == EventType.Repaint)
+            {
+                GUI.DrawTexture(new Rect(0f, 72f, previewW - 3f, VH - 72f), Vignette(), ScaleMode.StretchToFill, true);
+                Texture2D logo = Logo();
+                if (logo != null) GUI.DrawTexture(new Rect(24f, VH - 150f, 130f, 121f), logo, ScaleMode.ScaleToFit, true);
+            }
 
-            GenesisTheme.Box(new Rect(x, 0f, w, Screen.height), GenesisTheme.Background);
+            GenesisTheme.Box(new Rect(x, 0f, w, VH), GenesisTheme.Background);
+            GenesisSciFiSkin.Panel(new Rect(x + 6f, 4f, w - 10f, VH - 8f), "Extra_panel_glass_notches", new Color(0.3f, 0.42f, 0.75f, 0.45f), 28);
             GenesisTheme.Box(new Rect(x, 0f, w, 5f), GenesisTheme.Purple);
             GenesisTheme.Box(new Rect(x, 5f, w, 92f), GenesisTheme.PanelAlt);
             GUI.Label(new Rect(x + 24f, 16f, w - 48f, 18f), "DUEL : GENESIS", Style(12, FontStyle.Bold, GenesisTheme.Gold));
             GUI.Label(new Rect(x + 24f, 34f, w - 48f, 36f), "CHARACTER CREATOR", Style(27, FontStyle.Bold, Color.white));
+            if (Logo() != null) GUI.DrawTexture(new Rect(x + w - 104f, 12f, 80f, 75f), Logo(), ScaleMode.ScaleToFit, true);
             GUI.Label(new Rect(x + 24f, 67f, w - 48f, 20f), "Create your duelist.", Style(12, FontStyle.Normal, GenesisTheme.Muted));
 
             string[] tabs = { "BODY", "FACE", "COLOURS", "OUTFIT" };
@@ -173,8 +185,9 @@ namespace DuelGenesis.Characters
                 }
             }
 
-            Rect contentCard = new Rect(x + 18f, 153f, w - 36f, Screen.height - 247f);
-            GenesisTheme.Box(contentCard, GenesisTheme.Panel);
+            Rect contentCard = new Rect(x + 18f, 153f, w - 36f, VH - 247f);
+            if (!GenesisSciFiSkin.Panel(contentCard, "Extra_panel_glass_screws", new Color(0.16f, 0.22f, 0.45f, 0.92f), 24))
+                GenesisTheme.Box(contentCard, GenesisTheme.Panel);
             GenesisTheme.Box(new Rect(contentCard.x, contentCard.y, 3f, contentCard.height), new Color(GenesisTheme.Purple.r, GenesisTheme.Purple.g, GenesisTheme.Purple.b, 0.75f));
             DrawHudOverlay(contentCard);
 
@@ -193,7 +206,7 @@ namespace DuelGenesis.Characters
 
             FlushLiveShapes();
 
-            float by = Screen.height - 82f;
+            float by = VH - 82f;
             GenesisTheme.Box(new Rect(x, by - 8f, w, 90f), new Color(0.045f, 0.055f, 0.09f, 0.99f));
             float bw = (w - 66f) / 4f;
             if (ActionButton(new Rect(x + 24f, by, bw, 50f), "RANDOMIZE", GenesisTheme.PanelAlt)) Randomize();
@@ -202,12 +215,15 @@ namespace DuelGenesis.Characters
             if (ActionButton(new Rect(x + 42f + bw * 3f, by, bw, 50f), "SAVE", GenesisTheme.Green)) Close(save: true);
 
             float px = previewW * 0.5f;
-            if (ActionButton(new Rect(px - 134f, Screen.height - 68f, 114f, 42f), "◀ TURN", GenesisTheme.PanelAlt)) _spin -= 120f * Time.unscaledDeltaTime;
-            if (ActionButton(new Rect(px + 20f, Screen.height - 68f, 114f, 42f), "TURN ▶", GenesisTheme.PanelAlt)) _spin += 120f * Time.unscaledDeltaTime;
+            if (ActionButton(new Rect(px - 134f, VH - 68f, 114f, 42f), "◀ TURN", GenesisTheme.PanelAlt)) _spin -= 120f * Time.unscaledDeltaTime;
+            if (ActionButton(new Rect(px + 20f, VH - 68f, 114f, 42f), "TURN ▶", GenesisTheme.PanelAlt)) _spin += 120f * Time.unscaledDeltaTime;
         }
 
         private void DrawBody()
         {
+            Header("DUELIST NAME");
+            string typed = GUILayout.TextField(_look.name ?? "", 20, NameField(), GUILayout.Height(38));
+            if (typed != _look.name) _look.name = typed;
             Header("GENDER");
             GUILayout.BeginHorizontal();
             foreach (GenesisGender g in new[] { GenesisGender.Female, GenesisGender.Male })
@@ -400,8 +416,9 @@ namespace DuelGenesis.Characters
         {
             bool hover = card.Contains(Event.current.mousePosition);
             Color panel = hover ? new Color(0.075f, 0.09f, 0.145f, 0.98f) : new Color(0.048f, 0.06f, 0.105f, 0.96f);
-            GenesisTheme.Box(card, panel);
-            GenesisTheme.Box(new Rect(card.x, card.y, 3f, card.height), accent);
+            if (!GenesisSciFiSkin.Panel(card, "Extra_panel_glass", hover ? new Color(0.32f, 0.42f, 0.75f, 0.95f) : new Color(0.2f, 0.27f, 0.5f, 0.9f), 16))
+                GenesisTheme.Box(card, panel);
+            GenesisTheme.Box(new Rect(card.x, card.y + 4f, 3f, card.height - 8f), accent);
             GenesisTheme.Box(new Rect(card.x + 3f, card.y, card.width - 3f, 1f), new Color(accent.r, accent.g, accent.b, hover ? 0.45f : 0.20f));
             GenesisTheme.Box(new Rect(card.x + 3f, card.yMax - 1f, card.width - 3f, 1f), new Color(0f, 0f, 0f, 0.34f));
 
@@ -551,8 +568,16 @@ namespace DuelGenesis.Characters
             foreach (Color c in colours)
             {
                 Rect r = GUILayoutUtility.GetRect(36, 36, GUILayout.Width(36), GUILayout.Height(36));
-                GenesisTheme.Box(new Rect(r.x - 2f, r.y - 2f, r.width + 4f, r.height + 4f), new Color(1f, 1f, 1f, 0.15f));
-                GenesisTheme.Box(r, c);
+                bool hover = r.Contains(Event.current.mousePosition);
+                if (Event.current.type == EventType.Repaint)
+                {
+                    Color old = GUI.color;
+                    GUI.color = hover ? Color.white : new Color(1f, 1f, 1f, 0.25f);
+                    GUI.DrawTexture(new Rect(r.x - 3f, r.y - 3f, r.width + 6f, r.height + 6f), Round(), ScaleMode.StretchToFill, true);
+                    GUI.color = c;
+                    GUI.DrawTexture(r, Round(), ScaleMode.StretchToFill, true);
+                    GUI.color = old;
+                }
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) pick(c);
             }
             GUILayout.EndHorizontal();
@@ -598,6 +623,15 @@ namespace DuelGenesis.Characters
 
         private static bool TabButton(Rect rect, string label, bool active)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(14, active ? Color.white : new Color(0.8f, 0.85f, 0.95f));
+            if (sci != null)
+            {
+                Color was = GUI.backgroundColor;
+                GUI.backgroundColor = active ? GenesisTheme.Purple : new Color(0.22f, 0.27f, 0.42f, 1f);
+                bool hit = GUI.Button(rect, label, sci);
+                GUI.backgroundColor = was;
+                return hit;
+            }
             Color old = GUI.backgroundColor;
             GUI.backgroundColor = active ? GenesisTheme.Purple : new Color(0.16f, 0.18f, 0.25f, 1f);
             bool pressed = GUI.Button(rect, label, Button(active));
@@ -608,6 +642,15 @@ namespace DuelGenesis.Characters
 
         private static bool ActionButton(Rect rect, string label, Color color)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(15);
+            if (sci != null)
+            {
+                Color was = GUI.backgroundColor;
+                GUI.backgroundColor = color == GenesisTheme.PanelAlt ? new Color(0.35f, 0.4f, 0.55f, 1f) : color;
+                bool hit = GUI.Button(rect, label, sci);
+                GUI.backgroundColor = was;
+                return hit;
+            }
             Color old = GUI.backgroundColor;
             GUI.backgroundColor = color;
             bool pressed = GUI.Button(rect, label, Button(false));
@@ -654,27 +697,139 @@ namespace DuelGenesis.Characters
         private static GUIStyle MiniButton() =>
             new GUIStyle(GUI.skin.button)
             {
+                border = new RectOffset(14, 14, 14, 14),
+                normal = { background = Round(), textColor = GenesisTheme.Muted },
+                hover = { background = RoundBright(), textColor = Color.white },
+                active = { background = RoundBright(), textColor = Color.white },
                 fontSize = 9,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
-                padding = new RectOffset(4, 4, 2, 2),
-                normal = { textColor = GenesisTheme.Muted },
-                hover = { textColor = Color.white },
-                active = { textColor = Color.white }
+                padding = new RectOffset(4, 4, 2, 2)
             };
 
         private static GUIStyle Button(bool on)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(13, on ? GenesisTheme.Cyan : Color.white);
+            if (sci != null) return sci;
             var s = new GUIStyle(GUI.skin.button)
             {
                 fontSize = 13,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
-                padding = new RectOffset(8, 8, 4, 4)
+                padding = new RectOffset(8, 8, 4, 4),
+                border = new RectOffset(14, 14, 14, 14)
             };
-            s.normal.textColor = on ? Color.white : new Color(0.92f, 0.95f, 1f, 1f);
+            s.normal.background = Round();
+            s.hover.background = RoundBright();
+            s.active.background = RoundBright();
+            s.focused.background = Round();
+            s.onNormal.background = RoundBright();
+            s.normal.textColor = on ? GenesisTheme.Cyan : new Color(0.92f, 0.95f, 1f, 1f);
+            s.onNormal.textColor = GenesisTheme.Cyan;
             s.hover.textColor = Color.white;
             s.active.textColor = Color.white;
+            return s;
+        }
+            // ------------------------------------------------------------------ look and feel
+
+        private GameObject _studio;
+
+        /// <summary>The creator is laid out for 1080p and scaled to the real screen, so it keeps its size on any monitor.</summary>
+        private static float UiScale => Mathf.Max(0.5f, UnityEngine.Screen.height / 1080f);
+        private static float VW => UnityEngine.Screen.width / UiScale;
+        private static float VH => UnityEngine.Screen.height / UiScale;
+        private static Texture2D _round, _roundBright, _vignette, _logo;
+
+        /// <summary>Studio lighting on the duelist (key, fill and a coloured rim) and a spinning holo ring at their feet.</summary>
+        private void BuildStudio()
+        {
+            if (_character == null) return;
+            _studio = new GameObject("Character Creator Studio");
+            Transform t = _character.transform;
+            Transform owner = t.parent != null ? t.parent : t;
+            _studio.transform.SetPositionAndRotation(t.position, owner.rotation);
+            void Lamp(string n, Vector3 local, Color c, float intensity, float range)
+            {
+                var go = new GameObject(n);
+                go.transform.SetParent(_studio.transform, false);
+                go.transform.localPosition = local;
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Point;
+                l.color = c;
+                l.intensity = intensity;
+                l.range = range;
+                l.shadows = LightShadows.None;
+            }
+            Lamp("Key", new Vector3(0.9f, 2.1f, 1.6f), new Color(1f, 0.95f, 0.9f), 6f, 6f);
+            Lamp("Fill", new Vector3(-1.3f, 1.4f, 1.4f), new Color(0.75f, 0.85f, 1f), 3f, 5f);
+            Lamp("Rim", new Vector3(0f, 2.2f, -1.4f), GenesisTheme.Purple, 5f, 5f);
+
+            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            var ringMat = new Material(unlit != null ? unlit : Shader.Find("Unlit/Color")) { color = GenesisTheme.Cyan };
+            var ring = new GameObject("Holo Ring").transform;
+            ring.SetParent(_studio.transform, false);
+            ring.localPosition = new Vector3(0f, 0.02f, 0f);
+            for (int i = 0; i < 64; i++)
+            {
+                if (i % 8 == 7) continue;   // gaps make it read as a hologram
+                var seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(seg.GetComponent<Collider>());
+                seg.transform.SetParent(ring, false);
+                float a = i * 360f / 64f;
+                seg.transform.localRotation = Quaternion.Euler(0f, a, 0f);
+                seg.transform.localPosition = Quaternion.Euler(0f, a, 0f) * Vector3.forward * 0.75f;
+                seg.transform.localScale = new Vector3(0.07f, 0.01f, 0.025f);
+                seg.GetComponent<Renderer>().sharedMaterial = ringMat;
+            }
+            ring.gameObject.AddComponent<DuelGenesis.Core.GenesisSpin>().degreesPerSecond = new Vector3(0f, 25f, 0f);
+        }
+
+        private static Texture2D Round() => _round != null ? _round : _round = RoundedTexture(new Color(1f, 1f, 1f, 1f), new Color(0.82f, 0.86f, 0.95f, 1f));
+        private static Texture2D RoundBright() => _roundBright != null ? _roundBright : _roundBright = RoundedTexture(new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 1f));
+
+        /// <summary>A white rounded rectangle (tinted by GUI.backgroundColor / GUI.color) with a soft top-to-bottom sheen.</summary>
+        private static Texture2D RoundedTexture(Color top, Color bottom)
+        {
+            const int size = 48, radius = 12;
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = Mathf.Max(0f, Mathf.Max(radius - x, x - (size - 1 - radius)));
+                float dy = Mathf.Max(0f, Mathf.Max(radius - y, y - (size - 1 - radius)));
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01(radius + 0.5f - d);
+                Color c = Color.Lerp(bottom, top, y / (float)(size - 1));
+                c.a = a;
+                t.SetPixel(x, y, c);
+            }
+            t.Apply();
+            return t;
+        }
+
+        private static Texture2D Vignette()
+        {
+            if (_vignette != null) return _vignette;
+            const int size = 128;
+            _vignette = new Texture2D(size, size, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = (x / (size - 1f) - 0.5f) * 2f, dy = (y / (size - 1f) - 0.45f) * 2f;
+                float r = Mathf.Sqrt(dx * dx * 0.8f + dy * dy);
+                _vignette.SetPixel(x, y, new Color(0.02f, 0.02f, 0.06f, Mathf.Clamp01((r - 0.55f) * 1.4f) * 0.85f));
+            }
+            _vignette.Apply();
+            return _vignette;
+        }
+
+        private static Texture2D Logo() => _logo != null ? _logo : _logo = Resources.Load<Texture2D>("DuelGenesis/DuelGenesisLogo");
+
+        private static GUIStyle NameField()
+        {
+            var s = new GUIStyle(GUI.skin.textField) { fontSize = 18, fontStyle = FontStyle.Bold, padding = new RectOffset(12, 12, 8, 8), border = new RectOffset(14, 14, 14, 14) };
+            s.normal.background = s.focused.background = s.hover.background = Round();
+            s.normal.textColor = s.focused.textColor = s.hover.textColor = Color.white;
             return s;
         }
     }

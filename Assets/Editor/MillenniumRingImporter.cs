@@ -108,6 +108,28 @@ namespace DuelGenesis.EditorTools
             Quaternion animePitch = Quaternion.Euler(-11f, 0f, 0f);
             Vector3 animeOffsetNeck = new Vector3(0f, -0.018f, 0.052f);
 
+            // Size and place the Ring from the figure's own height (the OBJ and the figure use different units):
+            // about 11% of body height across, hanging on the upper chest in front of the neck.
+            float figureH = 1.7f;
+            var bodySmr = characterAssets.basePrefab.GetComponentsInChildren<SkinnedMeshRenderer>(true).FirstOrDefault(r => r.name == "Genesis9.Shape");
+            if (bodySmr != null && bodySmr.sharedMesh != null)
+                figureH = bodySmr.sharedMesh.bounds.size.y * (characterAssets.basePrefab.transform.worldToLocalMatrix * bodySmr.transform.localToWorldMatrix).lossyScale.y;
+            bool haveObj = false;
+            Bounds objBounds = default;
+            foreach (MeshFilter f in source.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (f.sharedMesh == null) continue;
+                Matrix4x4 rel = source.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                foreach (Vector3 v in f.sharedMesh.vertices)
+                {
+                    Vector3 p = rel.MultiplyPoint3x4(v);
+                    if (!haveObj) { objBounds = new Bounds(p, Vector3.zero); haveObj = true; } else objBounds.Encapsulate(p);
+                }
+            }
+            float objSize = haveObj ? Mathf.Max(objBounds.size.x, objBounds.size.y, 0.0001f) : 1f;
+            float fit = figureH * 0.11f / objSize;
+            Vector3 hangAt = neckAnchorRoot + new Vector3(0f, -figureH * 0.13f, figureH * 0.075f);
+
             int created = 0;
             foreach (MeshFilter sourceFilter in source.GetComponentsInChildren<MeshFilter>(true))
             {
@@ -120,9 +142,8 @@ namespace DuelGenesis.EditorTools
                 Vector3[] vertices = mesh.vertices;
                 for (int i = 0; i < vertices.Length; i++)
                 {
-                    Vector3 pNeck = relative.MultiplyPoint3x4(vertices[i]);
-                    pNeck = animePitch * pNeck + animeOffsetNeck;
-                    vertices[i] = neckRest.MultiplyPoint3x4(pNeck);
+                    Vector3 p = relative.MultiplyPoint3x4(vertices[i]) - objBounds.center;
+                    vertices[i] = hangAt + animePitch * (p * fit);   // figure-root space
                 }
                 mesh.vertices = vertices;
 
@@ -131,8 +152,7 @@ namespace DuelGenesis.EditorTools
                 {
                     for (int i = 0; i < normals.Length; i++)
                     {
-                        Vector3 nNeck = animePitch * relative.MultiplyVector(normals[i]);
-                        normals[i] = neckRest.MultiplyVector(nNeck).normalized;
+                        normals[i] = (animePitch * relative.MultiplyVector(normals[i])).normalized;
                     }
                     mesh.normals = normals;
                 }
