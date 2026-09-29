@@ -46,7 +46,7 @@ namespace DuelGenesis.Characters
                 GameObject prefab = assets.Find(equip.slot, equip.id);
                 if (prefab == null) continue;
 
-                Wear(root.transform, prefab, bones, equip.colors, equip.proportion);
+                Wear(root.transform, prefab, bones, equip.slot, equip.id, equip.colors, equip.proportion);
 
                 GenesisCharacterLibrary.Item entry = library?.Find(equip.slot, equip.id);
                 GenesisCharacterLibrary.Fit f = entry?.FitFor(appearance.gender);
@@ -142,11 +142,12 @@ namespace DuelGenesis.Characters
 
         private static readonly Color DefaultSkin = new Color(0.7725f, 0.4784f, 0.3765f, 1f);
 
-        private static void Wear(Transform root, GameObject prefab, Dictionary<string, Transform> bones, Color[] colors, float proportion)
+        private static void Wear(Transform root, GameObject prefab, Dictionary<string, Transform> bones, GenesisSlot slot, int id, Color[] colors, float proportion)
         {
             GameObject item = Object.Instantiate(prefab);
             int colour = 0;
             float itemScale = ItemScale(proportion);
+            bool millenniumPuzzle = slot == GenesisSlot.Neck && id == 6;
 
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
@@ -162,7 +163,7 @@ namespace DuelGenesis.Characters
                 smr.transform.localRotation = Quaternion.identity;
                 smr.transform.localScale = Vector3.one;
 
-                ScaleSkinnedGeometry(smr, itemScale);
+                TransformSkinnedGeometry(smr, itemScale, millenniumPuzzle ? -24f : 0f, millenniumPuzzle ? 0.025f : 0f);
 
                 if (colors != null)
                     foreach (Material m in smr.materials)
@@ -177,28 +178,54 @@ namespace DuelGenesis.Characters
                 {
                     mr.transform.SetParent(bones[p.name], true);
                     mr.transform.localScale *= itemScale;
+                    if (millenniumPuzzle) TiltRigidMillenniumPuzzle(mr, root);
                 }
             }
             Object.Destroy(item);
         }
 
-        private static void ScaleSkinnedGeometry(SkinnedMeshRenderer smr, float scale)
+        private static void TransformSkinnedGeometry(SkinnedMeshRenderer smr, float scale, float pitchDegrees, float forwardOffset)
         {
-            if (smr == null || smr.sharedMesh == null || Mathf.Abs(scale - 1f) < 0.001f) return;
+            if (smr == null || smr.sharedMesh == null) return;
+            bool resize = Mathf.Abs(scale - 1f) >= 0.001f;
+            bool tilt = Mathf.Abs(pitchDegrees) >= 0.001f || Mathf.Abs(forwardOffset) >= 0.0001f;
+            if (!resize && !tilt) return;
 
             Mesh source = smr.sharedMesh;
             Mesh copy = Object.Instantiate(source);
-            copy.name = source.name + " (Duel Genesis Sized)";
+            copy.name = source.name + " (Duel Genesis Adjusted)";
             Vector3[] vertices = copy.vertices;
-            Vector3 pivot = copy.bounds.center;
+            Bounds bounds = copy.bounds;
+            Vector3 scalePivot = bounds.center;
+            Vector3 tiltPivot = new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
+            Quaternion rotation = Quaternion.Euler(pitchDegrees, 0f, 0f);
+
             for (int i = 0; i < vertices.Length; i++)
-                vertices[i] = pivot + (vertices[i] - pivot) * scale;
+            {
+                Vector3 v = scalePivot + (vertices[i] - scalePivot) * scale;
+                if (tilt)
+                {
+                    v = tiltPivot + rotation * (v - tiltPivot);
+                    v.z += forwardOffset;
+                }
+                vertices[i] = v;
+            }
+
             copy.vertices = vertices;
             copy.RecalculateBounds();
             smr.sharedMesh = copy;
 
             GenesisRuntimeMeshCleanup cleanup = smr.gameObject.AddComponent<GenesisRuntimeMeshCleanup>();
             cleanup.mesh = copy;
+        }
+
+        private static void TiltRigidMillenniumPuzzle(MeshRenderer renderer, Transform characterRoot)
+        {
+            if (renderer == null || characterRoot == null) return;
+            Bounds b = renderer.bounds;
+            Vector3 pivot = new Vector3(b.center.x, b.max.y, b.center.z);
+            renderer.transform.RotateAround(pivot, characterRoot.right, -24f);
+            renderer.transform.position += characterRoot.forward * 0.025f;
         }
 
         private static float ItemScale(float proportion) =>
