@@ -50,6 +50,19 @@ namespace DuelGenesis.EditorTools
                 return;
             }
 
+            GenesisCharacterAssets characterAssets = AssetDatabase.LoadAssetAtPath<GenesisCharacterAssets>(CharacterAssetsPath);
+            if (characterAssets == null || characterAssets.basePrefab == null)
+            {
+                Debug.LogError("Duel: Genesis: base Genesis character is unavailable; cannot bind Millennium Ring to the neck.");
+                return;
+            }
+
+            if (!TryGetNeckRestMatrix(characterAssets.basePrefab, out Matrix4x4 neckRest, out string neckBoneName))
+            {
+                Debug.LogError("Duel: Genesis: could not find a neck bone in the Genesis base character.");
+                return;
+            }
+
             if (force)
             {
                 AssetDatabase.DeleteAsset(PrefabPath);
@@ -81,17 +94,19 @@ namespace DuelGenesis.EditorTools
             source.transform.localScale = Vector3.one;
 
             GameObject root = new GameObject("Millennium Ring");
-            GameObject boneObject = new GameObject("neckLower");
+            GameObject boneObject = new GameObject(neckBoneName);
             Transform bone = boneObject.transform;
             bone.SetParent(root.transform, false);
-            bone.localPosition = Vector3.zero;
-            bone.localRotation = Quaternion.identity;
-            bone.localScale = Vector3.one;
+            bone.localPosition = neckRest.GetColumn(3);
+            bone.localRotation = neckRest.rotation;
+            bone.localScale = neckRest.lossyScale;
+
+            Vector3 neckAnchorRoot = neckRest.MultiplyPoint3x4(Vector3.zero);
 
             // Bakura-style presentation: the cord starts at the neck, the Ring sits across the
-            // upper chest, and the bottom points lean slightly away from the body so the face reads.
+            // upper chest, and the lower points lean slightly away from the body so the face reads.
             Quaternion animePitch = Quaternion.Euler(-11f, 0f, 0f);
-            Vector3 animeOffset = new Vector3(0f, -0.018f, 0.052f);
+            Vector3 animeOffsetNeck = new Vector3(0f, -0.018f, 0.052f);
 
             int created = 0;
             foreach (MeshFilter sourceFilter in source.GetComponentsInChildren<MeshFilter>(true))
@@ -105,8 +120,9 @@ namespace DuelGenesis.EditorTools
                 Vector3[] vertices = mesh.vertices;
                 for (int i = 0; i < vertices.Length; i++)
                 {
-                    Vector3 p = relative.MultiplyPoint3x4(vertices[i]);
-                    vertices[i] = animePitch * p + animeOffset;
+                    Vector3 pNeck = relative.MultiplyPoint3x4(vertices[i]);
+                    pNeck = animePitch * pNeck + animeOffsetNeck;
+                    vertices[i] = neckRest.MultiplyPoint3x4(pNeck);
                 }
                 mesh.vertices = vertices;
 
@@ -114,7 +130,10 @@ namespace DuelGenesis.EditorTools
                 if (normals != null && normals.Length == mesh.vertexCount)
                 {
                     for (int i = 0; i < normals.Length; i++)
-                        normals[i] = animePitch * relative.MultiplyVector(normals[i]).normalized;
+                    {
+                        Vector3 nNeck = animePitch * relative.MultiplyVector(normals[i]);
+                        normals[i] = neckRest.MultiplyVector(nNeck).normalized;
+                    }
                     mesh.normals = normals;
                 }
                 else mesh.RecalculateNormals();
@@ -123,16 +142,20 @@ namespace DuelGenesis.EditorTools
                 for (int i = 0; i < weights.Length; i++)
                     weights[i] = new BoneWeight { boneIndex0 = 0, weight0 = 1f };
                 mesh.boneWeights = weights;
-                mesh.bindposes = new[] { Matrix4x4.identity };
+                mesh.bindposes = new[] { neckRest.inverse };
 
                 // GenesisCharacterBuilder sizes skinned wardrobe around mesh.bounds.center.
-                // Force that center onto the neck origin so 70%-130% scales DOWN from the
-                // necklace anchor instead of sliding the Ring up/down the torso.
-                Bounds b = mesh.bounds;
-                float ex = Mathf.Max(Mathf.Abs(b.min.x), Mathf.Abs(b.max.x));
-                float ey = Mathf.Max(Mathf.Abs(b.min.y), Mathf.Abs(b.max.y));
-                float ez = Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z));
-                mesh.bounds = new Bounds(Vector3.zero, new Vector3(ex * 2f, ey * 2f, ez * 2f));
+                // Put that pivot on the real Genesis neck rest position so the 70%-130% slider
+                // grows the Ring away from the neck instead of walking the chain up/down the body.
+                float ex = 0.001f, ey = 0.001f, ez = 0.001f;
+                foreach (Vector3 v in vertices)
+                {
+                    Vector3 d = v - neckAnchorRoot;
+                    ex = Mathf.Max(ex, Mathf.Abs(d.x));
+                    ey = Mathf.Max(ey, Mathf.Abs(d.y));
+                    ez = Mathf.Max(ez, Mathf.Abs(d.z));
+                }
+                mesh.bounds = new Bounds(neckAnchorRoot, new Vector3(ex * 2f, ey * 2f, ez * 2f));
 
                 string meshPath = MeshFolder + "/RingPart_" + created.ToString("D2") + ".asset";
                 AssetDatabase.CreateAsset(mesh, meshPath);
@@ -167,6 +190,30 @@ namespace DuelGenesis.EditorTools
             prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             AssignToNeckSlot(prefab);
             Debug.Log("Duel: Genesis: Millennium Ring installed in Neck slot 7 with anime-style neck anchoring.");
+        }
+
+        private static bool TryGetNeckRestMatrix(GameObject basePrefab, out Matrix4x4 neckRest, out string boneName)
+        {
+            neckRest = Matrix4x4.identity;
+            boneName = "neckLower";
+            if (basePrefab == null) return false;
+
+            Transform[] transforms = basePrefab.GetComponentsInChildren<Transform>(true);
+            Transform neck = transforms.FirstOrDefault(t => Normalize(t.name).EndsWith("necklower"))
+                          ?? transforms.FirstOrDefault(t => Normalize(t.name) == "neck")
+                          ?? transforms.FirstOrDefault(t => Normalize(t.name).EndsWith("neckupper"))
+                          ?? transforms.FirstOrDefault(t => Normalize(t.name).Contains("neck"));
+            if (neck == null) return false;
+
+            boneName = neck.name;
+            neckRest = basePrefab.transform.worldToLocalMatrix * neck.localToWorldMatrix;
+            return true;
+        }
+
+        private static string Normalize(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
 
         private static void EnsureMeshFolder()
