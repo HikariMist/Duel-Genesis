@@ -19,6 +19,56 @@ namespace DuelGenesis.EditorTools
         public const string PolyHavenFolder = "Assets/ThirdParty/PolyHaven";
         public const string CityKitFolder = "Assets/ThirdParty/Kenney/CityKitCommercial";
         public const string NatureKitFolder = "Assets/ThirdParty/Kenney/NatureKit";
+        public const string UIPackFolder = "Assets/Resources/DuelGenesis/UI/SciFi";   // Resources: the creator loads them at runtime
+
+        [MenuItem("Duel Genesis/Downloads/Kenney UI Pack Sci-Fi (CC0) - creator and menu skin")]
+        public static void DownloadUIPack()
+        {
+            string project = Directory.GetParent(Application.dataPath).FullName;
+            string url = "https://kenney.nl/media/pages/assets/ui-pack-sci-fi/b67c2acd31-1724181109/kenney_ui-pack-space-expansion.zip";
+            string zipPath = Path.Combine(project, "Temp", "kenney_ui-pack-sci-fi.zip");
+            Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
+            using (var request = UnityWebRequest.Get(url))
+            {
+                request.downloadHandler = new DownloadHandlerFile(zipPath);
+                var op = request.SendWebRequest();
+                while (!op.isDone) { }
+                if (request.result != UnityWebRequest.Result.Success) { Debug.LogError("Duel: Genesis could not download the UI pack: " + request.error); return; }
+            }
+            string dest = Path.Combine(project, UIPackFolder);
+            Directory.CreateDirectory(dest);
+            foreach (string old in Directory.GetFiles(dest, "*.png*")) File.Delete(old);   // earlier unprefixed copies
+            var names = new System.Collections.Generic.List<string>();
+            using (ZipArchive zip = ZipFile.OpenRead(zipPath))
+                foreach (ZipArchiveEntry e in zip.Entries)
+                {
+                    if (string.IsNullOrEmpty(e.Name)) continue;
+                    string lower = e.FullName.Replace('\\', '/').ToLowerInvariant();
+                    // Keep the default-resolution PNGs (skip @2x/double and vector copies) and the licence.
+                    if (lower.EndsWith(".png") && !lower.Contains("double") && !lower.Contains("vector") && !lower.Contains("@2x") && !lower.Contains("preview") && !lower.Contains("sample"))
+                    {
+                        // Colour sets share file names: prefix the colour folder (Blue_, Red_, Extra_ ...).
+                        string[] parts = e.FullName.Replace('\\', '/').Split('/');
+                        string colour = parts.Length >= 3 ? parts[parts.Length - 3] : "";
+                        string file = (string.IsNullOrEmpty(colour) ? "" : colour + "_") + e.Name;
+                        e.ExtractToFile(Path.Combine(dest, file), true);
+                        names.Add(file);
+                    }
+                    else if (lower.EndsWith("license.txt")) e.ExtractToFile(Path.Combine(dest, "License.txt"), true);
+                }
+            File.WriteAllText(Path.Combine(project, "Logs", "UIPackFiles.txt"), string.Join("\n", names));
+            AssetDatabase.Refresh();
+            foreach (string f in Directory.GetFiles(dest, "*.png"))
+            {
+                var imp = AssetImporter.GetAtPath(UIPackFolder + "/" + Path.GetFileName(f)) as TextureImporter;
+                if (imp == null) continue;
+                imp.textureType = TextureImporterType.GUI;
+                imp.mipmapEnabled = false;
+                imp.filterMode = FilterMode.Bilinear;
+                imp.SaveAndReimport();
+            }
+            Debug.Log($"Duel: Genesis downloaded the Kenney UI Pack Sci-Fi (CC0, {new FileInfo(zipPath).Length / 1048576f:0.0} MB): {names.Count} images in {UIPackFolder}.");
+        }
 
         [MenuItem("Duel Genesis/Downloads/Kenney City Kit Commercial (CC0) - buildings for the open city")]
         public static void DownloadCityKit() => DownloadKit("City Kit (Commercial)",

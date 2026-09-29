@@ -144,7 +144,7 @@ namespace DuelGenesis.Characters
             if (!IsOpen) return;
             GUI.depth = -40;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(UiScale, UiScale, 1f));   // same size on any screen
-            GUI.backgroundColor = new Color(0.22f, 0.26f, 0.4f, 1f);   // rounded buttons: deep blue unless a caller tints them
+            GUI.backgroundColor = GenesisSciFiSkin.Ready ? new Color(0.35f, 0.48f, 0.85f, 1f) : new Color(0.22f, 0.26f, 0.4f, 1f);
 
             float previewW = VW * 0.55f;
             float w = VW - previewW;
@@ -159,10 +159,11 @@ namespace DuelGenesis.Characters
             {
                 GUI.DrawTexture(new Rect(0f, 72f, previewW - 3f, VH - 72f), Vignette(), ScaleMode.StretchToFill, true);
                 Texture2D logo = Logo();
-                if (logo != null) GUI.DrawTexture(new Rect(previewW * 0.5f - 60f, VH - 190f, 120f, 112f), logo, ScaleMode.ScaleToFit, true);
+                if (logo != null) GUI.DrawTexture(new Rect(24f, VH - 150f, 130f, 121f), logo, ScaleMode.ScaleToFit, true);
             }
 
             GenesisTheme.Box(new Rect(x, 0f, w, VH), GenesisTheme.Background);
+            GenesisSciFiSkin.Panel(new Rect(x + 6f, 4f, w - 10f, VH - 8f), "Extra_panel_glass_notches", new Color(0.3f, 0.42f, 0.75f, 0.45f), 28);
             GenesisTheme.Box(new Rect(x, 0f, w, 5f), GenesisTheme.Purple);
             GenesisTheme.Box(new Rect(x, 5f, w, 92f), GenesisTheme.PanelAlt);
             GUI.Label(new Rect(x + 24f, 16f, w - 48f, 18f), "DUEL : GENESIS", Style(12, FontStyle.Bold, GenesisTheme.Gold));
@@ -185,7 +186,8 @@ namespace DuelGenesis.Characters
             }
 
             Rect contentCard = new Rect(x + 18f, 153f, w - 36f, VH - 247f);
-            GenesisTheme.Box(contentCard, GenesisTheme.Panel);
+            if (!GenesisSciFiSkin.Panel(contentCard, "Extra_panel_glass_screws", new Color(0.16f, 0.22f, 0.45f, 0.92f), 24))
+                GenesisTheme.Box(contentCard, GenesisTheme.Panel);
             GenesisTheme.Box(new Rect(contentCard.x, contentCard.y, 3f, contentCard.height), new Color(GenesisTheme.Purple.r, GenesisTheme.Purple.g, GenesisTheme.Purple.b, 0.75f));
             DrawHudOverlay(contentCard);
 
@@ -414,8 +416,9 @@ namespace DuelGenesis.Characters
         {
             bool hover = card.Contains(Event.current.mousePosition);
             Color panel = hover ? new Color(0.075f, 0.09f, 0.145f, 0.98f) : new Color(0.048f, 0.06f, 0.105f, 0.96f);
-            GenesisTheme.Box(card, panel);
-            GenesisTheme.Box(new Rect(card.x, card.y, 3f, card.height), accent);
+            if (!GenesisSciFiSkin.Panel(card, "Extra_panel_glass", hover ? new Color(0.32f, 0.42f, 0.75f, 0.95f) : new Color(0.2f, 0.27f, 0.5f, 0.9f), 16))
+                GenesisTheme.Box(card, panel);
+            GenesisTheme.Box(new Rect(card.x, card.y + 4f, 3f, card.height - 8f), accent);
             GenesisTheme.Box(new Rect(card.x + 3f, card.y, card.width - 3f, 1f), new Color(accent.r, accent.g, accent.b, hover ? 0.45f : 0.20f));
             GenesisTheme.Box(new Rect(card.x + 3f, card.yMax - 1f, card.width - 3f, 1f), new Color(0f, 0f, 0f, 0.34f));
 
@@ -620,6 +623,15 @@ namespace DuelGenesis.Characters
 
         private static bool TabButton(Rect rect, string label, bool active)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(14, active ? Color.white : new Color(0.8f, 0.85f, 0.95f));
+            if (sci != null)
+            {
+                Color was = GUI.backgroundColor;
+                GUI.backgroundColor = active ? GenesisTheme.Purple : new Color(0.22f, 0.27f, 0.42f, 1f);
+                bool hit = GUI.Button(rect, label, sci);
+                GUI.backgroundColor = was;
+                return hit;
+            }
             Color old = GUI.backgroundColor;
             GUI.backgroundColor = active ? GenesisTheme.Purple : new Color(0.16f, 0.18f, 0.25f, 1f);
             bool pressed = GUI.Button(rect, label, Button(active));
@@ -630,6 +642,15 @@ namespace DuelGenesis.Characters
 
         private static bool ActionButton(Rect rect, string label, Color color)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(15);
+            if (sci != null)
+            {
+                Color was = GUI.backgroundColor;
+                GUI.backgroundColor = color == GenesisTheme.PanelAlt ? new Color(0.35f, 0.4f, 0.55f, 1f) : color;
+                bool hit = GUI.Button(rect, label, sci);
+                GUI.backgroundColor = was;
+                return hit;
+            }
             Color old = GUI.backgroundColor;
             GUI.backgroundColor = color;
             bool pressed = GUI.Button(rect, label, Button(false));
@@ -688,6 +709,8 @@ namespace DuelGenesis.Characters
 
         private static GUIStyle Button(bool on)
         {
+            GUIStyle sci = GenesisSciFiSkin.Button(13, on ? GenesisTheme.Cyan : Color.white);
+            if (sci != null) return sci;
             var s = new GUIStyle(GUI.skin.button)
             {
                 fontSize = 13,
