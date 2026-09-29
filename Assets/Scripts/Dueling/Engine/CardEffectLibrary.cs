@@ -51,6 +51,7 @@ namespace DuelGenesis.Dueling
             RegisterCounterTraps();
             RegisterRituals();
             FieldSpells.Register(Add);
+            CounterTraps.Register(Add);
         }
 
         // ----------------------------------------------------------------------------- LP / burn

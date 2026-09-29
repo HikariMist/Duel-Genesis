@@ -265,6 +265,7 @@ namespace DuelGenesis.Dueling
 
             List<Action> scheduled = _endPhaseActions.ToList();
             _endPhaseActions.Clear();
+            _effectDamageRules.Clear();
             foreach (Action action in scheduled)
             {
                 if (IsOver) return;
@@ -575,9 +576,27 @@ namespace DuelGenesis.Dueling
 
         // =================================================================== life points
 
+        private readonly List<(DuelCard source, int player, bool reflect)> _effectDamageRules = new();
+
+        /// <summary>Effect damage from <paramref name="source"/> to <paramref name="player"/> is negated (or reflected) this turn.</summary>
+        public void ShieldEffectDamage(DuelCard source, int player, bool reflect) => _effectDamageRules.Add((source, player, reflect));
+
         public void DealDamage(int player, int amount, DuelCard source, bool battle)
         {
             if (amount <= 0 || IsOver) return;
+            if (!battle && source != null)
+            {
+                int rule = _effectDamageRules.FindIndex(r => r.source == source && r.player == player);
+                if (rule >= 0)
+                {
+                    bool reflect = _effectDamageRules[rule].reflect;
+                    Raise(DuelEventType.Message, player, source, text: reflect
+                        ? $"The {amount} damage from {source.Name} is sent back to {Duelists[1 - player].Name}!"
+                        : $"The {amount} damage from {source.Name} was negated.");
+                    if (reflect) { _effectDamageRules.RemoveAt(rule); DealDamage(1 - player, amount, null, false); }
+                    return;
+                }
+            }
             Duelists[player].LifePoints = Math.Max(0, Duelists[player].LifePoints - amount);
             Raise(DuelEventType.Damage, player, source, amount: amount,
                 text: $"{Duelists[player].Name} took {amount} {(battle ? "battle" : "effect")} damage.");
@@ -1033,7 +1052,8 @@ namespace DuelGenesis.Dueling
                         Kind = card.IsTrap ? DuelTriggerKind.TrapActivated : DuelTriggerKind.SpellActivated,
                         Player = player,
                         Card = card,
-                        Depth = (respondingTo?.Depth ?? 0) + 1
+                        Depth = (respondingTo?.Depth ?? 0) + 1,
+                        Targets = ctx.Targets.ToList()
                     };
 
                     OpenResponseWindow(1 - player, trigger,
@@ -1158,6 +1178,7 @@ namespace DuelGenesis.Dueling
                 DuelTriggerKind.SpecialSummoned => $"{who} Special Summoned {trigger.Card?.Name}.",
                 DuelTriggerKind.SpellActivated => $"{who} activated \"{trigger.Card?.Name}\".",
                 DuelTriggerKind.TrapActivated => $"{who} activated \"{trigger.Card?.Name}\".",
+                DuelTriggerKind.MonsterEffectActivated => $"{whose} {trigger.Card?.Name} activated its effect.",
                 _ => "Activate a card?"
             };
         }
@@ -1461,8 +1482,21 @@ namespace DuelGenesis.Dueling
             string label = item.kind == MonsterAbilityKind.Flip ? "FLIP effect" : "effect";
             Raise(DuelEventType.CardActivated, item.player, item.card, text: $"{item.card.Name}'s {label} activates!");
 
+            // The opponent may respond (Divine Wrath) before the monster effect resolves.
+            void Resolve()
+            {
+                var trigger = new DuelTrigger { Kind = DuelTriggerKind.MonsterEffectActivated, Player = item.player, Card = item.card, Targets = ctx.Targets.ToList() };
+                OpenResponseWindow(1 - item.player, trigger,
+                    proceed: () => ability.Do(ctx),
+                    onNegated: () =>
+                    {
+                        Raise(DuelEventType.ActivationNegated, item.player, item.card, text: $"{item.card.Name}'s effect was negated.");
+                        ctx.Finish();
+                    });
+            }
+
             TargetRequest request = ability.Tgt?.Invoke(ctx);
-            if (request == null) { ability.Do(ctx); return; }
+            if (request == null) { Resolve(); return; }
             if (request.Candidates.Count == 0)
             {
                 Raise(DuelEventType.Message, item.player, item.card, text: $"{item.card.Name}: there is nothing to target.");
@@ -1482,7 +1516,7 @@ namespace DuelGenesis.Dueling
                 OnCards = picks =>
                 {
                     ctx.Targets.AddRange(picks ?? new List<DuelCard>());
-                    ability.Do(ctx);
+                    Resolve();
                 }
             });
         }

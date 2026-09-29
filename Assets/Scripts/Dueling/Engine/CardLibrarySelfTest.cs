@@ -30,6 +30,8 @@ namespace DuelGenesis.Dueling
             public float AverageTurns;
             public readonly HashSet<string> UsedInDuels = new();
             public readonly List<string> Failures = new();
+            /// <summary>Spells/Traps with no working effect yet, by card type ("Trap / Counter").</summary>
+            public readonly SortedDictionary<string, List<string>> Missing = new();
 
             public bool Passed => Failures.Count == 0;
 
@@ -42,6 +44,10 @@ namespace DuelGenesis.Dueling
                 sb.AppendLine($"CPU duels: {DuelsFinished}/{DuelsRun} finished, avg {AverageTurns:0.0} turns; {UsedInDuels.Count} different Spell/Trap cards were activated by the CPU.");
                 sb.AppendLine(Passed ? "RESULT: PASS" : $"RESULT: {Failures.Count} FAILURE(S)");
                 foreach (string f in Failures) sb.AppendLine(" - " + f);
+                sb.AppendLine();
+                sb.AppendLine("NOT IMPLEMENTED YET (by type):");
+                foreach (var pair in Missing.OrderBy(p => p.Value.Count))
+                    sb.AppendLine($"  {pair.Key} ({pair.Value.Count}): {string.Join(", ", pair.Value.OrderBy(n => n))}");
                 return sb.ToString();
             }
         }
@@ -53,6 +59,12 @@ namespace DuelGenesis.Dueling
             report.SpellTrapTotal = spellTraps.Count;
             List<CardData> implemented = spellTraps.Where(c => CardEffects.Get(c) != null).ToList();
             report.Implemented = implemented.Count;
+            foreach (CardData c in spellTraps.Where(c => CardEffects.Get(c) == null))
+            {
+                string key = $"{c.kind} / {c.typeLine}";
+                if (!report.Missing.TryGetValue(key, out var list)) report.Missing[key] = list = new List<string>();
+                list.Add(c.cardName);
+            }
 
             List<CardData> monsters = catalog.Where(c => c.kind == CardKind.Monster && DuelRules.CanEverBeNormalSummoned(c)).ToList();
             List<CardData> extra = catalog.Where(c => DuelRules.IsExtraDeckMonster(c)).ToList();
@@ -216,6 +228,8 @@ namespace DuelGenesis.Dueling
                 case DuelTriggerKind.NormalSummoned:
                 case DuelTriggerKind.FlipSummoned:
                 case DuelTriggerKind.SpecialSummoned:
+                    return attacker == null ? null : new DuelTrigger { Kind = kind, Player = 1, Card = attacker.Card };
+                case DuelTriggerKind.MonsterEffectActivated:
                     return attacker == null ? null : new DuelTrigger { Kind = kind, Player = 1, Card = attacker.Card };
                 case DuelTriggerKind.SpellActivated:
                 case DuelTriggerKind.TrapActivated:

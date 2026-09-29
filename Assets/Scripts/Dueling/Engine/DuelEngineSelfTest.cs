@@ -27,6 +27,7 @@ namespace DuelGenesis.Dueling
                 CheckEffects(failures);
                 CheckFlipEffects(failures);
                 CheckFieldSpells(failures);
+                CheckCounterTraps(failures);
                 SimulateDuels(simulatedDuels, failures);
             }
             catch (Exception exception)
@@ -180,6 +181,22 @@ namespace DuelGenesis.Dueling
             Expect(failures, e.Me(0).Hand.Count == 7, $"Hand should be 7 before the End Phase (was {e.Me(0).Hand.Count}).");
             e.EndTurn(0);
             Expect(failures, e.Me(0).Hand.Count == DuelRules.HandSizeLimit, $"End Phase should discard down to 6 (was {e.Me(0).Hand.Count}).");
+        }
+
+        private static void CheckCounterTraps(List<string> failures)
+        {
+            // Barrel Behind the Door sends a burn back to the player who activated it.
+            List<CardData> a = VanillaDeck();
+            List<CardData> b = VanillaDeck();
+            a[39] = Spell("Final Flame", "Normal", "Inflict 600 damage to your opponent.");
+            b[39] = Trap("Barrel Behind the Door", "Counter", "Activate only when a card's effect that would inflict damage to you is activated. Your opponent takes the damage instead.");
+            DuelEngine e = NewEngine(a, b, 31, aiBoth: true);
+            e.StartDuel(1);
+            e.SetSpellTrap(1, e.DebugPutInHand(1, "Barrel Behind the Door"));
+            e.AdvancePhase(1);
+            Expect(failures, e.Activate(0, e.DebugPutInHand(0, "Final Flame")), "Final Flame could not be activated.");
+            Expect(failures, e.Me(1).LifePoints == 8000 && e.Me(0).LifePoints == 7400,
+                $"Barrel Behind the Door should reflect 600 (LP {e.Me(0).LifePoints} / {e.Me(1).LifePoints}).");
         }
 
         private static void CheckFieldSpells(List<string> failures)

@@ -287,7 +287,7 @@ namespace DuelGenesis.Dueling
     }
 
     /// <summary>What a response window is reacting to.</summary>
-    public enum DuelTriggerKind { AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase }
+    public enum DuelTriggerKind { AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase, MonsterEffectActivated }
 
     public sealed class DuelTrigger
     {
@@ -298,5 +298,7 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState Defender;  // null for a direct attack
         public bool Negated;
         public int Depth;
+        /// <summary>The cards the activated Spell/Trap targets (empty if it targets nothing).</summary>
+        public List<DuelCard> Targets = new();
     }
 }
