@@ -43,7 +43,7 @@ namespace DuelGenesis.Characters
                 if (equip == null || equip.id < 0) continue;
                 GameObject prefab = assets.Find(equip.slot, equip.id);
                 if (prefab == null) continue;
-                Wear(root.transform, prefab, bones, equip.colors);
+                Wear(root.transform, prefab, bones, equip.colors, equip.proportion);
                 GenesisCharacterLibrary.Fit f = library?.Find(equip.slot, equip.id)?.FitFor(appearance.gender);
                 if (f == null) continue;
                 Max(fit, GenesisMorphMap.ScaleTorso, f.torso);
@@ -106,10 +106,11 @@ namespace DuelGenesis.Characters
 
         private static readonly Color DefaultSkin = new Color(0.7725f, 0.4784f, 0.3765f, 1f);
 
-        private static void Wear(Transform root, GameObject prefab, Dictionary<string, Transform> bones, Color[] colors)
+        private static void Wear(Transform root, GameObject prefab, Dictionary<string, Transform> bones, Color[] colors, float proportion)
         {
             GameObject item = Object.Instantiate(prefab);
             int colour = 0;
+            float itemScale = ItemScale(proportion);
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 Transform[] mapped = smr.bones.Select(b => b != null && bones.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
@@ -120,20 +121,28 @@ namespace DuelGenesis.Characters
                 smr.transform.SetParent(root, false);
                 smr.transform.localPosition = Vector3.zero;
                 smr.transform.localRotation = Quaternion.identity;
-                smr.transform.localScale = Vector3.one;
+                smr.transform.localScale = Vector3.one * itemScale;
                 if (colors != null)
                     foreach (Material m in smr.materials)
                         if (colour < colors.Length && colors[colour].a > 0.01f) Tint(m, colors[colour++]);
             }
-            // Rigid pieces (hats, glasses): follow their bone by name.
+            // Rigid pieces (hats, glasses): follow their bone by name and keep the same user-selected size.
             foreach (MeshRenderer mr in item.GetComponentsInChildren<MeshRenderer>(true))
             {
                 Transform p = mr.transform.parent;
                 while (p != null && !bones.ContainsKey(p.name)) p = p.parent;
-                if (p != null) mr.transform.SetParent(bones[p.name], true);
+                if (p != null)
+                {
+                    mr.transform.SetParent(bones[p.name], true);
+                    mr.transform.localScale *= itemScale;
+                }
             }
             Object.Destroy(item);
         }
+
+        /// <summary>Maps the saved -100..100 item proportion to a safe but clearly visible 75%..125% scale.</summary>
+        private static float ItemScale(float proportion) =>
+            Mathf.Lerp(0.75f, 1.25f, Mathf.InverseLerp(-100f, 100f, Mathf.Clamp(proportion, -100f, 100f)));
 
         private static void Tint(Material m, Color c)
         {
