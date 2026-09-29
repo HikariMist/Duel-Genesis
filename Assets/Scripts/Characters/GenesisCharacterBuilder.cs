@@ -151,6 +151,14 @@ namespace DuelGenesis.Characters
 
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
+                // Some accessories are authored with a meaningful renderer offset/rotation. Most clothing is at the
+                // figure origin, but the Millennium Puzzle is not: throwing this transform away makes it hang at the waist.
+                Matrix4x4 authored = item.transform.worldToLocalMatrix * smr.transform.localToWorldMatrix;
+                Vector3 authoredPosition = authored.GetColumn(3);
+                Quaternion authoredRotation = authored.rotation;
+                Vector3 authoredScale = authored.lossyScale;
+                Vector3? puzzleNeckPivot = millenniumPuzzle ? FindSourceNeckAnchorLocal(smr) : null;
+
                 Transform[] mapped = smr.bones.Select(b => b != null && bones.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
                 if (mapped.Any(b => b == null) && mapped.Count(b => b == null) > mapped.Length / 3) continue;
                 for (int i = 0; i < mapped.Length; i++)
@@ -159,11 +167,29 @@ namespace DuelGenesis.Characters
                 smr.bones = mapped;
                 if (smr.rootBone != null && bones.TryGetValue(smr.rootBone.name, out Transform rb)) smr.rootBone = rb;
                 smr.transform.SetParent(root, false);
-                smr.transform.localPosition = Vector3.zero;
-                smr.transform.localRotation = Quaternion.identity;
-                smr.transform.localScale = Vector3.one;
 
-                TransformSkinnedGeometry(smr, itemScale, millenniumPuzzle ? -24f : 0f, millenniumPuzzle ? 0.025f : 0f);
+                if (millenniumPuzzle)
+                {
+                    // Keep DMO's authored necklace placement. The chain/neck contact stays where the original asset put it.
+                    smr.transform.localPosition = authoredPosition;
+                    smr.transform.localRotation = authoredRotation;
+                    smr.transform.localScale = authoredScale;
+                }
+                else
+                {
+                    smr.transform.localPosition = Vector3.zero;
+                    smr.transform.localRotation = Quaternion.identity;
+                    smr.transform.localScale = Vector3.one;
+                }
+
+                // Size the Puzzle around its neck bone rather than its centre. That keeps the chain locked to the neck
+                // while the pendant grows/shrinks, then gives the hanging portion a modest anime-style outward pitch.
+                TransformSkinnedGeometry(
+                    smr,
+                    itemScale,
+                    millenniumPuzzle ? -12f : 0f,
+                    0f,
+                    puzzleNeckPivot);
 
                 if (colors != null)
                     foreach (Material m in smr.materials)
@@ -184,7 +210,22 @@ namespace DuelGenesis.Characters
             Object.Destroy(item);
         }
 
-        private static void TransformSkinnedGeometry(SkinnedMeshRenderer smr, float scale, float pitchDegrees, float forwardOffset)
+        private static Vector3? FindSourceNeckAnchorLocal(SkinnedMeshRenderer smr)
+        {
+            if (smr == null || smr.bones == null) return null;
+            Transform neck = smr.bones.FirstOrDefault(b => b != null && IsNeckBoneName(b.name));
+            if (neck == null) return null;
+            return smr.transform.InverseTransformPoint(neck.position);
+        }
+
+        private static bool IsNeckBoneName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            string n = new string(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+            return n == "neck" || n == "necklower" || n == "neckupper" || n.EndsWith("necklower") || n.EndsWith("neckupper");
+        }
+
+        private static void TransformSkinnedGeometry(SkinnedMeshRenderer smr, float scale, float pitchDegrees, float forwardOffset, Vector3? pivotOverride = null)
         {
             if (smr == null || smr.sharedMesh == null) return;
             bool resize = Mathf.Abs(scale - 1f) >= 0.001f;
@@ -196,16 +237,15 @@ namespace DuelGenesis.Characters
             copy.name = source.name + " (Duel Genesis Adjusted)";
             Vector3[] vertices = copy.vertices;
             Bounds bounds = copy.bounds;
-            Vector3 scalePivot = bounds.center;
-            Vector3 tiltPivot = new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
+            Vector3 pivot = pivotOverride ?? bounds.center;
             Quaternion rotation = Quaternion.Euler(pitchDegrees, 0f, 0f);
 
             for (int i = 0; i < vertices.Length; i++)
             {
-                Vector3 v = scalePivot + (vertices[i] - scalePivot) * scale;
+                Vector3 v = pivot + (vertices[i] - pivot) * scale;
                 if (tilt)
                 {
-                    v = tiltPivot + rotation * (v - tiltPivot);
+                    v = pivot + rotation * (v - pivot);
                     v.z += forwardOffset;
                 }
                 vertices[i] = v;
@@ -224,8 +264,8 @@ namespace DuelGenesis.Characters
             if (renderer == null || characterRoot == null) return;
             Bounds b = renderer.bounds;
             Vector3 pivot = new Vector3(b.center.x, b.max.y, b.center.z);
-            renderer.transform.RotateAround(pivot, characterRoot.right, -24f);
-            renderer.transform.position += characterRoot.forward * 0.025f;
+            renderer.transform.RotateAround(pivot, characterRoot.right, -12f);
+            renderer.transform.position += characterRoot.forward * 0.01f;
         }
 
         private static float ItemScale(float proportion) =>
