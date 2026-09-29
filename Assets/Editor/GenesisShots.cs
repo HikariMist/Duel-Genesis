@@ -19,11 +19,11 @@ namespace DuelGenesis.EditorTools
             Transform t = shop.transform;
             string dir = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Logs", "Shots");
             System.IO.Directory.CreateDirectory(dir);
-            Shot(dir, "shop_1_aerial", t.TransformPoint(new Vector3(-26f, 22f, 52f)), t.TransformPoint(new Vector3(0f, 2f, 14f)), 60f);
-            Shot(dir, "shop_2_lot", t.TransformPoint(new Vector3(8f, 2.2f, 33f)), t.TransformPoint(new Vector3(0f, 4.5f, 10f)), 65f);
-            Shot(dir, "shop_3_entrance", t.TransformPoint(new Vector3(-6f, 1.8f, 19f)), t.TransformPoint(new Vector3(0f, 3f, 11f)), 70f);
-            Shot(dir, "shop_4_showroom", t.TransformPoint(new Vector3(0f, 2.2f, 10.5f)), t.TransformPoint(new Vector3(0f, 2f, -8f)), 85f);
-            Shot(dir, "shop_5_tables", t.TransformPoint(new Vector3(4f, 3f, 1f)), t.TransformPoint(new Vector3(12f, 0.5f, -7f)), 80f);
+            Shot(dir, "shop_1_aerial", t.TransformPoint(new Vector3(-30f, 26f, 48f)), t.TransformPoint(new Vector3(0f, 4f, 0f)), 60f);
+            Shot(dir, "shop_2_front", t.TransformPoint(new Vector3(4f, 2.5f, 30f)), t.TransformPoint(new Vector3(0f, 6f, 2f)), 70f);
+            Shot(dir, "shop_3_door", t.TransformPoint(new Vector3(-13f, 1.8f, 1f)), t.TransformPoint(new Vector3(-6f, 1.8f, -14f)), 80f);
+            Shot(dir, "shop_4_hall", t.TransformPoint(new Vector3(12f, 3f, -7f)), t.TransformPoint(new Vector3(-6f, 1.5f, -22f)), 85f);
+            Shot(dir, "shop_5_bar", t.TransformPoint(new Vector3(0f, 2f, -14f)), t.TransformPoint(new Vector3(0f, 1.5f, -26f)), 80f);
             Debug.Log("Duel: Genesis captured card shop screenshots into " + dir);
         }
 
@@ -54,6 +54,39 @@ namespace DuelGenesis.EditorTools
             float half = Mathf.Max(Mathf.Abs(c.x - hub.x), Mathf.Abs(c.z - hub.z)) * 0.5f + 60f;
             Shot(dir, "7_map", new Vector3(mid.x, 400f, mid.z), new Vector3(mid.x, 0f, mid.z + 0.001f), 0f, half);
             Debug.Log($"Duel: Genesis saved Duel Center screenshots to {dir} (hall centre {c}, plaza at {hub}).");
+        }
+
+        /// <summary>DEV: drops both Sketchfab models into an empty corner of the map and photographs them from four sides.</summary>
+        [MenuItem("Duel Genesis/DEV/Preview Sketchfab Models (screenshots)")]
+        public static void PreviewSketchfab()
+        {
+            GenesisSketchfabModels.SetUpAll();
+            string dir = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Logs", "Shots");
+            System.IO.Directory.CreateDirectory(dir);
+            var holder = new GameObject("__Sketchfab Preview");
+            try
+            {
+                float x = 300f;
+                foreach (string model in GenesisSketchfabModels.Models)
+                {
+                    GameObject prefab = GenesisSketchfabModels.Load(model);
+                    if (prefab == null) continue;
+                    var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder.transform);
+                    go.transform.position = new Vector3(x, 0f, -300f);
+                    if (model == "SciFiBar") go.transform.localScale = Vector3.one * 12f;
+                    Physics.SyncTransforms();
+                    Bounds b = GenesisWorldBuilder.RendererBounds(go);
+                    float r = Mathf.Max(b.extents.x, b.extents.z) * 2.2f + 2f;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Vector3 dirv = Quaternion.Euler(0f, i * 90f, 0f) * Vector3.forward;
+                        Shot(dir, $"sf_{model}_{i}", b.center + dirv * r + Vector3.up * b.extents.y * 0.8f, b.center, 50f);
+                    }
+                    x += 60f;
+                }
+            }
+            finally { Object.DestroyImmediate(holder); }
+            Debug.Log("Duel: Genesis captured Sketchfab previews into " + dir);
         }
 
         private static void Shot(string dir, string name, Vector3 from, Vector3 lookAt, float fov, float orthoHalf = 0f)
