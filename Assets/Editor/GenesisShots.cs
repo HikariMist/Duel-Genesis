@@ -19,11 +19,11 @@ namespace DuelGenesis.EditorTools
             Transform t = shop.transform;
             string dir = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Logs", "Shots");
             System.IO.Directory.CreateDirectory(dir);
-            Shot(dir, "shop_1_street", t.TransformPoint(new Vector3(14f, 2.2f, 30f)), t.TransformPoint(new Vector3(-1f, 5f, 4f)), 60f);
-            Shot(dir, "shop_2_corner", t.TransformPoint(new Vector3(24f, 9f, 24f)), t.TransformPoint(new Vector3(2f, 5f, 0f)), 60f);
-            Shot(dir, "shop_3_ground", t.TransformPoint(new Vector3(10f, 2.6f, 8f)), t.TransformPoint(new Vector3(-6f, 1f, -6f)), 80f);
-            Shot(dir, "shop_4_counter", t.TransformPoint(new Vector3(-2f, 2.4f, 5f)), t.TransformPoint(new Vector3(8f, 1.2f, -8f)), 75f);
-            Shot(dir, "shop_5_upstairs", t.TransformPoint(new Vector3(8f, 7.6f, 3f)), t.TransformPoint(new Vector3(-4f, 5.5f, -8f)), 80f);
+            Shot(dir, "shop_1_aerial", t.TransformPoint(new Vector3(-26f, 22f, 52f)), t.TransformPoint(new Vector3(0f, 2f, 14f)), 60f);
+            Shot(dir, "shop_2_lot", t.TransformPoint(new Vector3(8f, 2.2f, 33f)), t.TransformPoint(new Vector3(0f, 4.5f, 10f)), 65f);
+            Shot(dir, "shop_3_entrance", t.TransformPoint(new Vector3(-6f, 1.8f, 19f)), t.TransformPoint(new Vector3(0f, 3f, 11f)), 70f);
+            Shot(dir, "shop_4_showroom", t.TransformPoint(new Vector3(0f, 2.2f, 10.5f)), t.TransformPoint(new Vector3(0f, 2f, -8f)), 85f);
+            Shot(dir, "shop_5_tables", t.TransformPoint(new Vector3(4f, 3f, 1f)), t.TransformPoint(new Vector3(12f, 0.5f, -7f)), 80f);
             Debug.Log("Duel: Genesis captured card shop screenshots into " + dir);
         }
 

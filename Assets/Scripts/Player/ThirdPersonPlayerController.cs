@@ -7,7 +7,9 @@ namespace DuelGenesis.Player
     public class ThirdPersonPlayerController : MonoBehaviour
     {
         [Header("Movement")]
-        public float moveSpeed = 5f;
+        public float moveSpeed = 4.2f;     // normal
+        public float sprintSpeed = 7.5f;   // hold Shift
+        public float slowWalkSpeed = 1.6f; // hold Ctrl
         public float rotationSpeed = 12f;
         public float gravity = -20f;
         public float jumpHeight = 1.2f;
@@ -62,7 +64,10 @@ namespace DuelGenesis.Player
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
             }
 
-            Vector3 velocity = move * moveSpeed;
+            float speed = keyboard.ctrlKey.isPressed ? slowWalkSpeed
+                        : keyboard.shiftKey.isPressed && input.y >= 0f ? sprintSpeed
+                        : moveSpeed;
+            Vector3 velocity = move * speed;
             velocity.y = _verticalVelocity;
             _controller.Move(velocity * Time.deltaTime);
         }

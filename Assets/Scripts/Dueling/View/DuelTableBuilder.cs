@@ -278,7 +278,8 @@ namespace DuelGenesis.Dueling
             root.transform.SetParent(table, false);
 
             BuildFurniture(root.transform, withChair: true);
-            BuildMat(root.transform);
+            DuelGenesis.Shops.GenesisMatType chosen = DuelGenesis.Shops.GenesisMats.Selected;
+            BuildMat(root.transform, chosen.id, chosen.Art);
             BuildArena(root.transform);
             BuildZones(root.transform, zones);
             BuildLights(root.transform);
@@ -455,8 +456,12 @@ namespace DuelGenesis.Dueling
         // ------------------------------------------------------------------ printed mat
 
         private static Material _sharedMatMaterial;
+        private static readonly Dictionary<string, Material> _artMatMaterials = new();
+        private static readonly List<(Material material, Texture2D art)> _matJobs = new();
+        private static Texture2D _pendingMatArt;
 
-        private static void BuildMat(Transform root)
+        /// <summary>The printed mat; with <paramref name="art"/>, the human's half shows that duel-mat artwork.</summary>
+        private static void BuildMat(Transform root, string artId = null, Texture2D art = null)
         {
             float widthMm = DuelMatLayout.MatWidthMm + MatMarginMm * 2f;
             float depthMm = DuelMatLayout.MatDepthMm * 2f + MatMarginMm * 2f;
@@ -480,7 +485,18 @@ namespace DuelGenesis.Dueling
                 _pendingMatDepthMm = depthMm;
                 _matAttempts = 0;
             }
-            mat.GetComponent<Renderer>().sharedMaterial = _sharedMatMaterial;
+            Material use = _sharedMatMaterial;
+            if (art != null && !string.IsNullOrEmpty(artId))
+            {
+                if (!_artMatMaterials.TryGetValue(artId, out use) || use == null)
+                {
+                    use = DuelVisualResources.NewLit(DuelVisualResources.Navy, 0.18f);
+                    use.name = "DG Game Mat - " + artId;
+                    _artMatMaterials[artId] = use;
+                    _matJobs.Add((use, art));
+                }
+            }
+            mat.GetComponent<Renderer>().sharedMaterial = use;
 
             // Rubber mat body (slight thickness).
             GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -495,6 +511,14 @@ namespace DuelGenesis.Dueling
         /// <summary>Call every frame: renders the printed mat once the pipeline is ready and verifies it.</summary>
         public static void TickMatRender()
         {
+            if (_pendingMatMaterial == null && _matJobs.Count > 0)
+            {
+                (_pendingMatMaterial, _pendingMatArt) = _matJobs[0];
+                _matJobs.RemoveAt(0);
+                _pendingMatWidthMm = DuelMatLayout.MatWidthMm + MatMarginMm * 2f;
+                _pendingMatDepthMm = DuelMatLayout.MatDepthMm * 2f + MatMarginMm * 2f;
+                _matAttempts = 0;
+            }
             if (_pendingMatMaterial == null) return;
             if (Time.frameCount < 3) return;
             if (GraphicsSettings.currentRenderPipeline != null && RenderPipelineManager.currentPipeline == null) return;
@@ -503,11 +527,12 @@ namespace DuelGenesis.Dueling
             {
                 Debug.LogWarning("Duel: Genesis could not render the game mat texture; using a plain mat.");
                 _pendingMatMaterial = null;
+                _pendingMatArt = null;
                 return;
             }
 
             if (_matTexture != null) { _matTexture.Release(); UnityEngine.Object.Destroy(_matTexture); _matTexture = null; }
-            Texture texture = RenderMatTexture(_pendingMatWidthMm, _pendingMatDepthMm);
+            Texture texture = RenderMatTexture(_pendingMatWidthMm, _pendingMatDepthMm, _pendingMatArt);
             if (texture == null || !LooksRendered(_matTexture)) return;
 
 #if UNITY_EDITOR
@@ -521,6 +546,7 @@ namespace DuelGenesis.Dueling
             _pendingMatMaterial.SetColor("_BaseColor", Color.white);
             _pendingMatMaterial.SetTexture("_BaseMap", baked != null ? baked : texture);
             _pendingMatMaterial = null;
+            _pendingMatArt = null;
             if (baked != null) { _matTexture.Release(); UnityEngine.Object.Destroy(_matTexture); _matTexture = null; }
             Debug.Log($"Duel: Genesis game mat rendered ({w}x{h}, mip-mapped) after {_matAttempts} attempt(s).");
         }
@@ -589,7 +615,7 @@ namespace DuelGenesis.Dueling
             return !blankWhite && !blankClear;
         }
 
-        private static Texture RenderMatTexture(float widthMm, float depthMm)
+        private static Texture RenderMatTexture(float widthMm, float depthMm, Texture2D art = null)
         {
             if (_matTexture != null && _matTexture.IsCreated()) return _matTexture;
 
@@ -630,7 +656,7 @@ namespace DuelGenesis.Dueling
                 canvas.worldCamera = camera;
                 canvas.planeDistance = 1f;
 
-                var painter = new MatPainter((RectTransform)canvasObject.transform, widthMm, depthMm);
+                var painter = new MatPainter((RectTransform)canvasObject.transform, widthMm, depthMm, art);
                 painter.Paint();
 
                 Canvas.ForceUpdateCanvases();
@@ -655,8 +681,11 @@ namespace DuelGenesis.Dueling
             private readonly float _depthMm;
             private readonly Font _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
-            public MatPainter(RectTransform root, float widthMm, float depthMm)
+            private readonly Texture2D _art;
+
+            public MatPainter(RectTransform root, float widthMm, float depthMm, Texture2D art = null)
             {
+                _art = art;
                 _root = root;
                 _widthMm = widthMm;
                 _depthMm = depthMm;
@@ -674,15 +703,28 @@ namespace DuelGenesis.Dueling
                     float sign = player == 0 ? -1f : 1f;
                     float rot = player == 0 ? 0f : 180f;
 
-                    // Mat panel.
-                    Image panel = Img("Mat " + player, DuelVisualResources.RoundedSprite, new Color(accent.r * 0.10f, accent.g * 0.10f, accent.b * 0.16f + 0.05f, 0.92f));
+                    // Duel-mat artwork on the human's half (player 0), cropped to fill the panel.
+                    bool artHere = player == 0 && _art != null;
+                    if (artHere)
+                    {
+                        RawImage artImage = Raw("Mat Art", _art, Color.white);
+                        float panelAspect = DuelMatLayout.MatWidthMm / (DuelMatLayout.MatDepthMm - 4f);
+                        float artAspect = _art.width / (float)Mathf.Max(1, _art.height);
+                        artImage.uvRect = artAspect > panelAspect
+                            ? new Rect((1f - panelAspect / artAspect) * 0.5f, 0f, panelAspect / artAspect, 1f)
+                            : new Rect(0f, (1f - artAspect / panelAspect) * 0.5f, 1f, artAspect / panelAspect);
+                        Place(artImage.rectTransform, 0f, sign * DuelMatLayout.MatDepthMm * 0.5f, DuelMatLayout.MatWidthMm, DuelMatLayout.MatDepthMm - 4f, rot);
+                    }
+
+                    // Mat panel (a light tint over artwork so the zones stay readable).
+                    Image panel = Img("Mat " + player, DuelVisualResources.RoundedSprite, new Color(accent.r * 0.10f, accent.g * 0.10f, accent.b * 0.16f + 0.05f, artHere ? 0.28f : 0.92f));
                     Place(panel.rectTransform, 0f, sign * DuelMatLayout.MatDepthMm * 0.5f, DuelMatLayout.MatWidthMm, DuelMatLayout.MatDepthMm - 4f, rot);
                     Image border = Img("Mat Border " + player, DuelVisualResources.RoundedOutlineSprite, new Color(accent.r, accent.g, accent.b, 0.75f));
                     Place(border.rectTransform, 0f, sign * DuelMatLayout.MatDepthMm * 0.5f, DuelMatLayout.MatWidthMm, DuelMatLayout.MatDepthMm - 4f, rot);
 
                     // Logo printed on the free band behind the Spell & Trap row.
                     Texture2D logo = DuelVisualResources.Logo;
-                    if (logo != null)
+                    if (logo != null && !artHere)
                     {
                         RawImage logoImage = Raw("Logo " + player, logo, new Color(1f, 1f, 1f, 0.55f));
                         float logoW = Mathf.Min(190f, 80f * logo.width / (float)logo.height);   // fits a 190 x 80 mm band

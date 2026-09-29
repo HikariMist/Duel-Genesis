@@ -65,7 +65,10 @@ namespace DuelGenesis.Player
             _speed = Mathf.Lerp(_speed, delta.magnitude / dt, k);
             _turn = Mathf.Lerp(_turn, Mathf.Clamp(yawDelta / dt / 180f, -1f, 1f), k);
 
-            float normalized = Mathf.Clamp01(_speed / runSpeed);
+            // Full "Speed" = sprinting; normal pace sits mid-blend and Ctrl walks slowly.
+            var mover = GetComponent<ThirdPersonPlayerController>();
+            float top = mover != null ? Mathf.Max(mover.sprintSpeed, 0.1f) : runSpeed;
+            float normalized = Mathf.Clamp01(_speed / top);
             if (_hasSpeed) _animator.SetFloat("Speed", normalized < 0.04f ? 0f : normalized);
             if (_hasDirection) _animator.SetFloat("Direction", _turn);
             _animator.speed = normalized > 0.1f ? Mathf.Lerp(0.75f, 1.15f, normalized) : 1f;
