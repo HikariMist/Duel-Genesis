@@ -15,6 +15,7 @@ namespace DuelGenesis.EditorTools
     {
         private const string ModelPath = "Assets/Resources/DuelGenesis/Characters/MillenniumRing.obj";
         private const string PrefabPath = "Assets/Resources/DuelGenesis/Characters/MillenniumRingGenerated.prefab";
+        private const string MeshFolder = "Assets/Resources/DuelGenesis/Characters/MillenniumRingMeshes";
         private const string GoldMaterialPath = "Assets/Resources/DuelGenesis/Characters/MillenniumRing_Gold.mat";
         private const string BlackMaterialPath = "Assets/Resources/DuelGenesis/Characters/MillenniumRing_Black.mat";
         private const string CharacterAssetsPath = "Assets/Resources/DuelGenesis/Characters/GenesisCharacterAssets.asset";
@@ -52,9 +53,12 @@ namespace DuelGenesis.EditorTools
             if (force)
             {
                 AssetDatabase.DeleteAsset(PrefabPath);
+                AssetDatabase.DeleteAsset(MeshFolder);
                 AssetDatabase.DeleteAsset(GoldMaterialPath);
                 AssetDatabase.DeleteAsset(BlackMaterialPath);
             }
+
+            EnsureMeshFolder();
 
             Material gold = CreateArtifactMaterial(
                 GoldMaterialPath,
@@ -84,6 +88,8 @@ namespace DuelGenesis.EditorTools
             bone.localRotation = Quaternion.identity;
             bone.localScale = Vector3.one;
 
+            // Bakura-style presentation: the cord starts at the neck, the Ring sits across the
+            // upper chest, and the bottom points lean slightly away from the body so the face reads.
             Quaternion animePitch = Quaternion.Euler(-11f, 0f, 0f);
             Vector3 animeOffset = new Vector3(0f, -0.018f, 0.052f);
 
@@ -119,25 +125,28 @@ namespace DuelGenesis.EditorTools
                 mesh.boneWeights = weights;
                 mesh.bindposes = new[] { Matrix4x4.identity };
 
-                // The runtime size slider scales skinned meshes around bounds.center. Keep that
-                // center exactly on the neck anchor so 70%-130% never pulls the chain off the neck.
+                // GenesisCharacterBuilder sizes skinned wardrobe around mesh.bounds.center.
+                // Force that center onto the neck origin so 70%-130% scales DOWN from the
+                // necklace anchor instead of sliding the Ring up/down the torso.
                 Bounds b = mesh.bounds;
                 float ex = Mathf.Max(Mathf.Abs(b.min.x), Mathf.Abs(b.max.x));
                 float ey = Mathf.Max(Mathf.Abs(b.min.y), Mathf.Abs(b.max.y));
                 float ez = Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z));
                 mesh.bounds = new Bounds(Vector3.zero, new Vector3(ex * 2f, ey * 2f, ez * 2f));
 
+                string meshPath = MeshFolder + "/RingPart_" + created.ToString("D2") + ".asset";
+                AssetDatabase.CreateAsset(mesh, meshPath);
+                Mesh savedMesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+
                 string partName = sourceFilter.gameObject.name;
                 GameObject part = new GameObject(partName);
                 part.transform.SetParent(root.transform, false);
                 SkinnedMeshRenderer smr = part.AddComponent<SkinnedMeshRenderer>();
-                smr.sharedMesh = mesh;
+                smr.sharedMesh = savedMesh;
                 smr.bones = new[] { bone };
                 smr.rootBone = bone;
                 smr.updateWhenOffscreen = true;
                 smr.sharedMaterial = IsBlackPart(partName) ? black : gold;
-
-                AssetDatabase.AddObjectToAsset(mesh, root);
                 created++;
             }
 
@@ -155,8 +164,15 @@ namespace DuelGenesis.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceUpdate);
 
+            prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             AssignToNeckSlot(prefab);
             Debug.Log("Duel: Genesis: Millennium Ring installed in Neck slot 7 with anime-style neck anchoring.");
+        }
+
+        private static void EnsureMeshFolder()
+        {
+            if (AssetDatabase.IsValidFolder(MeshFolder)) return;
+            AssetDatabase.CreateFolder("Assets/Resources/DuelGenesis/Characters", "MillenniumRingMeshes");
         }
 
         private static Material CreateArtifactMaterial(string path, string displayName, Color color, float metallic, float smoothness)
