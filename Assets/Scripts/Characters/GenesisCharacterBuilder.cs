@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace DuelGenesis.Characters
 {
@@ -23,7 +24,7 @@ namespace DuelGenesis.Characters
             root.name = "Genesis Character";
             root.transform.localPosition = Vector3.zero;
             root.transform.localRotation = Quaternion.identity;
-            foreach (MonoBehaviour mb in root.GetComponentsInChildren<MonoBehaviour>(true)) Object.Destroy(mb);   // DMO gameplay stubs
+            foreach (MonoBehaviour mb in root.GetComponentsInChildren<MonoBehaviour>(true)) Object.Destroy(mb);
             foreach (Collider c in root.GetComponentsInChildren<Collider>(true)) Object.Destroy(c);
             foreach (Rigidbody rb in root.GetComponentsInChildren<Rigidbody>(true)) Object.Destroy(rb);
 
@@ -36,7 +37,6 @@ namespace DuelGenesis.Characters
 
             bool male = appearance.gender == GenesisGender.Male;
 
-            // Wardrobe, bound to the figure's skeleton; the body's fit shapes follow the tightest item.
             var fit = new Dictionary<string, float>();
             var authoredOffsets = new Dictionary<string, float>();
             GenesisCharacterLibrary library = GenesisCharacterLibrary.Instance;
@@ -72,7 +72,6 @@ namespace DuelGenesis.Characters
                 }
             }
 
-            // Pull the wardrobe back in after it has been attached, then apply all figure/body/face morphs.
             figure = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             body = FindBodyRenderer(figure);
             ApplyShapes(root, appearance);
@@ -80,11 +79,8 @@ namespace DuelGenesis.Characters
             if (body != null)
                 foreach (var kv in fit) Shape(new[] { body }, kv.Key, kv.Value);
 
-            // DMO items carry authored morph offsets (hair/head fit, waist corrections, height corrections, etc.).
-            // Add them after the user's own morphs so imported outfits sit the way they did in DMO.
             foreach (var kv in authoredOffsets) AddShape(figure, kv.Key, kv.Value);
 
-            // Colours: skin on the figure, eyes on the iris.
             foreach (SkinnedMeshRenderer r in figure)
             {
                 bool iris = r.name.IndexOf("Iris", System.StringComparison.OrdinalIgnoreCase) >= 0;
@@ -98,7 +94,8 @@ namespace DuelGenesis.Characters
                 }
             }
 
-            // Size: a real-world height, feet at the parent's origin.
+            FixFaceOverlayMaterials(figure, appearance);
+
             float target = (male ? 1.74f : 1.64f) * (1f + appearance.height * 0.0012f);
             FitHeight(root.transform, body, target);
 
@@ -125,7 +122,6 @@ namespace DuelGenesis.Characters
             return all.OrderByDescending(r => r.sharedMesh.blendShapeCount).FirstOrDefault();
         }
 
-        /// <summary>Figure, body and face shaping on every mesh of the character that has the shape (live-safe).</summary>
         public static void ApplyShapes(GameObject root, GenesisAppearance appearance)
         {
             if (root == null || appearance == null) return;
@@ -155,7 +151,7 @@ namespace DuelGenesis.Characters
             foreach (SkinnedMeshRenderer smr in item.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 Transform[] mapped = smr.bones.Select(b => b != null && bones.TryGetValue(b.name, out Transform t) ? t : null).ToArray();
-                if (mapped.Any(b => b == null) && mapped.Count(b => b == null) > mapped.Length / 3) continue;   // not rigged to this figure
+                if (mapped.Any(b => b == null) && mapped.Count(b => b == null) > mapped.Length / 3) continue;
                 for (int i = 0; i < mapped.Length; i++)
                     if (mapped[i] == null) mapped[i] = bones.TryGetValue("hip", out Transform hip) ? hip : root;
 
@@ -166,8 +162,6 @@ namespace DuelGenesis.Characters
                 smr.transform.localRotation = Quaternion.identity;
                 smr.transform.localScale = Vector3.one;
 
-                // A SkinnedMeshRenderer is driven by bones, so scaling its Transform can be cancelled by skinning.
-                // Resize a private runtime copy of the actual mesh instead; this makes the creator's Size slider visible.
                 ScaleSkinnedGeometry(smr, itemScale);
 
                 if (colors != null)
@@ -175,7 +169,6 @@ namespace DuelGenesis.Characters
                         if (colour < colors.Length && colors[colour].a > 0.01f) Tint(m, colors[colour++]);
             }
 
-            // Rigid pieces (hats, glasses): follow their bone by name and use normal transform scaling.
             foreach (MeshRenderer mr in item.GetComponentsInChildren<MeshRenderer>(true))
             {
                 Transform p = mr.transform.parent;
@@ -208,9 +201,54 @@ namespace DuelGenesis.Characters
             cleanup.mesh = copy;
         }
 
-        /// <summary>Maps the saved -100..100 item proportion to a visible but controlled 70%..130% size.</summary>
         private static float ItemScale(float proportion) =>
             Mathf.Lerp(0.70f, 1.30f, Mathf.InverseLerp(-100f, 100f, Mathf.Clamp(proportion, -100f, 100f)));
+
+        private static void FixFaceOverlayMaterials(IEnumerable<SkinnedMeshRenderer> renderers, GenesisAppearance appearance)
+        {
+            if (renderers == null || appearance == null) return;
+
+            foreach (SkinnedMeshRenderer r in renderers)
+            {
+                if (r == null) continue;
+                Material[] mats = r.materials;
+                foreach (Material m in mats)
+                {
+                    if (m == null) continue;
+                    string key = (r.name + " " + m.name).ToLowerInvariant();
+                    bool brow = key.Contains("eyebrow") || key.Contains("brow");
+                    bool lash = key.Contains("eyelash") || key.Contains("lash");
+                    bool liner = key.Contains("eyeliner") || key.Contains("eye liner");
+                    bool paint = key.Contains("facepaint") || key.Contains("face paint") || key.Contains("makeup") || key.Contains("make up");
+                    if (!brow && !lash && !liner && !paint) continue;
+
+                    Color tint = brow ? appearance.eyebrowColor :
+                                 lash ? appearance.eyelashColor :
+                                 liner ? appearance.eyelinerColor : appearance.paintColor;
+                    if (tint.a < 0.01f && (brow || lash)) tint.a = 1f;
+                    Tint(m, tint);
+                    MakeTransparentOverlay(m);
+                }
+            }
+        }
+
+        private static void MakeTransparentOverlay(Material m)
+        {
+            if (m == null) return;
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+            if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 0f);
+            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            if (m.HasProperty("_SrcBlendAlpha")) m.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            if (m.HasProperty("_DstBlendAlpha")) m.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            m.SetShaderPassEnabled("DepthOnly", false);
+            m.SetShaderPassEnabled("ShadowCaster", false);
+        }
 
         private static void Tint(Material m, Color c)
         {
@@ -223,10 +261,6 @@ namespace DuelGenesis.Characters
             if (!fit.TryGetValue(key, out float v) || value > v) fit[key] = value;
         }
 
-        /// <summary>
-        /// Sets a Genesis/DMO morph on every renderer that supports it. DMO's controller names are not always the
-        /// names stored on the actual mesh, so known controller morphs are expanded to their real mesh morphs.
-        /// </summary>
         public static void Shape(IEnumerable<SkinnedMeshRenderer> renderers, string shape, float weight)
         {
             if (string.IsNullOrEmpty(shape) || renderers == null) return;
@@ -288,10 +322,6 @@ namespace DuelGenesis.Characters
 
         private static readonly Dictionary<Mesh, Dictionary<string, int>> ShapeNames = new Dictionary<Mesh, Dictionary<string, int>>();
 
-        /// <summary>
-        /// Blendshape index by name. AssetRipper/DAZ can prefix names differently, so matching accepts the raw name,
-        /// common suffixes, case differences and a punctuation-free normalized form.
-        /// </summary>
         public static int ShapeIndex(Mesh mesh, string shape)
         {
             if (mesh == null || string.IsNullOrEmpty(shape)) return -1;
@@ -319,7 +349,6 @@ namespace DuelGenesis.Characters
             string normalized = NormalizeShapeName(shape);
             if (map.TryGetValue(normalized, out index)) return index;
 
-            // Final fallback for prefixes that do not use a normal separator.
             for (int i = 0; i < mesh.blendShapeCount; i++)
             {
                 string candidate = NormalizeShapeName(mesh.GetBlendShapeName(i));
@@ -357,7 +386,6 @@ namespace DuelGenesis.Characters
             return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
 
-        /// <summary>Scales the figure to <paramref name="height"/> metres with its feet on the parent's origin.</summary>
         private static void FitHeight(Transform root, SkinnedMeshRenderer body, float height)
         {
             if (body == null) return;
@@ -382,7 +410,6 @@ namespace DuelGenesis.Characters
         }
     }
 
-    /// <summary>Destroys runtime mesh copies created by the character creator when that wardrobe object goes away.</summary>
     internal sealed class GenesisRuntimeMeshCleanup : MonoBehaviour
     {
         public Mesh mesh;
