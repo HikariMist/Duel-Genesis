@@ -63,8 +63,10 @@ namespace DuelGenesis.EditorTools
                     float a = i * 36f * Mathf.Deg2Rad;
                     count += Put(park, Pick(rng, "flower_redA", "flower_yellowA", "flower_purpleA", "flower_redB", "flower_yellowB"), centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 5.5f, a * 57f, 0.6f);
                 }
-                string[] trees = { "tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_tall", "tree_plateau", "tree_default_fall", "tree_oak_fall" };
-                for (int i = 0; i < 22; i++) { var p = Spot(7f); if (p != null) count += Put(park, Pick(rng, trees), p.Value, rng.Next(360), 6f + (float)rng.NextDouble() * 3f, solid: true); }
+                string[] trees = RealTrees("island_tree_03", "tree_small_02", "jacaranda_tree", "pine_tree_01");
+                bool realPark = trees.Length > 0;
+                if (!realPark) trees = new[] { "tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_tall", "tree_plateau", "tree_default_fall", "tree_oak_fall" };
+                for (int i = 0; i < (realPark ? 16 : 22); i++) { var p = Spot(realPark ? 10f : 7f); if (p != null) count += Put(park, Pick(rng, trees), p.Value, rng.Next(360), (realPark ? 8f : 6f) + (float)rng.NextDouble() * 4f, solid: true); }
                 for (int i = 0; i < 26; i++) { var p = Spot(3f); if (p != null) count += Put(park, Pick(rng, "plant_bush", "plant_bushLarge", "plant_bushDetailed", "plant_bushSmall"), p.Value, rng.Next(360), 1f + (float)rng.NextDouble() * 0.8f); }
                 for (int i = 0; i < 14; i++)   // flower beds: little clusters
                 {
@@ -101,14 +103,16 @@ namespace DuelGenesis.EditorTools
             // ---- pine forest round the map edge
             var forest = new GameObject("Forest Edge").transform;
             forest.SetParent(root, false);
-            string[] pines = { "tree_pineDefaultA", "tree_pineDefaultB", "tree_pineRoundA", "tree_pineRoundC", "tree_pineTallA", "tree_pineTallB", "tree_pineTallC", "tree_cone", "tree_cone_dark" };
-            for (float d = Half - 8f; d > Half - 40f; d -= 11f)
-                for (float t = -Half + 6f; t < Half - 6f; t += 12f)
+            string[] pines = RealTrees("pine_tree_01", "fir_tree_01");
+            bool realForest = pines.Length > 0;
+            if (!realForest) pines = new[] { "tree_pineDefaultA", "tree_pineDefaultB", "tree_pineRoundA", "tree_pineRoundC", "tree_pineTallA", "tree_pineTallB", "tree_pineTallC", "tree_cone", "tree_cone_dark" };
+            for (float d = Half - 8f; d > Half - 40f; d -= realForest ? 16f : 11f)
+                for (float t = -Half + 6f; t < Half - 6f; t += realForest ? 17f : 12f)
                     foreach (var p in new[] { new Vector2(t, d), new Vector2(t, -d), new Vector2(d, t), new Vector2(-d, t) })
                     {
                         Vector2 j = p + new Vector2((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f) * 6f;
                         if (OnRoad(j)) continue;
-                        count += Put(forest, Pick(rng, pines), j, rng.Next(360), 8f + (float)rng.NextDouble() * 6f, solid: true);
+                        count += Put(forest, Pick(rng, pines), j, rng.Next(360), 8f + (float)rng.NextDouble() * (realForest ? 8f : 6f), solid: true);
                     }
 
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
@@ -202,12 +206,17 @@ namespace DuelGenesis.EditorTools
             return lines.Any(l => Mathf.Abs(p.x - l) < (l == 0f ? 16f : 13f) || Mathf.Abs(p.y - l) < (l == 0f ? 16f : 13f));
         }
 
+        /// <summary>The Poly Haven scanned trees that are in the project (empty until Downloads > Poly Haven Realistic Trees).</summary>
+        private static string[] RealTrees(params string[] ids) =>
+            ids.Select(id => $"{GenesisAssetDownloads.TreesFolder}/{id}/{id}.fbx").Where(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null).ToArray();
+
         private static string Pick(System.Random rng, params string[] names) => names[rng.Next(names.Length)];
 
         /// <summary>Places a kit model sized to <paramref name="height"/> metres, standing on the ground. Returns 1 if placed.</summary>
         private static int Put(Transform parent, string model, Vector2 at, float yaw, float height, bool solid = false)
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Kit + model + ".fbx");
+            bool real = model.StartsWith("Assets/");
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(real ? model : Kit + model + ".fbx");
             if (prefab == null) return 0;
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
@@ -225,7 +234,14 @@ namespace DuelGenesis.EditorTools
                 Vector3 s = go.transform.lossyScale;
                 col.size = new Vector3(Mathf.Max(0.3f, w) / s.x, b.size.y * 0.7f / s.y, Mathf.Max(0.3f, w) / s.z);
             }
-            GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic);
+            if (real)
+            {
+                // Scanned trees are heavy: cull them when they shrink on screen, and let them instance instead of static-batching.
+                var lod = go.AddComponent<LODGroup>();
+                lod.SetLODs(new[] { new LOD(0.015f, go.GetComponentsInChildren<Renderer>()) });
+                lod.RecalculateBounds();
+            }
+            else GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic);
             return 1;
         }
     }
