@@ -367,6 +367,7 @@ namespace DuelGenesis.Dueling
                     {
                         controller.Monsters[monster.Slot] = null;
                         card.Zone = DuelZone.None;   // already leaving: effects must not try to move it again
+                        ReleaseControlHeldBy(card);
                         if (CurrentAttacker == monster) CurrentAttacker = null;
                         if (CurrentAttackTarget == monster) CurrentAttackTarget = null;
                         // Equip Spells and linked cards leave with the monster.
@@ -477,7 +478,10 @@ namespace DuelGenesis.Dueling
         {
             if (card == null || card.Zone == DuelZone.Graveyard) return;
             bool fromField = card.OnField;
+            bool flippedMonster = FindMonster(card)?.WasFlipped == true;
+            int lastController = card.Controller;
             MoveToList(card, DuelZone.Graveyard);
+            if (flippedMonster) QueueMonsterAbility(MonsterAbilityKind.SentToGraveyardAfterFlip, card, lastController);
             if (fromField && destroyed)
                 Raise(DuelEventType.Destroyed, card.Owner, card, cause, text: $"{card.Name} was destroyed.");
             else
@@ -526,6 +530,7 @@ namespace DuelGenesis.Dueling
             if (card == null || card.Zone != DuelZone.Hand) return;
             MoveToList(card, DuelZone.Graveyard);
             Raise(DuelEventType.Discarded, card.Owner, card, text: $"{Duelists[card.Owner].Name} discarded {card.Name}.");
+            QueueMonsterAbility(MonsterAbilityKind.Discarded, card, card.Owner);
         }
 
         public void SwitchControl(DuelMonsterState monster, int newController, bool temporary)
@@ -545,6 +550,8 @@ namespace DuelGenesis.Dueling
             monster.Card.Slot = slot;
             monster.Card.Controller = newController;
             monster.ReturnControlTo = temporary ? previous : -1;
+            monster.ControlHeldBy = null;
+            monster.CanAttackDirectly = false;
             monster.SummonedTurn = TurnNumber;
             Raise(DuelEventType.ControlChanged, newController, monster.Card, text: $"{target.Name} took control of {monster.Name}.");
         }
@@ -602,14 +609,14 @@ namespace DuelGenesis.Dueling
         public int GetAttack(DuelMonsterState m)
         {
             if (m == null) return 0;
-            int value = m.Card.Data.attack + m.TempAttack + StatModifier(m, true);
+            int value = m.Card.Data.attack + m.TempAttack + m.PermAttack + StatModifier(m, true);
             return Math.Max(0, value);
         }
 
         public int GetDefense(DuelMonsterState m)
         {
             if (m == null) return 0;
-            int value = m.Card.Data.defense + m.TempDefense + StatModifier(m, false);
+            int value = m.Card.Data.defense + m.TempDefense + m.PermDefense + StatModifier(m, false);
             return Math.Max(0, value);
         }
 
@@ -628,6 +635,14 @@ namespace DuelGenesis.Dueling
             MonsterEffect self = CardEffects.GetMonster(m.Card.Data);
             if (self != null)
                 total += attack ? self.SelfAttackModifier(this, m) : self.SelfDefenseModifier(this, m);
+            if (attack)
+                foreach (DuelistState d in Duelists)
+                foreach (DuelMonsterState other in d.MonstersOnField)
+                {
+                    if (other.IsFaceDown) continue;
+                    MonsterEffect aura = CardEffects.GetMonster(other.Card.Data);
+                    if (aura != null) total += aura.AuraAttackModifier(this, other, m);
+                }
             return total;
         }
 
@@ -704,7 +719,7 @@ namespace DuelGenesis.Dueling
 
                 var trigger = new DuelTrigger { Kind = DuelTriggerKind.NormalSummoned, Player = player, Card = card };
                 OpenResponseWindow(1 - player, trigger,
-                    proceed: () => { },
+                    proceed: () => AfterSummon(MonsterAbilityKind.NormalSummoned, player, card),
                     onNegated: () => { });
             }
 
@@ -730,16 +745,35 @@ namespace DuelGenesis.Dueling
             return true;
         }
 
-        public DuelMonsterState SpecialSummon(int player, DuelCard card, DuelMonsterPosition position, DuelCard cause, int preferredSlot = -1)
+        public DuelMonsterState SpecialSummon(int player, DuelCard card, DuelMonsterPosition position, DuelCard cause, int preferredSlot = -1, bool openWindow = true)
         {
             if (card == null || !Duelists[player].HasFreeMonsterZone) return null;
+            if (SpecialSummonsLocked)
+            {
+                Raise(DuelEventType.Message, player, card, text: "Fossil Dyna Pachycephalo: neither player can Special Summon.");
+                return null;
+            }
             DuelMonsterState monster = PlaceMonster(card, player, preferredSlot, position);
             if (monster == null) return null;
+            monster.SpecialSummoned = true;
             Raise(DuelEventType.SpecialSummon, player, card, cause, text: $"{Duelists[player].Name} Special Summoned {card.Name}.");
+            if (!openWindow)
+            {
+                QueueMonsterAbility(MonsterAbilityKind.SpecialSummoned, card, player);
+                return monster;
+            }
             var trigger = new DuelTrigger { Kind = DuelTriggerKind.SpecialSummoned, Player = player, Card = card };
-            OpenResponseWindow(1 - player, trigger, proceed: () => { }, onNegated: () => { });
+            OpenResponseWindow(1 - player, trigger, proceed: () =>
+            {
+                QueueMonsterAbility(MonsterAbilityKind.SpecialSummoned, card, player);
+                RunQueuedMonsterAbilities();
+            }, onNegated: () => { });
             return monster;
         }
+
+        /// <summary>A face-up Fossil Dyna Pachycephalo stops both players Special Summoning.</summary>
+        public bool SpecialSummonsLocked =>
+            Duelists.Any(d => d.MonstersOnField.Any(m => m.IsFaceUp && m.Name == "Fossil Dyna Pachycephalo"));
 
         public bool CanFlipSummon(int player, DuelMonsterState m)
         {
@@ -753,9 +787,11 @@ namespace DuelGenesis.Dueling
             m.Position = DuelMonsterPosition.FaceUpAttack;
             m.Card.FaceUp = true;
             m.HasChangedPosition = true;
+            m.WasFlipped = true;
             Raise(DuelEventType.FlipSummon, player, m.Card, text: $"{Duelists[player].Name} Flip Summoned {m.Name}.");
+            QueueMonsterAbility(MonsterAbilityKind.Flip, m.Card, player);
             var trigger = new DuelTrigger { Kind = DuelTriggerKind.FlipSummoned, Player = player, Card = m.Card };
-            OpenResponseWindow(1 - player, trigger, proceed: () => { }, onNegated: () => { });
+            OpenResponseWindow(1 - player, trigger, proceed: () => AfterSummon(MonsterAbilityKind.FlipSummoned, player, m.Card), onNegated: RunQueuedMonsterAbilities);
             return true;
         }
 
@@ -777,13 +813,22 @@ namespace DuelGenesis.Dueling
         }
 
         /// <summary>Changes position through a card effect (ignores once-per-turn rules).</summary>
-        public void ForcePosition(DuelMonsterState m, DuelMonsterPosition position)
+        public void ForcePosition(DuelMonsterState m, DuelMonsterPosition position, bool activateFlip = true)
         {
             if (m == null || m.Position == position) return;
             bool wasFaceDown = m.IsFaceDown;
             m.Position = position;
             m.Card.FaceUp = position != DuelMonsterPosition.FaceDownDefense;
-            if (position == DuelMonsterPosition.FaceDownDefense) m.PositionSetTurn = TurnNumber;
+            if (position == DuelMonsterPosition.FaceDownDefense)
+            {
+                m.PositionSetTurn = TurnNumber;
+                ReleaseControlHeldBy(m.Card);   // a Charmer turned face-down lets its monster go
+            }
+            else if (wasFaceDown)
+            {
+                m.WasFlipped = true;
+                if (activateFlip) QueueMonsterAbility(MonsterAbilityKind.Flip, m.Card, m.Card.Controller);
+            }
             Raise(wasFaceDown && m.Card.FaceUp ? DuelEventType.Flipped : DuelEventType.PositionChanged, m.Card.Controller, m.Card,
                 text: position == DuelMonsterPosition.FaceDownDefense ? $"{m.Name} was changed to face-down Defense Position."
                     : $"{m.Name} is now in {(position == DuelMonsterPosition.FaceUpAttack ? "Attack" : "Defense")} Position.");
@@ -913,6 +958,7 @@ namespace DuelGenesis.Dueling
                                 else if (still != null)
                                     still.Resolving = false;
                                 after?.Invoke();
+                                RunQueuedMonsterAbilities();
                             };
                             effect.Resolve(ctx);
                         },
@@ -1067,7 +1113,7 @@ namespace DuelGenesis.Dueling
             return false;
         }
 
-        public bool CanAttackDirectly(int player, DuelMonsterState m) => CanAttack(player, m) && Duelists[1 - player].MonsterCount == 0;
+        public bool CanAttackDirectly(int player, DuelMonsterState m) => CanAttack(player, m) && (Duelists[1 - player].MonsterCount == 0 || m.CanAttackDirectly);
 
         public IEnumerable<DuelMonsterState> AttackTargets(int player, DuelMonsterState m)
         {
@@ -1078,7 +1124,7 @@ namespace DuelGenesis.Dueling
         public bool DeclareAttack(int player, DuelMonsterState attacker, DuelMonsterState defender)
         {
             if (!CanAttack(player, attacker)) return false;
-            if (defender == null && Duelists[1 - player].MonsterCount > 0) return false;
+            if (defender == null && Duelists[1 - player].MonsterCount > 0 && !attacker.CanAttackDirectly) return false;
             if (defender != null && defender.Card.Controller == player) return false;
 
             attacker.HasAttacked = true;
@@ -1135,10 +1181,14 @@ namespace DuelGenesis.Dueling
                 return;
             }
 
+            bool flippedByAttack = false;
+            int defenderController = defender.Card.Controller;
             if (defender.IsFaceDown)
             {
                 defender.Position = DuelMonsterPosition.FaceUpDefense;
                 defender.Card.FaceUp = true;
+                defender.WasFlipped = true;
+                flippedByAttack = true;
                 Raise(DuelEventType.Flipped, defender.Card.Controller, defender.Card, text: $"{defender.Name} was flipped face-up.");
             }
 
@@ -1171,7 +1221,25 @@ namespace DuelGenesis.Dueling
                 else if (atk < def)
                     DealDamage(player, def - atk, defender.Card, battle: true);
             }
+
+            // Flip effects activate after damage calculation, even if the flipped monster was destroyed —
+            // unless Harpie Lady 2 (or a lone Blade Knight) destroyed it.
+            bool defenderDied = defender.Card.Zone == DuelZone.Graveyard;
+            bool attackerDied = attacker.Card.Zone == DuelZone.Graveyard;
+            if (flippedByAttack && !(defenderDied && NegatesFlipEffects(attacker)))
+                QueueMonsterAbility(MonsterAbilityKind.Flip, defender.Card, defenderController);
+            if (defenderDied) QueueMonsterAbility(MonsterAbilityKind.DestroyedByBattle, defender.Card, defenderController, attacker.Card);
+            if (attackerDied) QueueMonsterAbility(MonsterAbilityKind.DestroyedByBattle, attacker.Card, player, defender.Card);
             ClearAttack();
+            RunQueuedMonsterAbilities();
+        }
+
+        private bool NegatesFlipEffects(DuelMonsterState attacker)
+        {
+            if (attacker.Card.Zone != DuelZone.Monster && attacker.Card.Zone != DuelZone.Graveyard) return false;
+            if (attacker.Name == "Harpie Lady 2") return true;
+            return attacker.Name == "Blade Knight" && attacker.Card.Zone == DuelZone.Monster &&
+                   Duelists[attacker.Card.Controller].MonsterCount == 1;
         }
 
         // =================================================================== choices
@@ -1216,6 +1284,7 @@ namespace DuelGenesis.Dueling
             if (picks.Any(p => !choice.Candidates.Contains(p))) return false;
             PendingChoice = null;
             choice.OnCards?.Invoke(picks);
+            RunQueuedMonsterAbilities();
             return true;
         }
 
@@ -1225,6 +1294,7 @@ namespace DuelGenesis.Dueling
             if (choice == null || choice.Kind != DuelChoiceKind.SelectOption) return false;
             PendingChoice = null;
             choice.OnOption?.Invoke(option);
+            RunQueuedMonsterAbilities();
             return true;
         }
 
@@ -1234,7 +1304,86 @@ namespace DuelGenesis.Dueling
             if (choice == null || choice.OnCancel == null) return false;
             PendingChoice = null;
             choice.OnCancel();
+            RunQueuedMonsterAbilities();
             return true;
+        }
+
+        // =================================================================== monster effects (Flip, summon triggers)
+
+        private readonly List<(MonsterAbilityKind kind, DuelCard card, int player, DuelCard other)> _monsterQueue = new();
+        private bool _monsterRunning;
+
+        /// <summary>Queues a monster's printed effect; it resolves once nothing else is waiting.</summary>
+        public void QueueMonsterAbility(MonsterAbilityKind kind, DuelCard card, int player, DuelCard other = null)
+        {
+            if (MonsterAbilities.Get(card, kind) != null) _monsterQueue.Add((kind, card, player, other));
+        }
+
+        public bool HasQueuedMonsterAbilities => _monsterQueue.Count > 0 || _monsterRunning;
+
+        public void RunQueuedMonsterAbilities()
+        {
+            if (_monsterRunning || IsOver || PendingChoice != null || _monsterQueue.Count == 0) return;
+            var item = _monsterQueue[0];
+            _monsterQueue.RemoveAt(0);
+            MonsterAbility ability = MonsterAbilities.Get(item.card, item.kind);
+            _monsterRunning = true;
+            var ctx = new EffectContext(this, item.player, item.card, null) { Paid = item.other };
+            ctx.Done = () =>
+            {
+                _monsterRunning = false;
+                RunQueuedMonsterAbilities();
+            };
+
+            if (ability.Can != null && !ability.Can(ctx)) { ctx.Finish(); return; }
+            string label = item.kind == MonsterAbilityKind.Flip ? "FLIP effect" : "effect";
+            Raise(DuelEventType.CardActivated, item.player, item.card, text: $"{item.card.Name}'s {label} activates!");
+
+            TargetRequest request = ability.Tgt?.Invoke(ctx);
+            if (request == null) { ability.Do(ctx); return; }
+            if (request.Candidates.Count == 0)
+            {
+                Raise(DuelEventType.Message, item.player, item.card, text: $"{item.card.Name}: there is nothing to target.");
+                ctx.Finish();
+                return;
+            }
+            Ask(new DuelChoice
+            {
+                Player = item.player,
+                Title = item.card.Name,
+                Prompt = request.Prompt,
+                SourceCard = item.card,
+                Candidates = request.Candidates,
+                MinCount = Math.Min(request.Min, request.Candidates.Count),
+                MaxCount = Math.Min(request.Max, request.Candidates.Count),
+                Context = request.Context,
+                OnCards = picks =>
+                {
+                    ctx.Targets.AddRange(picks ?? new List<DuelCard>());
+                    ability.Do(ctx);
+                }
+            });
+        }
+
+        /// <summary>After a Normal or Flip Summon resolves: summon triggers, Mysterious Puppeteer, then anything queued.</summary>
+        private void AfterSummon(MonsterAbilityKind kind, int player, DuelCard card)
+        {
+            QueueMonsterAbility(kind, card, player);
+            foreach (DuelistState d in Duelists)
+            foreach (DuelMonsterState m in d.MonstersOnField.Where(m => m.IsFaceUp && m.Name == "Mysterious Puppeteer" && m.Card != card).ToList())
+                GainLife(d.Index, 500, m.Card);
+            RunQueuedMonsterAbilities();
+        }
+
+        /// <summary>Monsters taken by a Charmer go back when the Charmer leaves the field or is turned face-down.</summary>
+        private void ReleaseControlHeldBy(DuelCard holder)
+        {
+            foreach (DuelistState d in Duelists)
+            foreach (DuelMonsterState m in d.MonstersOnField.Where(m => m.ControlHeldBy == holder).ToList())
+            {
+                m.ControlHeldBy = null;
+                if (m.Card.Owner != m.Card.Controller) SwitchControl(m, m.Card.Owner, temporary: false);
+            }
         }
 
         // =================================================================== events

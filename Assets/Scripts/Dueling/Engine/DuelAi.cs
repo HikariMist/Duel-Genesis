@@ -34,6 +34,8 @@ namespace DuelGenesis.Dueling
                 "revive" => c.Candidates.OrderByDescending(card => card.Data.attack),
                 "boost" => c.Candidates.OrderByDescending(card => card.Controller == _me ? 1 : 0)
                                         .ThenByDescending(card => e.GetAttack(e.FindMonster(card))),
+                "bounce" or "control" => c.Candidates.Where(card => card.Controller != _me || card.Zone != DuelZone.Monster && card.Zone != DuelZone.SpellTrap)
+                                                  .OrderByDescending(card => MonsterValue(e, e.FindMonster(card))),
                 "destroy-backrow" => c.Candidates.OrderByDescending(card => card.Controller != _me ? 1 : 0)
                                                   .ThenByDescending(card => e.FindBackrow(card)?.FaceDown == true ? 1 : 0),
                 _ => c.Candidates.OrderByDescending(card => card.Controller != _me ? 1 : 0)
@@ -131,8 +133,10 @@ namespace DuelGenesis.Dueling
                 int atk = card.Data.attack;
                 int def = card.Data.defense;
 
-                bool attack = atk >= threat || Opp(e).MonsterCount == 0 || atk >= threatAttack + 300 || tributes > 0;
-                int score = attack ? atk + (atk > threat ? 600 : 0) : (int)(def * 0.7f);
+                bool flip = tributes == 0 && MonsterAbilities.Get(card, MonsterAbilityKind.Flip) != null;
+                bool attack = !flip && (atk >= threat || Opp(e).MonsterCount == 0 || atk >= threatAttack + 300 || tributes > 0);
+                // Flip monsters are Set so their effect fires when attacked or Flip Summoned.
+                int score = attack ? atk + (atk > threat ? 600 : 0) : flip ? 900 + def / 2 : (int)(def * 0.7f);
                 score -= tributeCost;
                 if (tributes > 0 && atk - tributeCost < 500) continue;
 
@@ -154,7 +158,8 @@ namespace DuelGenesis.Dueling
             foreach (DuelMonsterState m in Me(e).MonstersOnField)
             {
                 if (!e.CanFlipSummon(_me, m)) continue;
-                if (m.Card.Data.attack > threat || Opp(e).MonsterCount == 0)
+                bool flipEffect = MonsterAbilities.Get(m.Card, MonsterAbilityKind.Flip) != null && Opp(e).MonsterCount > 0;
+                if (m.Card.Data.attack > threat || Opp(e).MonsterCount == 0 || flipEffect)
                     return e.FlipSummon(_me, m);
             }
             return false;

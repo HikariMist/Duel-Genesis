@@ -82,6 +82,8 @@ namespace DuelGenesis.Dueling
     {
         public virtual int SelfAttackModifier(DuelEngine engine, DuelMonsterState self) => 0;
         public virtual int SelfDefenseModifier(DuelEngine engine, DuelMonsterState self) => 0;
+        /// <summary>Change this face-up monster (<paramref name="source"/>) applies to another monster (<paramref name="target"/>).</summary>
+        public virtual int AuraAttackModifier(DuelEngine engine, DuelMonsterState source, DuelMonsterState target) => 0;
     }
 
     /// <summary>Registry of implemented card effects, looked up by card name.</summary>
@@ -148,6 +150,8 @@ namespace DuelGenesis.Dueling
 
             // ---- Monsters with passive stat effects
             Monsters["Buster Blader"] = new BusterBlader();
+            Monsters["Nightmare Penguin"] = new NightmarePenguinAura();
+            Monsters["Blade Knight"] = new BladeKnight();
         }
 
         public static CardEffect Get(CardData card)

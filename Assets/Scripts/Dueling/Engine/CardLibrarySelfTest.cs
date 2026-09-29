@@ -22,6 +22,8 @@ namespace DuelGenesis.Dueling
             public int SpellTrapTotal;
             public int CardsTested;
             public int MainPhaseActivations;
+            public int MonsterAbilityCards;
+            public int MonsterAbilityRuns;
             public int Responses;
             public int DuelsFinished;
             public int DuelsRun;
@@ -36,6 +38,7 @@ namespace DuelGenesis.Dueling
                 var sb = new StringBuilder();
                 sb.AppendLine($"Spell/Trap cards with working effects: {Implemented} / {SpellTrapTotal}");
                 sb.AppendLine($"Per-card test: {CardsTested} cards, {MainPhaseActivations} Main Phase activations, {Responses} responses resolved.");
+                sb.AppendLine($"Monster effects (Flip / summon triggers): {MonsterAbilityCards} cards, {MonsterAbilityRuns} effect resolutions tested.");
                 sb.AppendLine($"CPU duels: {DuelsFinished}/{DuelsRun} finished, avg {AverageTurns:0.0} turns; {UsedInDuels.Count} different Spell/Trap cards were activated by the CPU.");
                 sb.AppendLine(Passed ? "RESULT: PASS" : $"RESULT: {Failures.Count} FAILURE(S)");
                 foreach (string f in Failures) sb.AppendLine(" - " + f);
@@ -62,8 +65,50 @@ namespace DuelGenesis.Dueling
                 if (report.Failures.Count > 40) { report.Failures.Add("(stopped after 40 failures)"); break; }
             }
 
+            TestMonsterAbilities(catalog, monsters, extra, report);
             SimulateDuels(implemented, monsters, extra, duels, report);
             return report;
+        }
+
+        // ------------------------------------------------------------------ monster effects
+
+        /// <summary>Every monster with a Flip effect / summon trigger: put it on a busy board, fire each of its effects, and check it finishes.</summary>
+        private static void TestMonsterAbilities(IReadOnlyList<CardData> catalog, List<CardData> monsters, List<CardData> extra, Report report)
+        {
+            int seed = 5000;
+            foreach (CardData card in catalog.Where(c => c.kind == CardKind.Monster))
+            {
+                bool any = false;
+                foreach (MonsterAbilityKind kind in Enum.GetValues(typeof(MonsterAbilityKind)))
+                {
+                    try
+                    {
+                        DuelEngine e = BusyBoard(card, catalog, monsters, extra, seed++, firstPlayer: 0);
+                        DuelCard testCard = e.Me(0).Deck.Concat(e.Me(0).Hand).FirstOrDefault(c => c.Data == card);
+                        if (testCard == null || MonsterAbilities.Get(testCard, kind) == null) continue;
+                        any = true;
+                        int total = e.AllCards().Count();
+                        DuelCard other = e.Me(1).MonstersOnField.Select(m => m.Card).FirstOrDefault();
+                        if (kind != MonsterAbilityKind.Discarded && kind != MonsterAbilityKind.DestroyedByBattle && kind != MonsterAbilityKind.SentToGraveyardAfterFlip)
+                        {
+                            if (e.PlaceMonster(testCard, 0, -1, DuelMonsterPosition.FaceUpDefense) == null) continue;
+                        }
+                        e.QueueMonsterAbility(kind, testCard, 0, other);
+                        e.RunQueuedMonsterAbilities();
+                        report.MonsterAbilityRuns++;
+                        if (!e.IsOver && e.HasQueuedMonsterAbilities)
+                            report.Failures.Add($"{card.cardName} ({kind}): the effect never finished resolving (game would freeze).");
+                        if (!e.IsOver && e.IsWaitingForChoice)
+                            report.Failures.Add($"{card.cardName} ({kind}): left a choice pending with CPU on both sides.");
+                        Check(e, total, card.cardName, kind.ToString(), report);
+                    }
+                    catch (Exception ex)
+                    {
+                        report.Failures.Add($"{card.cardName} ({kind}): {ex.GetType().Name}: {ex.Message} {FirstFrame(ex)}");
+                    }
+                }
+                if (any) report.MonsterAbilityCards++;
+            }
         }
 
         // ------------------------------------------------------------------ per-card test

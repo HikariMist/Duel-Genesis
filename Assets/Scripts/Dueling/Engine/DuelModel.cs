@@ -117,6 +117,12 @@ namespace DuelGenesis.Dueling
         public int ReturnControlTo = -1;  // Change of Heart / Brain Control
         public bool CannotAttackThisTurn;
         public bool CannotChangePosition;
+        public int PermAttack;         // lasting changes from effects (Slate Warrior, Rigorous Reaver)
+        public int PermDefense;
+        public DuelCard ControlHeldBy;   // Charmers: control returns when this card leaves the field or turns face-down
+        public bool WasFlipped;          // has been flipped face-up since it came to the field
+        public bool SpecialSummoned;
+        public bool CanAttackDirectly;   // Jowls of Dark Demise
         public readonly List<DuelBackrowState> Equips = new();
 
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;

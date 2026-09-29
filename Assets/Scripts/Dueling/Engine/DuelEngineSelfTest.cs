@@ -25,6 +25,7 @@ namespace DuelGenesis.Dueling
                 CheckBattle(failures);
                 CheckHandLimit(failures);
                 CheckEffects(failures);
+                CheckFlipEffects(failures);
                 SimulateDuels(simulatedDuels, failures);
             }
             catch (Exception exception)
@@ -66,6 +67,11 @@ namespace DuelGenesis.Dueling
             for (int i = 0; i < 3; i++) deck.Add(Monster("Tribute Five " + i, 5, 2100, 1500));
             for (int i = 0; i < 2; i++) deck.Add(Monster("Tribute Seven " + i, 7, 2600, 2100, "Dragon / Normal", "DARK"));
             deck.Add(Monster("Buster Blader", 7, 2600, 2300, "Warrior / Effect", "EARTH", "Gains 500 ATK for each Dragon monster your opponent controls or is in their GY."));
+            deck.Add(Monster("Man-Eater Bug", 2, 450, 600, "Insect / Flip Effect", "EARTH", "FLIP: Target 1 monster on the field; destroy it."));
+            deck.Add(Monster("Penguin Soldier", 2, 750, 500, "Aqua / Flip Effect", "WATER", "FLIP: You can target up to 2 monsters on the field; return those targets to the hand."));
+            deck.Add(Monster("Morphing Jar", 2, 700, 600, "Rock / Flip Effect", "EARTH", "FLIP: Both players discard as many cards as possible from their hands, then each player draws 5 cards."));
+            deck.Add(Monster("Cyber Jar", 3, 900, 900, "Rock / Flip Effect", "DARK", "FLIP: Destroy all monsters on the field..."));
+            deck.Add(Monster("Spear Cretin", 2, 500, 500, "Fiend / Flip Effect", "DARK", "FLIP: When this card is sent to the Graveyard after being flipped..."));
             deck.Add(Spell("Axe of Despair", "Equip", "The equipped monster gains 1000 ATK."));
             deck.Add(Spell("Mystic Plasma Zone", "Field", "Increase the ATK of all DARK monsters by 500 points and decreases their DEF by 400 points."));
             while (deck.Count < 40)
@@ -173,6 +179,59 @@ namespace DuelGenesis.Dueling
             Expect(failures, e.Me(0).Hand.Count == 7, $"Hand should be 7 before the End Phase (was {e.Me(0).Hand.Count}).");
             e.EndTurn(0);
             Expect(failures, e.Me(0).Hand.Count == DuelRules.HandSizeLimit, $"End Phase should discard down to 6 (was {e.Me(0).Hand.Count}).");
+        }
+
+        private static void CheckFlipEffects(List<string> failures)
+        {
+            // 1) Man-Eater Bug Set, attacked face-down: destroyed, but its FLIP effect still destroys the attacker.
+            {
+                List<CardData> a = VanillaDeck();
+                List<CardData> b = VanillaDeck();
+                a[39] = Monster("Striker", 4, 1800, 1000);
+                b[39] = Monster("Man-Eater Bug", 2, 450, 600, "Insect / Flip Effect", "EARTH", "FLIP: Target 1 monster on the field; destroy it.");
+                DuelEngine e = NewEngine(a, b, 11, aiBoth: true);
+                e.StartDuel(1);
+                e.NormalSummon(1, e.DebugPutInHand(1, "Man-Eater Bug"), set: true);
+                e.AdvancePhase(1);
+                e.NormalSummon(0, e.DebugPutInHand(0, "Striker"), set: false);
+                e.AdvancePhase(0);
+                DuelMonsterState striker = e.Me(0).MonstersOnField.First();
+                e.DeclareAttack(0, striker, e.Me(1).MonstersOnField.First());
+                Expect(failures, e.Me(1).Graveyard.Any(c => c.Name == "Man-Eater Bug"), "Man-Eater Bug should be destroyed by battle.");
+                Expect(failures, e.Me(0).Graveyard.Any(c => c.Name == "Striker"), "Man-Eater Bug's FLIP effect should destroy the attacker.");
+            }
+            // 2) Flip Summon: Des Koala burns 400 per card in the opponent's hand.
+            {
+                List<CardData> a = VanillaDeck();
+                a[39] = Monster("Des Koala", 3, 1100, 1800, "Beast / Flip Effect", "EARTH", "FLIP: Inflict 400 damage to your opponent for each card in their hand.");
+                DuelEngine e = NewEngine(a, VanillaDeck(), 12, aiBoth: true);
+                e.StartDuel(0);
+                e.NormalSummon(0, e.DebugPutInHand(0, "Des Koala"), set: true);
+                e.AdvancePhase(0); e.AdvancePhase(0); e.AdvancePhase(0);
+                e.AdvancePhase(1); e.AdvancePhase(1); e.AdvancePhase(1);   // back to player 0, turn 3
+                int opponentHand = e.Me(1).Hand.Count;
+                DuelMonsterState koala = e.Me(0).MonstersOnField.First();
+                Expect(failures, e.FlipSummon(0, koala), "Des Koala could not be Flip Summoned.");
+                Expect(failures, e.Me(1).LifePoints == 8000 - 400 * opponentHand, $"Des Koala should burn {400 * opponentHand} (LP {e.Me(1).LifePoints}).");
+            }
+            // 3) Charmer: control lasts only while the Charmer is face-up on the field.
+            {
+                List<CardData> a = VanillaDeck();
+                List<CardData> b = VanillaDeck();
+                a[39] = Monster("Hiita the Fire Charmer", 3, 500, 1500, "Spellcaster / Flip Effect", "FIRE", "FLIP: Target 1 face-up FIRE monster your opponent controls; take control of that target while this card is face-up on the field.");
+                b[39] = Monster("Fire Beast", 4, 1600, 1000, "Pyro / Normal", "FIRE");
+                DuelEngine e = NewEngine(a, b, 13, aiBoth: true);
+                e.StartDuel(0);
+                e.NormalSummon(0, e.DebugPutInHand(0, "Hiita the Fire Charmer"), set: true);
+                e.AdvancePhase(0); e.AdvancePhase(0); e.AdvancePhase(0);
+                e.NormalSummon(1, e.DebugPutInHand(1, "Fire Beast"), set: false);
+                e.AdvancePhase(1); e.AdvancePhase(1); e.AdvancePhase(1);
+                DuelMonsterState hiita = e.Me(0).MonstersOnField.First(m => m.Name.StartsWith("Hiita"));
+                e.FlipSummon(0, hiita);
+                Expect(failures, e.Me(0).MonstersOnField.Any(m => m.Name == "Fire Beast"), "Hiita should take control of the FIRE monster.");
+                e.Destroy(hiita.Card, null);
+                Expect(failures, e.Me(1).MonstersOnField.Any(m => m.Name == "Fire Beast"), "Control should return when the Charmer leaves the field.");
+            }
         }
 
         private static void CheckEffects(List<string> failures)
