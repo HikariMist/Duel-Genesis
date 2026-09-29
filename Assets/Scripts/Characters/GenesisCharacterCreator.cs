@@ -90,7 +90,13 @@ namespace DuelGenesis.Characters
         {
             if (!IsOpen) return;
             IsOpen = false;
-            if (save) GenesisAppearanceStore.Save(_look);
+            _rebuildAt = -1f;
+            _liveDirty = false;
+            if (save)
+            {
+                GenesisAppearanceStore.Save(_look);
+                if (_character != null) _character.Rebuild(_look);
+            }
             else if (_character != null) _character.Rebuild(_before);
             if (_character != null) _character.transform.localRotation = _avatarRest;
             if (_camera != null) Destroy(_camera.gameObject);
@@ -104,9 +110,11 @@ namespace DuelGenesis.Characters
             Transform t = _character.transform;
             t.localRotation = _avatarRest * Quaternion.Euler(0f, _spin, 0f);
             Transform owner = t.parent != null ? t.parent : t;
-            float h = _look.gender == GenesisGender.Male ? 1.74f : 1.64f;
+            float baseHeight = _look.gender == GenesisGender.Male ? 1.74f : 1.64f;
+            float heightScale = 1f + _look.height * 0.0012f;
+            float h = baseHeight * heightScale;
             Vector3 target = t.position + Vector3.up * (_faceView ? h - 0.12f : h * 0.55f);
-            float dist = _faceView ? 0.9f : 4.2f;
+            float dist = (_faceView ? 0.9f : 4.2f) * heightScale;
             _camera.transform.position = target + owner.forward * dist;
             _camera.transform.rotation = Quaternion.LookRotation(target - _camera.transform.position, Vector3.up);
         }
@@ -139,7 +147,12 @@ namespace DuelGenesis.Characters
             for (int i = 0; i < tabs.Length; i++)
             {
                 bool on = (int)_tab == i;
-                if (GUI.Button(new Rect(x + 24f + i * tw, 64f, tw - 6f, 36f), tabs[i], Button(on))) { _tab = (Tab)i; _scroll = Vector2.zero; }
+                if (GUI.Button(new Rect(x + 24f + i * tw, 64f, tw - 6f, 36f), tabs[i], Button(on)))
+                {
+                    _tab = (Tab)i;
+                    _scroll = Vector2.zero;
+                    if (_tab == Tab.Face) _faceView = true;
+                }
             }
 
             var body = new Rect(x + 24f, 112f, w - 48f, Screen.height - 200f);
@@ -194,7 +207,6 @@ namespace DuelGenesis.Characters
         private void DrawFace()
         {
             var groups = GenesisMorphMap.FaceGroups;
-            _faceView = true;
             _faceGroup = GUILayout.SelectionGrid(_faceGroup, groups.Select(g => g.label.ToUpperInvariant()).ToArray(), 5, Button(false));
             var group = groups[Mathf.Clamp(_faceGroup, 0, groups.Length - 1)];
             float[] values = group.values(_look.face);
