@@ -28,7 +28,7 @@ namespace DuelGenesis.EditorTools
         public const float CardShopYaw = 180f;                                      // local +Z (front) faces world -Z
 
         /// <summary>The shop and its parking lot in world space, kept clear by the nature planter.</summary>
-        public static bool InCardShopLot(Vector2 world) => world.x > 55f && world.x < 101f && world.y > 7f && world.y < 84f;
+        public static bool InCardShopLot(Vector2 world) => world.x > 55f && world.x < 101f && world.y > 7f && world.y < 93f;
 
         [MenuItem("Duel Genesis/World/11. Build Genesis Card Shop (open city)")]
         public static void BuildCardShopMenu()
@@ -53,7 +53,7 @@ namespace DuelGenesis.EditorTools
             Object.FindFirstObjectByType<DuelGenesis.Player.ThirdPersonCamera>()?.SnapBehind(spot.transform.forward);
         }
 
-        private const float HallZ = -16f;    // hall centre (local z); the Inn stands in front of it
+        private const float HallZ = -24.5f;    // hall centre (local z); the Inn stands in front of it
         private const float ShopW = 18f;     // half width
         private const float ShopD = 12f;     // half depth
         private const float ShopH = 9f;      // roof height
@@ -132,6 +132,9 @@ namespace DuelGenesis.EditorTools
                 Box(hall, "Entrance Mat", new Vector3(x, 0.065f, ShopD - 1.2f), new Vector3(doorHalf * 2f, 0.01f, 2.4f), s < 0 ? magenta : cyan, collider: false)
                     .GetComponent<Renderer>().sharedMaterial = Mat(s < 0 ? "CS Rug Magenta" : "CS Rug Cyan", (s < 0 ? Magenta : Cyan) * 0.35f, smooth: 0.1f);
             }
+            // Video billboards on the outside of both side walls.
+            VideoWall(hall, "Billboard West", new Vector3(-ShopW - 0.25f, 5.2f, 2f), 90f, 3f, metal, screen, 6);
+            VideoWall(hall, "Billboard East", new Vector3(ShopW + 0.25f, 5.2f, 2f), -90f, 3f, metal, screen, 8);
             // Neon trim on the outside of the hall: roof line and corners.
             Box(hall, "Roof Line Glow", new Vector3(0f, ShopH + 0.42f, ShopD + 0.22f), new Vector3(ShopW * 2f + 0.4f, 0.08f, 0.06f), magenta, collider: false);
             foreach (float s in new[] { -1f, 1f })
@@ -168,8 +171,8 @@ namespace DuelGenesis.EditorTools
             spinner.localPosition = hero + new Vector3(0f, 2.3f, 0f);
             spinner.gameObject.AddComponent<DuelGenesis.Core.GenesisSpin>().degreesPerSecond = new Vector3(0f, 25f, 0f);
             Box(spinner, "Card Frame", Vector3.zero, new Vector3(2.2f, 3.2f, 0.08f), gold, collider: false);
-            Quad(spinner, "Card Face A", new Vector3(0f, 0f, -0.05f), new Vector2(2f, 2.95f), 0f, screen).AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = 3;
-            Quad(spinner, "Card Face B", new Vector3(0f, 0f, 0.05f), new Vector2(2f, 2.95f), 180f, screen).AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = 11;
+            Quad(spinner, "Card Face A", new Vector3(0f, 0f, -0.05f), new Vector2(2f, 2.95f), 0f, Pack(0)).AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = 3;
+            Quad(spinner, "Card Face B", new Vector3(0f, 0f, 0.05f), new Vector2(2f, 2.95f), 180f, Pack(1)).AddComponent<DuelGenesis.Core.GenesisCardSlideshow>().offset = 11;
             SpotLight(hall, "Hero Spot W", new Vector3(-4f, ShopH - 0.4f, 9f), hero + Vector3.up * 2f, new Color(1f, 0.6f, 0.9f));
             SpotLight(hall, "Hero Spot E", new Vector3(4f, ShopH - 0.4f, 9f), hero + Vector3.up * 2f, new Color(0.6f, 0.9f, 1f));
 
@@ -177,7 +180,7 @@ namespace DuelGenesis.EditorTools
             int card = 0;
             foreach (float s in new[] { -1f, 1f })
                 foreach (float x in new[] { 4.2f, 8f })
-                    Showcase(hall, new Vector3(s * x, 0f, 8.4f), charcoal, s < 0 ? magenta : cyan, glass, s < 0 ? magenta : cyan, Pack(card++), Pack(card++), Pack(card++));
+                    Showcase(hall, new Vector3(s * x, 0f, 8.4f), charcoal, metal, glass, s < 0 ? magenta : cyan, Pack(card++), Pack(card++), Pack(card++));
             HangingSign(hall, "RARE SINGLES", new Vector3(-6.1f, 5.4f, 8.4f), board, magenta, 0f, 6f);
             HangingSign(hall, "NEW RELEASES", new Vector3(6.1f, 5.4f, 8.4f), board, cyan, 0f, 6f);
 
@@ -336,46 +339,47 @@ namespace DuelGenesis.EditorTools
 
         /// <summary>Places the Dragon Gate Inn (daydev, CC BY 4.0) as the shop's front: its round base, dirt and outer rim are
         /// hidden, it is scaled up so the inn is ~15 m tall, and its back sits against the hall's front wall.</summary>
+        // Tools/glb_to_obj.py centres the inn building (x/z) on the origin and drops its round base; the model spans
+        // z -7.96 (bamboo behind) .. +5.33 (front trees) and the building itself is 9.96 x 7.84 x 8.46 m.
+        private const float InnScale = 2f, InnBackZ = 7.96f;
+        private static readonly Vector3 InnBuilding = new Vector3(9.96f, 7.84f, 8.46f);
+
+        /// <summary>Places the Dragon Gate Inn (daydev, CC BY 4.0) in front of the hall with a welcome arch before it.</summary>
         private static void PlaceInn(Transform root, float hallFrontZ, Material gold)
         {
             GameObject prefab = GenesisSketchfabModels.Load("DragonGateInn");
             if (prefab == null) { Debug.LogWarning("Duel: Genesis: Dragon Gate Inn model not found (Production Assets > Set Up Sketchfab Models)."); return; }
             var inn = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root);
             inn.name = "Dragon Gate Inn (by daydev, CC BY 4.0)";
+            float z = hallFrontZ + 0.5f + InnBackZ * InnScale;
+            inn.transform.localPosition = new Vector3(0f, 0.07f, z);
             inn.transform.localRotation = Quaternion.identity;
-            inn.transform.localScale = Vector3.one * 2f;
-            foreach (Renderer r in inn.GetComponentsInChildren<Renderer>(true))
-            {
-                string m = r.sharedMaterial != null ? r.sharedMaterial.name : "";
-                if (m.StartsWith("Dirt") || m.StartsWith("Rock")) r.gameObject.SetActive(false);
-            }
-            Physics.SyncTransforms();
-            // The inn itself (walls, roofs, windows) decides the placement; trees and signs come along.
-            string[] building = { "WallRed", "Roof", "ChineseWindows", "Gold", "LionDoors", "GreenDark", "Wood_red" };
-            Bounds b = new Bounds();
-            bool any = false;
-            foreach (Renderer r in inn.GetComponentsInChildren<Renderer>())
-            {
-                string m = r.sharedMaterial != null ? r.sharedMaterial.name : "";
-                if (!building.Any(k => m.StartsWith(k))) continue;
-                Bounds lb = ToLocal(root, r.bounds);
-                if (!any) { b = lb; any = true; } else b.Encapsulate(lb);
-            }
-            Bounds all = LocalBounds(root, inn);
-            if (!any) b = all;
-            inn.transform.localPosition += new Vector3(-b.center.x, -all.min.y, hallFrontZ + 0.4f - b.min.z);
-            // A solid block for the building so players walk around it, not through it.
-            Physics.SyncTransforms();
-            b = new Bounds(b.center + new Vector3(-b.center.x, -all.min.y, hallFrontZ + 0.4f - b.min.z), b.size);
+            inn.transform.localScale = Vector3.one * InnScale;
+            GameObjectUtility.SetStaticEditorFlags(inn, StaticEditorFlags.BatchingStatic);
+
+            // Solid building so players walk around it, not through it.
+            Vector3 size = InnBuilding * InnScale;
             var block = new GameObject("Inn Collider");
             block.transform.SetParent(root, false);
-            block.transform.localPosition = b.center;
-            block.AddComponent<BoxCollider>().size = new Vector3(b.size.x * 0.85f, b.size.y, b.size.z * 0.85f);
-            // Our sign across the inn front.
-            Vector3 front = new Vector3(0f, Mathf.Min(6.2f, b.max.y * 0.45f), b.max.z + 0.3f);
-            Box(root, "Inn Sign Board", front, new Vector3(9f, 1.5f, 0.2f), Mat("CS Charcoal", new Color(0.055f, 0.06f, 0.075f), metallic: 0.55f, smooth: 0.75f), collider: false);
-            Box(root, "Inn Sign Glow", front + new Vector3(0f, -0.8f, 0.05f), new Vector3(9f, 0.07f, 0.06f), gold, collider: false);
-            Sign(root, "GENESIS  CARDS", front + new Vector3(0f, 0f, 0.11f), 180f, 0.09f, Color.Lerp(Gold, Color.white, 0.3f));
+            block.transform.localPosition = new Vector3(0f, size.y * 0.5f, z);
+            block.AddComponent<BoxCollider>().size = new Vector3(size.x * 0.9f, size.y, size.z * 0.9f);
+            PointLight(root, "Inn Neon Glow", new Vector3(0f, 5f, z + size.z * 0.5f + 2f), 18f, 4f, new Color(1f, 0.45f, 0.8f));
+
+            // Welcome arch at the front of the forecourt.
+            Material charcoal = Mat("CS Charcoal", new Color(0.055f, 0.06f, 0.075f), metallic: 0.55f, smooth: 0.75f);
+            Material cyan = Mat("DC Glow Cyan", Cyan, emission: Cyan * 2.2f);
+            Material magenta = Mat("DC Glow Magenta", Magenta, emission: Magenta * 2f);
+            const float archZ = 14.95f, archHalf = 11.5f, archY = 6.2f;
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Box(root, "Arch Post", new Vector3(s * archHalf, archY * 0.5f, archZ), new Vector3(0.7f, archY, 0.7f), charcoal);
+                Box(root, "Arch Post Glow", new Vector3(s * archHalf, archY * 0.5f, archZ + 0.36f), new Vector3(0.08f, archY, 0.02f), s < 0 ? magenta : cyan, collider: false);
+            }
+            Box(root, "Arch Beam", new Vector3(0f, archY + 0.6f, archZ), new Vector3(archHalf * 2f + 0.7f, 1.4f, 0.5f), charcoal, collider: false);
+            Box(root, "Arch Glow Low", new Vector3(0f, archY - 0.08f, archZ + 0.26f), new Vector3(archHalf * 2f + 0.7f, 0.07f, 0.04f), gold, collider: false);
+            Box(root, "Arch Glow High", new Vector3(0f, archY + 1.28f, archZ + 0.26f), new Vector3(archHalf * 2f + 0.7f, 0.07f, 0.04f), magenta, collider: false);
+            Sign(root, "GENESIS  CARDS", new Vector3(0f, archY + 0.6f, archZ + 0.27f), 180f, 0.1f, Color.Lerp(Gold, Color.white, 0.3f));
+            Sign(root, "GENESIS  CARDS", new Vector3(0f, archY + 0.6f, archZ - 0.27f), 0f, 0.1f, Color.Lerp(Gold, Color.white, 0.3f));
         }
 
         private static Bounds ToLocal(Transform space, Bounds world)
@@ -408,7 +412,7 @@ namespace DuelGenesis.EditorTools
             Box(root, "Showcase Base", foot + new Vector3(0f, 0.45f, 0f), new Vector3(3f, 0.9f, 1.1f), wood);
             Box(root, "Showcase Trim", foot + new Vector3(0f, 0.92f, 0f), new Vector3(3.04f, 0.05f, 1.14f), trim, collider: false);
             Box(root, "Showcase Glass", foot + new Vector3(0f, 1.3f, 0f), new Vector3(3f, 0.7f, 1.1f), glass, collider: false);
-            Box(root, "Showcase Glow", foot + new Vector3(0f, 0.95f, 0f), new Vector3(2.9f, 0.02f, 1f), glow, collider: false);
+            Box(root, "Showcase Glow", foot + new Vector3(0f, 0.6f, 0.56f), new Vector3(2.9f, 0.04f, 0.02f), glow, collider: false);
             Material[] faces = { a, b, c };
             for (int k = 0; k < 3; k++)
             {

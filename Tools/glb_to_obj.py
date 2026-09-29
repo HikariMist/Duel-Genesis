@@ -1,7 +1,9 @@
 """Convert a .glb (glTF 2.0 binary) to OBJ + MTL + textures + a materials.json sidecar, stdlib + numpy only.
 Handles node hierarchies (TRS or matrix), POSITION/NORMAL/TEXCOORD_0, triangle lists, metal-rough and
 KHR_materials_pbrSpecularGlossiness materials, emissive textures/factors and KHR_materials_emissive_strength.
-Usage: python3 glb_to_obj.py in.glb out_dir name"""
+Usage: python3 glb_to_obj.py in.glb out_dir name [exclude_prefixes] [center_prefixes]
+  exclude_prefixes: comma list of material names to drop (Unity merges an OBJ into one mesh, so parts can't be hidden later)
+  center_prefixes:  comma list of materials whose bounds are moved to x=z=0 with the lowest kept vertex at y=0"""
 import json, struct, sys, os
 import numpy as np
 
@@ -46,7 +48,8 @@ def node_matrix(n):
     M = np.eye(4); M[:3, :3] = R * np.array(s); M[:3, 3] = t
     return M
 
-def main(path, out, name):
+def main(path, out, name, exclude="", center="", drop_behind=""):
+    exclude = [e for e in exclude.split(",") if e]; center = [c for c in center.split(",") if c]
     j, binc = load(path)
     os.makedirs(out, exist_ok=True)
     # textures
@@ -95,6 +98,7 @@ def main(path, out, name):
     vo = 1
     lo, hi = np.full(3, 1e9), np.full(3, -1e9)
     tris = 0
+    parts = []
     scene = j['scenes'][j.get('scene', 0)]
     stack = [(ni, np.eye(4)) for ni in scene['nodes']]
     while stack:
@@ -117,6 +121,9 @@ def main(path, out, name):
             if np.linalg.det(M[:3, :3]) < 0: idx = idx.reshape(-1, 3)[:, ::-1].reshape(-1)
             lo = np.minimum(lo, pos.min(0)); hi = np.maximum(hi, pos.max(0))
             mat = mats[p['material']]['name'] if 'material' in p else 'default'
+            if any(mat.startswith(e) for e in exclude): continue
+            parts.append((f"{mesh.get('name', 'mesh')}_{ni}_{pi}", mat, pos, uv, nrm, idx))
+            continue
             lines.append(f"o {mesh.get('name', 'mesh')}_{ni}_{pi}\nusemtl {mat}\n")
             lines.extend(f'v {a:.5f} {b:.5f} {c:.5f}\n' for a, b, c in pos)
             lines.extend(f'vt {a:.5f} {1 - b:.5f}\n' for a, b in uv)
@@ -124,8 +131,32 @@ def main(path, out, name):
             t = idx.reshape(-1, 3) + vo
             lines.extend(f'f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}\n' for a, b, c in t)
             tris += len(t); vo += len(pos)
+    allpos = np.concatenate([p[2] for p in parts])
+    ref = [p[2] for p in parts if any(p[1].startswith(c) for c in center)] or [allpos]
+    ref = np.concatenate(ref)
+    if center and drop_behind:   # decoration standing behind the centred building would poke into whatever is built behind it
+        back = ref[:, 2].min()
+        parts = [pt for pt in parts if any(pt[1].startswith(c) for c in center) or pt[2][:, 2].mean() >= back - float(drop_behind)]
+        allpos = np.concatenate([pt[2] for pt in parts])
+    shift = np.array([-(ref[:, 0].min() + ref[:, 0].max()) / 2, -allpos[:, 1].min(), -(ref[:, 2].min() + ref[:, 2].max()) / 2]) if center else np.zeros(3)
+    footprint = (ref.max(0) - ref.min(0)).round(3).tolist()
+    lo, hi = np.full(3, 1e9), np.full(3, -1e9)
+    for oname, mat, pos, uv, nrm, idx in parts:
+        pos = pos + shift
+        lo = np.minimum(lo, pos.min(0)); hi = np.maximum(hi, pos.max(0))
+        lines.append(f"o {oname}\nusemtl {mat}\n")
+        lines.extend(f'v {a:.5f} {b:.5f} {c:.5f}\n' for a, b, c in pos)
+        lines.extend(f'vt {a:.5f} {1 - b:.5f}\n' for a, b in uv)
+        lines.extend(f'vn {a:.4f} {b:.4f} {c:.4f}\n' for a, b, c in nrm)
+        t = idx.reshape(-1, 3) + vo
+        lines.extend(f'f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}\n' for a, b, c in t)
+        tris += len(t); vo += len(pos)
     open(os.path.join(out, f'{name}.obj'), 'w').writelines(lines)
+    meta = json.load(open(os.path.join(out, f'{name}_materials.json')))
+    meta['footprint'] = footprint
+    meta['bounds'] = {'min': lo.round(3).tolist(), 'max': hi.round(3).tolist()}
+    json.dump(meta, open(os.path.join(out, f'{name}_materials.json'), 'w'), indent=1)
     print(name, 'tris', tris, 'verts', vo - 1, 'bounds', lo.round(2), hi.round(2), 'size', (hi - lo).round(2), 'mats', len(mats), 'textures', len(set(tex_files.values())))
 
 if __name__ == '__main__':
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:7])

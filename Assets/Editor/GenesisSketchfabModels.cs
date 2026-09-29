@@ -26,6 +26,18 @@ namespace DuelGenesis.EditorTools
             AssetDatabase.SaveAssets();
         }
 
+        [MenuItem("Duel Genesis/DEV/Log Card Shop Inn Parts")]
+        public static void LogInnParts()
+        {
+            GameObject inn = GameObject.Find("Dragon Gate Inn (by daydev, CC BY 4.0)");
+            if (inn == null) { Debug.LogWarning("no inn"); return; }
+            var sb = new System.Text.StringBuilder();
+            foreach (Renderer r in inn.GetComponentsInChildren<Renderer>(true))
+                sb.AppendLine($"{r.name} | active {r.gameObject.activeInHierarchy} | mats {string.Join(",", r.sharedMaterials.Select(m => m != null ? m.name : "null"))} | min {r.bounds.min} max {r.bounds.max}");
+            File.WriteAllText("Logs/DG-InnParts.txt", sb.ToString());
+            Debug.Log("Duel: Genesis wrote Logs/DG-InnParts.txt");
+        }
+
         public static GameObject Load(string model) => AssetDatabase.LoadAssetAtPath<GameObject>($"{Root}/{model}/{model}.obj");
 
         public static void SetUp(string model)
