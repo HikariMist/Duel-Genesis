@@ -68,6 +68,7 @@ namespace DuelGenesis.UI
                 CardRarity.Rare => Cyan,
                 CardRarity.SuperRare => Purple,
                 CardRarity.UltraRare => Gold,
+                CardRarity.SecretRare => Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime * 0.22f, 1f), 0.6f, 1f),
                 _ => Color.white
             };
         }

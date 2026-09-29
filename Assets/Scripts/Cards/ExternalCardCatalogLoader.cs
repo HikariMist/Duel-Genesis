@@ -55,6 +55,13 @@ namespace DuelGenesis.Cards
         }
     }
 
+    [Serializable]
+    public class CardRarityTable
+    {
+        [Serializable] public class Entry { public string id; public string name; public string rarity; }
+        public List<Entry> rarities = new();
+    }
+
     public static class CardModelRegistry
     {
         private static readonly Dictionary<string, string> ResourcePaths = new();
@@ -98,6 +105,10 @@ namespace DuelGenesis.Cards
 
             return Resources.Load<GameObject>($"Models/{characterName}");
         }
+
+        /// <summary>Cheap check (manifest lookup only) — does not load the prefab.</summary>
+        public static bool HasModel(CardData card) =>
+            card != null && (ResourcePaths.ContainsKey(card.id ?? string.Empty) || TryResolveDmoCharacterName(card.cardName, out _));
 
         public static AnimationClip[] LoadAnimationClips(CardData card)
         {
@@ -151,6 +162,8 @@ namespace DuelGenesis.Cards
     public class ExternalCardCatalogLoader : MonoBehaviour
     {
         public const string CatalogFileName = "duel_genesis_cards.json";
+        /// <summary>id -> rarity from Tools/assign_rarities.py; wins over the catalog so a rebuilt catalog keeps them.</summary>
+        public const string RarityFileName = "duel_genesis_rarities.json";
         private const string ExcludedCardName = "Tricky Token";
         public int LoadedCardCount { get; private set; }
 
@@ -183,9 +196,12 @@ namespace DuelGenesis.Cards
                     return;
                 }
 
+                Dictionary<string, string> rarities = LoadRarities();
                 int registered = 0;
                 foreach (ExternalCardRecord record in catalog.cards)
                 {
+                    if (record != null && record.id != null && rarities.TryGetValue(record.id, out string rarity))
+                        record.rarity = rarity;
                     if (record == null || string.IsNullOrWhiteSpace(record.id))
                         continue;
                     if (string.Equals(record.cardName?.Trim(), ExcludedCardName, StringComparison.OrdinalIgnoreCase))
@@ -198,7 +214,7 @@ namespace DuelGenesis.Cards
                 }
 
                 LoadedCardCount = registered;
-                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production cards. Prototype cards and Tricky Token are disabled.");
+                Debug.Log($"Duel: Genesis loaded {LoadedCardCount} production cards ({rarities.Count} rarities from {RarityFileName}). Prototype cards and Tricky Token are disabled.");
             }
             catch (Exception exception)
             {
@@ -206,6 +222,25 @@ namespace DuelGenesis.Cards
                 LoadedCardCount = 0;
                 Debug.LogError("Failed to load Duel: Genesis production card catalog: " + exception.Message);
             }
+        }
+    
+        private static Dictionary<string, string> LoadRarities()
+        {
+            var map = new Dictionary<string, string>();
+            string path = Path.Combine(Application.streamingAssetsPath, RarityFileName);
+            if (!File.Exists(path)) return map;
+            try
+            {
+                CardRarityTable table = JsonUtility.FromJson<CardRarityTable>(File.ReadAllText(path));
+                if (table?.rarities != null)
+                    foreach (CardRarityTable.Entry e in table.rarities)
+                        if (!string.IsNullOrWhiteSpace(e?.id) && !string.IsNullOrWhiteSpace(e.rarity)) map[e.id] = e.rarity;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("Duel: Genesis could not read " + RarityFileName + ": " + exception.Message);
+            }
+            return map;
         }
     }
 }

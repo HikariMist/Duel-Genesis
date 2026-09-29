@@ -34,11 +34,16 @@ namespace DuelGenesis.EditorTools
             if (StarterLoadout.StarterDeckSize != 40)
                 failures.Add($"Starter deck must contain 40 cards, found {StarterLoadout.StarterDeckSize}.");
 
-            for (int i = 1; i <= 20; i++)
+            // The retired DG001-DG024 prototype cards are gone; validate the real production catalog instead.
+            string catalogPath = System.IO.Path.Combine(Application.streamingAssetsPath, "duel_genesis_cards.json");
+            if (!System.IO.File.Exists(catalogPath))
+                failures.Add("Production card catalog (StreamingAssets/duel_genesis_cards.json) is missing.");
+            else
             {
-                string id = $"DG{i:000}";
-                if (CardDatabase.GetById(id) == null)
-                    failures.Add($"Starter card {id} is missing from CardDatabase.");
+                ExternalCardCatalog catalog = JsonUtility.FromJson<ExternalCardCatalog>(System.IO.File.ReadAllText(catalogPath));
+                int count = catalog?.cards?.Count ?? 0;
+                if (count < 500)
+                    failures.Add($"Production card catalog only has {count} cards.");
             }
 
             if (DuelistProfile.RequiredXPForNextLevel(1) <= 0)
@@ -48,18 +53,14 @@ namespace DuelGenesis.EditorTools
             if (DuelistProfile.GetTitleForLevel(100) != "Genesis Legend")
                 failures.Add("Level 100 title is not Genesis Legend.");
 
-            if (CardDatabase.All.Count < 24)
-                failures.Add("Prototype card pool is unexpectedly small.");
 
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scenes/GenesisPrototype.unity") == null)
                 failures.Add("GenesisPrototype.unity is missing. Build or restore the playable prototype scene.");
 
-            if (AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/StreamingAssets/duel_genesis_cards.example.json") == null)
-                failures.Add("External card catalog example JSON is missing.");
 
             bool passed = failures.Count == 0;
             string report = passed
-                ? "Duel: Genesis vertical-slice validation PASS — scene, starter deck, progression formulas, card pool and import template are valid."
+                ? "Duel: Genesis vertical-slice validation PASS — scene, starter deck size, progression formulas and production card catalog are valid."
                 : "Duel: Genesis vertical-slice validation FAILED:\n- " + string.Join("\n- ", failures);
 
             if (passed) Debug.Log(report);

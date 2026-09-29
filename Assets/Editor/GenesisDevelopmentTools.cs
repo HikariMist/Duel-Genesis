@@ -58,6 +58,25 @@ namespace DuelGenesis.EditorTools
             wallet.Add(50000);
         }
 
+        [MenuItem("Duel Genesis/DEV/Give Player Every Card (3 copies) In Play Mode")]
+        public static void GiveEveryCard()
+        {
+            if (!Application.isPlaying)
+            {
+                EditorUtility.DisplayDialog("Duel: Genesis", "Enter Play Mode first.", "OK");
+                return;
+            }
+
+            PlayerCollection collection = Object.FindFirstObjectByType<PlayerCollection>();
+            if (collection == null)
+            {
+                EditorUtility.DisplayDialog("Duel: Genesis", "PlayerCollection was not found.", "OK");
+                return;
+            }
+
+            collection.GrantEveryCard(3);
+        }
+
         [MenuItem("Duel Genesis/DEV/Re-run Runtime Diagnostics In Play Mode")]
         public static void RunRuntimeDiagnostics()
         {

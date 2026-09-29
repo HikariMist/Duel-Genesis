@@ -25,6 +25,12 @@ namespace DuelGenesis.Core
             if (_applied) return;
             _applied = true;
 
+            if (GameObject.Find("DG City") != null)
+            {
+                ApplyCityAtmosphere();
+                return;
+            }
+
             RenderSettings.ambientLight = new Color(0.12f, 0.15f, 0.23f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
@@ -51,7 +57,28 @@ namespace DuelGenesis.Core
             Colorize("Seat Interaction", new Color(0.10f, 0.16f, 0.22f, 1f));
 
             BuildGenesisPlazaDecor();
-            BuildTabletopZoneGlow();
+            AddAccentLights();   // the duel table builds its own mat, zones and lighting (DuelBoardView)
+        }
+
+        /// <summary>Genesis City (Akihabara map) is in the scene: dusk sky, long-range haze, neon accents kept.</summary>
+        private static void ApplyCityAtmosphere()
+        {
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.55f, 0.47f, 0.52f, 1f);
+            RenderSettings.fogStartDistance = 70f;
+            RenderSettings.fogEndDistance = 480f;
+
+            Camera camera = Camera.main;
+            if (camera != null)
+            {
+                camera.clearFlags = RenderSettings.skybox != null ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
+                camera.farClipPlane = Mathf.Max(camera.farClipPlane, 900f);
+            }
+
+            Colorize("Pack Terminal - 1000 GC", Purple, true);
+            Colorize("Seat Interaction", new Color(0.10f, 0.16f, 0.22f, 1f));
+            BuildGenesisPlazaDecor(true);
             AddAccentLights();
         }
 
@@ -94,13 +121,16 @@ namespace DuelGenesis.Core
             return material;
         }
 
-        private static void BuildGenesisPlazaDecor()
+        private static void BuildGenesisPlazaDecor(bool city = false)
         {
             if (GameObject.Find("DG Genesis Plaza Decor") != null)
                 return;
 
             GameObject root = new GameObject("DG Genesis Plaza Decor");
 
+            // Genesis City has real streets, lamps and shops: only the prototype graybox needs the neon set dressing.
+            if (!city)
+            {
             // Main illuminated route from spawn toward the shop and duel table.
             for (int i = 0; i < 8; i++)
             {
@@ -114,15 +144,29 @@ namespace DuelGenesis.Core
             CreatePylon(root.transform, "Shop Pylon B", new Vector3(-2.8f, 0f, -1.2f), Cyan);
             CreatePylon(root.transform, "Arena Pylon A", new Vector3(3.4f, 0f, -1.1f), Cyan);
             CreatePylon(root.transform, "Arena Pylon B", new Vector3(8.8f, 0f, -1.1f), Magenta);
+            }
 
-            CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 4.15f, -0.62f), Purple, 0.42f);
-            CreateSign(root.transform, "NEON DUEL TABLE", new Vector3(6f, 3.15f, 0f), Cyan, 0.36f);
-            CreateSign(root.transform, "GENESIS CITY // PROTOTYPE DISTRICT", new Vector3(0f, 0.08f, 7.8f), Mint, 0.31f, new Vector3(90f, 0f, 0f));
+            if (city)
+            {
+                // Real-world sized signage for the Genesis City hub (letters ~25-40 cm tall).
+                // The plaza's shop is now the Kame Game Shop (its own sign), so only the table and plaza get labels.
+                CreateSign(root.transform, "DUEL TABLE", new Vector3(6f, 2.55f, 3.6f), Cyan, 0.05f);
+                CreateSign(root.transform, "GENESIS CITY", new Vector3(0f, 0.03f, -7f), Mint, 0.07f, new Vector3(90f, 0f, 0f));
+            }
+            else
+            {
+                CreateSign(root.transform, "GENESIS CARD SHOP", new Vector3(-6f, 4.15f, -0.62f), Purple, 0.42f);
+                CreateSign(root.transform, "NEON DUEL TABLE", new Vector3(6f, 3.15f, 0f), Cyan, 0.36f);
+                CreateSign(root.transform, "GENESIS CITY // PROTOTYPE DISTRICT", new Vector3(0f, 0.08f, 7.8f), Mint, 0.31f, new Vector3(90f, 0f, 0f));
+            }
 
+            if (!city)
+            {
             // Small glowing kiosks imply a larger future city without needing external art assets yet.
             CreateKiosk(root.transform, "Collection Kiosk", new Vector3(-2.8f, 0.6f, 5.8f), Cyan);
             CreateKiosk(root.transform, "Deck Workshop Kiosk", new Vector3(0f, 0.6f, 5.8f), Purple);
             CreateKiosk(root.transform, "Ranked Arena Kiosk", new Vector3(2.8f, 0.6f, 5.8f), Magenta);
+            }
         }
 
         private static void CreateWorldTile(Transform parent, string name, Vector3 position, Vector3 scale, Color color)
@@ -192,32 +236,6 @@ namespace DuelGenesis.Core
                 renderer.material = CreateMaterial(color, true);
         }
 
-        private static void BuildTabletopZoneGlow()
-        {
-            GameObject root = GameObject.Find("Duel Table Prototype");
-            if (root == null || root.transform.Find("DG Visual Zone Grid") != null)
-                return;
-
-            GameObject grid = new GameObject("DG Visual Zone Grid");
-            grid.transform.SetParent(root.transform, false);
-
-            const float startX = -1.68f;
-            const float spacing = 0.84f;
-
-            for (int i = 0; i < 5; i++)
-            {
-                float x = startX + spacing * i;
-                CreateTile(grid.transform, $"Player Monster Zone {i + 1}", new Vector3(x, 1.345f, -0.34f), new Vector3(0.67f, 0.018f, 0.46f), Cyan);
-                CreateTile(grid.transform, $"CPU Monster Zone {i + 1}", new Vector3(x, 1.345f, 0.34f), new Vector3(0.67f, 0.018f, 0.46f), Magenta);
-                CreateTile(grid.transform, $"Player Spell Trap Zone {i + 1}", new Vector3(x, 1.345f, -0.91f), new Vector3(0.67f, 0.014f, 0.32f), new Color(0.10f, 0.45f, 0.52f, 1f));
-                CreateTile(grid.transform, $"CPU Spell Trap Zone {i + 1}", new Vector3(x, 1.345f, 0.91f), new Vector3(0.67f, 0.014f, 0.32f), new Color(0.42f, 0.13f, 0.50f, 1f));
-            }
-
-            CreateTile(grid.transform, "Genesis Center Line", new Vector3(0f, 1.36f, 0f), new Vector3(4.08f, 0.022f, 0.045f), Mint);
-            CreateTile(grid.transform, "Player Deck Marker", new Vector3(1.95f, 1.37f, -1.13f), new Vector3(0.42f, 0.025f, 0.25f), Gold);
-            CreateTile(grid.transform, "CPU Deck Marker", new Vector3(-1.95f, 1.37f, 1.13f), new Vector3(0.42f, 0.025f, 0.25f), Gold);
-        }
-
         private static void CreateTile(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Color color)
         {
             GameObject tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -241,13 +259,6 @@ namespace DuelGenesis.Core
 
         private static void AddAccentLights()
         {
-            GameObject table = GameObject.Find("Duel Table Prototype");
-            if (table != null && table.transform.Find("DG Cyan Light") == null)
-            {
-                AddPointLight(table.transform, "DG Cyan Light", new Vector3(-1.7f, 3.2f, -0.2f), Cyan, 3.2f, 6.5f);
-                AddPointLight(table.transform, "DG Magenta Light", new Vector3(1.7f, 3.2f, 0.2f), Magenta, 3.2f, 6.5f);
-            }
-
             GameObject shop = GameObject.Find("Genesis Card Shop Prototype");
             if (shop != null && shop.transform.Find("DG Shop Glow") == null)
                 AddPointLight(shop.transform, "DG Shop Glow", new Vector3(0f, 2.4f, -1.3f), Purple, 2.8f, 5f);

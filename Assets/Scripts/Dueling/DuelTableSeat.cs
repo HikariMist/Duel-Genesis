@@ -18,6 +18,8 @@ namespace DuelGenesis.Dueling
         private bool _hasReturnPoint;
         private bool _duelWasActive;
 
+        public bool IsOccupied => _seatedPlayer != null;
+
         public string InteractionPrompt
         {
             get
@@ -126,6 +128,8 @@ namespace DuelGenesis.Dueling
             }
 
             _seatedPlayer.SetMovementEnabled(true);
+            ThirdPersonCamera camera = Object.FindAnyObjectByType<ThirdPersonCamera>();
+            if (camera != null) camera.SetLookEnabled(true);
             _seatedPlayer = null;
             _hasReturnPoint = false;
             _duelWasActive = false;
