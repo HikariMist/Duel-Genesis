@@ -316,14 +316,18 @@ namespace DuelGenesis.Dueling
             float halfHeight = Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) * distance;
             float halfWidth = halfHeight * _camera.aspect;
 
-            float scale = 0.78f;
+            float scale = 0.6f;   // smaller fan so the whole hand stays on screen and the back row shows above it
             float cardW = DuelMatLayout.CardWidthMm * 0.001f * scale;
-            float spacing = Mathf.Min(cardW * 0.92f, halfWidth * 1.3f / Mathf.Max(1, count - 1));
+            float spacing = Mathf.Min(cardW * 0.92f, (halfWidth * 1.7f - cardW) / Mathf.Max(1, count - 1));   // the whole fan fits the screen width
             float offset = (i - (count - 1) * 0.5f);
             bool hovered = card == HoveredCard;
             bool raised = hovered || (CardHighlight != null && CardHighlight(card).strength > 0.5f);
 
-            Vector3 centre = cam.position + cam.forward * distance - cam.up * (halfHeight * 0.76f);
+            // Keep the fan's lowest card (the fan curves down at the ends) inside the bottom of the screen.
+            float cardH = DuelMatLayout.CardWidthMm * 0.001f * scale * 1.46f;
+            float edgeDrop = ((count - 1) * 0.5f) * ((count - 1) * 0.5f) * 0.0012f;
+            float lowest = halfHeight - cardH * 0.5f - edgeDrop - 0.006f;
+            Vector3 centre = cam.position + cam.forward * distance - cam.up * Mathf.Min(halfHeight * 0.7f, lowest);
             Vector3 world = centre + cam.right * (offset * spacing) - cam.up * (offset * offset * 0.0012f)
                             + cam.up * (raised ? (hovered ? 0.032f : 0.012f) : 0f)
                             - cam.forward * (i * 0.0006f + (hovered ? 0.01f : 0f));
@@ -563,8 +567,8 @@ namespace DuelGenesis.Dueling
 
             float surface = DuelMatLayout.SurfaceY;
             // Seated: eyes ~47 cm above the table, 60 cm from its centre (a real seated duelist).
-            Vector3 seatedPos = new Vector3(0f, surface + 0.47f, -0.60f);
-            Vector3 seatedLook = new Vector3(0f, surface, -0.03f);
+            Vector3 seatedPos = new Vector3(0f, surface + 0.52f, -0.66f);   // a little further back: your whole field shows above the hand
+            Vector3 seatedLook = new Vector3(0f, surface, -0.06f);
             Vector3 overheadPos = new Vector3(0f, surface + 0.92f, -0.20f);
             Vector3 overheadLook = new Vector3(0f, surface, -0.04f);
 

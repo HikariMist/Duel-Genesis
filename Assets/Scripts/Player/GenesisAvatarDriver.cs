@@ -69,6 +69,7 @@ namespace DuelGenesis.Player
             var mover = GetComponent<ThirdPersonPlayerController>();
             float top = mover != null ? Mathf.Max(mover.sprintSpeed, 0.1f) : runSpeed;
             float normalized = Mathf.Clamp01(_speed / top);
+            if (mover != null && mover.Riding) normalized = 0f;   // standing on the board, not running
             if (_hasSpeed) _animator.SetFloat("Speed", normalized < 0.04f ? 0f : normalized);
             if (_hasDirection) _animator.SetFloat("Direction", _turn);
             _animator.speed = normalized > 0.1f ? Mathf.Lerp(0.75f, 1.15f, normalized) : 1f;

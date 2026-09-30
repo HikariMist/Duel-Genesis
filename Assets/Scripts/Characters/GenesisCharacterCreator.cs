@@ -735,7 +735,7 @@ namespace DuelGenesis.Characters
         private GameObject _studio;
 
         /// <summary>The creator is laid out for 1080p and scaled to the real screen, so it keeps its size on any monitor.</summary>
-        private static float UiScale => Mathf.Max(0.5f, UnityEngine.Screen.height / 1080f);
+        private static float UiScale => Mathf.Max(0.45f, Mathf.Min(UnityEngine.Screen.height / 1080f, UnityEngine.Screen.width / 1920f));   // fit both ways so narrow windows keep every button
         private static float VW => UnityEngine.Screen.width / UiScale;
         private static float VH => UnityEngine.Screen.height / UiScale;
         private static Texture2D _round, _roundBright, _vignette, _logo;

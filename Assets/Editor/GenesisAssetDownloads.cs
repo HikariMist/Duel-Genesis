@@ -101,7 +101,7 @@ namespace DuelGenesis.EditorTools
             AssetDatabase.SaveAssets();
         }
 
-        private static string Fetch(string url)
+        internal static string Fetch(string url)
         {
             using (var r = UnityWebRequest.Get(url))
             {
@@ -112,7 +112,7 @@ namespace DuelGenesis.EditorTools
             }
         }
 
-        private static bool Save(string url, string dest)
+        internal static bool Save(string url, string dest)
         {
             using (var r = UnityWebRequest.Get(url))
             {

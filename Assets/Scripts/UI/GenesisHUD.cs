@@ -80,13 +80,17 @@ namespace DuelGenesis.UI
                 _profilePanel = Object.FindFirstObjectByType<GenesisProfilePanel>();
         }
 
+        private DuelGenesis.Characters.GenesisCharacterCreator _creator;
+
         private void OnGUI()
         {
             ResolvePlayerSystems();
+            if (_creator == null) _creator = FindFirstObjectByType<DuelGenesis.Characters.GenesisCharacterCreator>();
             if ((_mainMenu != null && _mainMenu.IsOpen) ||
                 (_profilePanel != null && _profilePanel.IsOpen) ||
                 (_deckBuilder != null && _deckBuilder.IsOpen) ||
-                (_duel != null && _duel.IsActive))
+                (_duel != null && _duel.IsActive) ||
+                (_creator != null && _creator.IsOpen))   // the creator covers the whole screen
                 return;
 
             GUIStyle hud = new GUIStyle(GUI.skin.label)
@@ -126,7 +130,7 @@ namespace DuelGenesis.UI
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
                 $"SYSTEM CHECK: {systemState}\n" +
-                "[C] Collection   [B] Deck Builder   [P] Profile   [F1] Help" + devLine, hud);
+                "[C] Collection   [B] Deck Builder   [P] Profile   [G] Skateboard   [M] Map   [F1] Help" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
