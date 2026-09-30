@@ -942,8 +942,7 @@ namespace DuelGenesis.Dueling
 
             // Shuffle the three between their zones.
             var slots = hats.Select(h => h.Slot).ToList();
-            var rng = new Random();
-            var order = slots.OrderBy(_ => rng.Next()).ToList();
+            var order = slots.OrderBy(_ => e.RandomRange(0, 1 << 20)).ToList();
             foreach (DuelMonsterState h in hats) ctx.Me.Monsters[h.Slot] = null;
             for (int i = 0; i < hats.Count; i++)
             {
@@ -954,7 +953,7 @@ namespace DuelGenesis.Dueling
             foreach (DuelMonsterState h in hats) e.MagicalHatsCovered.Add(h.Card.Uid);
 
             // The attacker must guess: the attack now lands on a random hat.
-            if (ctx.Trigger != null) ctx.Trigger.Defender = hats[rng.Next(hats.Count)];
+            if (ctx.Trigger != null) ctx.Trigger.Defender = hats[e.RandomRange(0, hats.Count)];
             e.Raise(DuelEventType.Message, ctx.Player, ctx.Card, text: $"{ctx.Me.Name} hid {hidden.Name} under Magical Hats! The attack lands on a random hat.");
             ctx.Finish();
         }

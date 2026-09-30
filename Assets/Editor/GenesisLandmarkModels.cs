@@ -152,7 +152,7 @@ namespace DuelGenesis.EditorTools
                 foreach (var mf in inst.GetComponentsInChildren<MeshFilter>())
                     if (mf.sharedMesh != null) mf.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
             foreach (var r in inst.GetComponentsInChildren<MeshRenderer>())
-                GameObjectUtility.SetStaticEditorFlags(r.gameObject, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);   // no static batching: it re-merges millions of triangles every time Play starts; the SRP Batcher and instancing draw these fine
             return Save(root, prefabPath);
         }
 
