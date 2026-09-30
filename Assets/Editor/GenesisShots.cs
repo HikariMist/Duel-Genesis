@@ -89,7 +89,7 @@ namespace DuelGenesis.EditorTools
             Debug.Log("Duel: Genesis captured Sketchfab previews into " + dir);
         }
 
-        private static void Shot(string dir, string name, Vector3 from, Vector3 lookAt, float fov, float orthoHalf = 0f)
+        internal static void Shot(string dir, string name, Vector3 from, Vector3 lookAt, float fov, float orthoHalf = 0f)
         {
             var go = new GameObject("DG Shot Camera") { hideFlags = HideFlags.HideAndDontSave };
             var cam = go.AddComponent<Camera>();

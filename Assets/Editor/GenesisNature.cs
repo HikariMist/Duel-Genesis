@@ -45,7 +45,8 @@ namespace DuelGenesis.EditorTools
                     p.magnitude > 68f &&                                         // clear of the ring road
                     !(Mathf.Abs(p.x) < 28f && p.y > 58f && p.y < 128f) &&        // clear of the Duel Center and its forecourt
                     Vector2.Distance(p, centre) > 9f &&
-                    !GenesisDuelCenter.InCardShopLot(p);                         // the obelisk clearing and the card shop's lot
+                    !GenesisDuelCenter.InCardShopLot(p) &&                        // the obelisk clearing and the card shop's lot
+                    !GenesisGarden.IsReserved(p);                                // the park torii
                 Vector2 Rand() => new Vector2(sx * Mathf.Lerp(x0, x1, (float)rng.NextDouble()), sz * Mathf.Lerp(x0, x1, (float)rng.NextDouble()));
                 var used = new List<Vector2>();
                 Vector2? Spot(float gap)
@@ -64,7 +65,7 @@ namespace DuelGenesis.EditorTools
                     float a = i * 36f * Mathf.Deg2Rad;
                     count += Put(park, Pick(rng, "flower_redA", "flower_yellowA", "flower_purpleA", "flower_redB", "flower_yellowB"), centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 5.5f, a * 57f, 0.6f);
                 }
-                string[] trees = RealTrees("island_tree_03", "tree_small_02", "jacaranda_tree", "pine_tree_01");
+                string[] trees = RealTrees("tree_small_02", "jacaranda_tree");
                 bool realPark = trees.Length > 0;
                 if (!realPark) trees = new[] { "tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_tall", "tree_plateau", "tree_default_fall", "tree_oak_fall" };
                 for (int i = 0; i < (realPark ? 16 : 22); i++) { var p = Spot(realPark ? 10f : 7f); if (p != null) count += Put(park, Pick(rng, trees), p.Value, rng.Next(360), (realPark ? 8f : 6f) + (float)rng.NextDouble() * 4f, solid: true); }
@@ -96,7 +97,7 @@ namespace DuelGenesis.EditorTools
                     {
                         Vector2 p = dir * d + side * sgn * 16.5f;
                         if (dir == Vector2.up && d < 140f) continue;   // Duel Center forecourt
-                        if (OnRoadGrid(p) || GenesisDuelCenter.InCardShopLot(p)) continue;
+                        if (OnRoadGrid(p) || GenesisDuelCenter.InCardShopLot(p) || GenesisGarden.IsReserved(p)) continue;
                         count += Put(verges, Pick(rng, "plant_bush", "plant_bushDetailed", "plant_bushLarge", "flower_redA", "flower_yellowA", "flower_purpleA"), p, rng.Next(360), 0.9f);
                     }
             }
@@ -207,12 +208,9 @@ namespace DuelGenesis.EditorTools
             return lines.Any(l => Mathf.Abs(p.x - l) < (l == 0f ? 16f : 13f) || Mathf.Abs(p.y - l) < (l == 0f ? 16f : 13f));
         }
 
-        /// <summary>The Poly Haven scanned trees that are in the project (empty until Downloads > Poly Haven Realistic Trees).</summary>
-        /// <summary>Off for now: the raw scans are film-resolution; they need game-ready versions first.</summary>
-        private const bool UseRealTrees = false;
-
-        private static string[] RealTrees(params string[] ids) => !UseRealTrees ? new string[0] :
-            ids.Select(id => $"{GenesisAssetDownloads.TreesFolder}/{id}/{id}.fbx").Where(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null).ToArray();
+        /// <summary>The game-ready Poly Haven trees (Production Assets > Bake Game-Ready Poly Haven Trees) that exist.</summary>
+        private static string[] RealTrees(params string[] ids) =>
+            ids.Select(id => $"{GenesisRealTrees.OutFolder}/{id}/{id}.prefab").Where(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null).ToArray();
 
         private static string Pick(System.Random rng, params string[] names) => names[rng.Next(names.Length)];
 
@@ -229,7 +227,7 @@ namespace DuelGenesis.EditorTools
             if (b.size.y > 0.001f) go.transform.localScale *= height / b.size.y;
             b = GenesisWorldBuilder.RendererBounds(go);
             go.transform.position += new Vector3(at.x - b.center.x, -b.min.y, at.y - b.center.z);
-            if (solid)
+            if (solid && !real)
             {
                 b = GenesisWorldBuilder.RendererBounds(go);
                 var col = go.AddComponent<BoxCollider>();
@@ -238,13 +236,7 @@ namespace DuelGenesis.EditorTools
                 Vector3 s = go.transform.lossyScale;
                 col.size = new Vector3(Mathf.Max(0.3f, w) / s.x, b.size.y * 0.7f / s.y, Mathf.Max(0.3f, w) / s.z);
             }
-            if (real)
-            {
-                // Scanned trees are heavy: cull them when they shrink on screen, and let them instance instead of static-batching.
-                var lod = go.AddComponent<LODGroup>();
-                lod.SetLODs(new[] { new LOD(0.015f, go.GetComponentsInChildren<Renderer>()) });
-                lod.RecalculateBounds();
-            }
+            if (real) go.GetComponent<LODGroup>()?.RecalculateBounds();   // baked trees carry their own LOD group and trunk collider
             else GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic);
             return 1;
         }
