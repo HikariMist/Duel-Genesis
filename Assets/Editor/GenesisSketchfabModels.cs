@@ -40,6 +40,14 @@ namespace DuelGenesis.EditorTools
 
         public static GameObject Load(string model) => AssetDatabase.LoadAssetAtPath<GameObject>($"{Root}/{model}/{model}.obj");
 
+        /// <summary>A material asset file name Unity accepts (no leading dot, no path characters).</summary>
+        private static string SafeName(string name)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+            name = name.TrimStart('.', ' ');
+            return string.IsNullOrEmpty(name) ? "Material" : name;
+        }
+
         public static void SetUp(string model)
         {
             string folder = $"{Root}/{model}";
@@ -60,7 +68,7 @@ namespace DuelGenesis.EditorTools
             int made = 0;
             foreach (MatDef d in file.materials)
             {
-                string path = $"{matFolder}/{d.name}.mat";
+                string path = $"{matFolder}/{SafeName(d.name)}.mat";
                 var m = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (m == null) { m = new Material(lit); AssetDatabase.CreateAsset(m, path); }
                 m.shader = lit;

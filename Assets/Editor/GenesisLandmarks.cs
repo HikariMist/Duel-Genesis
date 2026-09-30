@@ -54,6 +54,27 @@ namespace DuelGenesis.EditorTools
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
         }
 
+        [MenuItem("Duel Genesis/DEV/Capture Landmark Screenshots")]
+        public static void CaptureLandmarks()
+        {
+            string dir = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Logs", "Shots");
+            System.IO.Directory.CreateDirectory(dir);
+            int i = 0;
+            foreach (var (name, _, _) in CountryShops)
+            {
+                GameObject shop = GameObject.Find(name);
+                if (shop == null) continue;
+                Transform t = shop.transform;
+                i++;
+                GenesisShots.Shot(dir, $"country_{i}_front", t.TransformPoint(new Vector3(6f, 2.4f, 24f)), t.TransformPoint(new Vector3(0f, 2f, 0f)), 70f);
+                if (i == 1) GenesisShots.Shot(dir, "country_1_back", t.TransformPoint(new Vector3(-6f, 2.4f, -24f)), t.TransformPoint(new Vector3(0f, 2f, 0f)), 70f);
+            }
+            GenesisShots.Shot(dir, "tokyo_tower", new Vector3(10f, 1.8f, 10f), new Vector3(TokyoTowerSite.x, 45f, TokyoTowerSite.y), 75f);
+            GenesisShots.Shot(dir, "chinatown_street", new Vector3(140f, 2f, -120f), new Vector3(200f, 5f, -120f), 75f);
+            GenesisShots.Shot(dir, "sakura_garden", new Vector3(-180f, 2f, -20f), new Vector3(-180f, 3f, -60f), 75f);
+            Debug.Log("Duel: Genesis captured landmark screenshots into " + dir);
+        }
+
         // ------------------------------------------------------------------ 18. sakura
 
         [MenuItem("Duel Genesis/World/18. Replace Cherry Blossoms With Realistic Sakura")]
