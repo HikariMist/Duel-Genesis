@@ -80,13 +80,17 @@ namespace DuelGenesis.UI
                 _profilePanel = Object.FindFirstObjectByType<GenesisProfilePanel>();
         }
 
+        private DuelGenesis.Characters.GenesisCharacterCreator _creator;
+
         private void OnGUI()
         {
             ResolvePlayerSystems();
+            if (_creator == null) _creator = FindFirstObjectByType<DuelGenesis.Characters.GenesisCharacterCreator>();
             if ((_mainMenu != null && _mainMenu.IsOpen) ||
                 (_profilePanel != null && _profilePanel.IsOpen) ||
                 (_deckBuilder != null && _deckBuilder.IsOpen) ||
-                (_duel != null && _duel.IsActive))
+                (_duel != null && _duel.IsActive) ||
+                (_creator != null && _creator.IsOpen))   // the creator covers the whole screen
                 return;
 
             GUIStyle hud = new GUIStyle(GUI.skin.label)

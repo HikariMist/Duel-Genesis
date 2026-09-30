@@ -350,6 +350,7 @@ namespace DuelGenesis.Characters
         {
             if (smr == null || smr.sharedMesh == null || Mathf.Abs(scale - 1f) < 0.001f) return;
             Mesh source = smr.sharedMesh;
+            if (!source.isReadable) return;   // imported without Read/Write (e.g. the Millennium Ring): keep its authored size
             Mesh copy = Object.Instantiate(source);
             copy.name = source.name + " (Duel Genesis Sized)";
             Vector3[] vertices = copy.vertices;

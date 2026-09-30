@@ -148,7 +148,7 @@ namespace DuelGenesis.Dueling
             CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;   // the whole 1920x1080 layout always fits, whatever the window shape
             gameObject.AddComponent<GraphicRaycaster>();
             _root = (RectTransform)transform;
 
