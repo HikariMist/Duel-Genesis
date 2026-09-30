@@ -130,7 +130,7 @@ namespace DuelGenesis.UI
                 $"COLLECTION: {cards} cards / {unique} unique\n" +
                 $"MAIN DECK: {deckCount} cards — {deckState}\n" +
                 $"SYSTEM CHECK: {systemState}\n" +
-                "[C] Collection   [B] Deck Builder   [P] Profile   [F1] Help" + devLine, hud);
+                "[C] Collection   [B] Deck Builder   [P] Profile   [G] Skateboard   [M] Map   [F1] Help" + devLine, hud);
 
             if (!_showCollection || _collection == null) return;
 
