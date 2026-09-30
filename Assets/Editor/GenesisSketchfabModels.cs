@@ -14,7 +14,7 @@ namespace DuelGenesis.EditorTools
     public static class GenesisSketchfabModels
     {
         public const string Root = "Assets/ThirdParty/Sketchfab";
-        public static readonly string[] Models = { "DragonGateInn", "SciFiBar" };
+        public static readonly string[] Models = { "DragonGateInn", "SciFiBar", "PotOfGreed", "MagicalHats" };
 
         [System.Serializable] private class MatDef { public string name; public float[] color; public string baseTex; public float[] emissive; public string emissiveTex; public string alpha; public float cutoff; public bool doubleSided; public float smoothness; public float metallic; }
         [System.Serializable] private class MatFile { public MatDef[] materials; }

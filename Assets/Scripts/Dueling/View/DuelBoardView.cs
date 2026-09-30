@@ -354,8 +354,34 @@ namespace DuelGenesis.Dueling
 
         // ============================================================== holograms
 
+        private readonly Dictionary<int, MagicalHatCover> _hats = new();
+
+        /// <summary>Magical Hats: a hat over each monster the trap hid, until the Battle Phase ends or the monster leaves.</summary>
+        private void SyncHats()
+        {
+            var wanted = new HashSet<int>();
+            foreach (DuelistState d in _engine.Duelists)
+            foreach (DuelMonsterState m in d.MonstersOnField)
+            {
+                if (!_engine.MagicalHatsCovered.Contains(m.Card.Uid) || !m.IsFaceDown) continue;
+                wanted.Add(m.Card.Uid);
+                if (!_hats.TryGetValue(m.Card.Uid, out MagicalHatCover hat))
+                    _hats[m.Card.Uid] = hat = MagicalHatCover.Spawn(_cardRoot);
+                if (hat == null) continue;
+                Vector3 at = _cards.TryGetValue(m.Card.Uid, out DuelCardView v) ? v.transform.localPosition : DuelMatLayout.MonsterZone(m.Card.Controller, m.Slot);
+                hat.SetPose(at, DuelMatLayout.Yaw(m.Card.Controller));
+            }
+            foreach (int uid in _hats.Keys.ToList())
+            {
+                if (wanted.Contains(uid)) continue;
+                if (_hats[uid] != null) Destroy(_hats[uid].gameObject);
+                _hats.Remove(uid);
+            }
+        }
+
         private void SyncHolograms()
         {
+            SyncHats();
             var wanted = new HashSet<int>();
             if (HologramsEnabled)
             {
@@ -400,7 +426,11 @@ namespace DuelGenesis.Dueling
                     break;
                 case DuelEventType.CardActivated:
                     if (e.Card != null)
+                    {
                         DuelFlash.Spawn(_root, CardLocalPosition(e.Card), e.Card.IsTrap ? DuelVisualResources.Magenta : new Color(0.2f, 1f, 0.7f), 1.4f, 0.55f);
+                        if (HologramsEnabled && (e.Card.IsSpell || e.Card.IsTrap))
+                            CardModelShowcase.TrySpawn(_cardRoot, CardLocalPosition(e.Card), e.Card);   // Pot of Greed, Magical Hats...
+                    }
                     break;
                 case DuelEventType.Destroyed:
                     if (e.Card != null)

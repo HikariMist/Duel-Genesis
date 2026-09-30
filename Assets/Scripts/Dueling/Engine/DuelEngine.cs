@@ -159,10 +159,26 @@ namespace DuelGenesis.Dueling
             SetPhase(DuelPhase.Main1);
         }
 
+        /// <summary>Cards destroyed when the Battle Phase ends (Magical Hats' decoys).</summary>
+        public readonly List<DuelCard> DestroyAtEndOfBattle = new();
+        /// <summary>Monsters hidden under Magical Hats (for the view): card uids, cleared when the Battle Phase ends.</summary>
+        public readonly HashSet<int> MagicalHatsCovered = new();
+
         private void SetPhase(DuelPhase phase)
         {
+            if (Phase == DuelPhase.Battle && phase != DuelPhase.Battle) EndOfBattleCleanup();
             Phase = phase;
             Raise(DuelEventType.PhaseChanged, TurnPlayer, text: PhaseName(phase));
+        }
+
+        private void EndOfBattleCleanup()
+        {
+            MagicalHatsCovered.Clear();
+            if (DestroyAtEndOfBattle.Count == 0) return;
+            var doomed = DestroyAtEndOfBattle.ToList();
+            DestroyAtEndOfBattle.Clear();
+            foreach (DuelCard c in doomed)
+                if (c.OnField) Destroy(c, c);
         }
 
         public static string PhaseName(DuelPhase phase) => phase switch
@@ -1327,7 +1343,7 @@ namespace DuelGenesis.Dueling
 
             var trigger = new DuelTrigger { Kind = DuelTriggerKind.AttackDeclared, Player = player, Attacker = attacker, Defender = defender, Card = attacker.Card };
             OpenResponseWindow(1 - player, trigger,
-                proceed: () => ResolveBattle(player, attacker, defender),
+                proceed: () => { CurrentAttackTarget = trigger.Defender; ResolveBattle(player, attacker, trigger.Defender); },
                 onNegated: () =>
                 {
                     Raise(DuelEventType.AttackNegated, player, attacker.Card, text: $"{attacker.Name}'s attack was negated.");
