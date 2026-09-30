@@ -132,8 +132,8 @@ namespace DuelGenesis.EditorTools
                 }
             }
 
-            // 7. The Genesis Duel Center closes the north boulevard, entrance to the plaza.
-            GameObject hall = GenesisDuelCenter.BuildAt(city, new Vector3(0f, 0f, 96f), 180f);
+            // 7. The Genesis Duel Center (the Genesis Colosseum) closes the north boulevard, its portal facing the plaza.
+            GameObject hall = GenesisDuelCenter.BuildColosseum(city, GenesisDuelCenter.ColosseumCentre, GenesisDuelCenter.ColosseumYaw);
             GenesisDuelCenter.BuildCardShop(city, GenesisDuelCenter.CardShopSpot, GenesisDuelCenter.CardShopYaw);
             Box(map, "Duel Center Forecourt", new Vector3(0f, 0.012f, 71f), new Vector3(40f, 0.024f, 18f), _paving);
 
@@ -160,7 +160,7 @@ namespace DuelGenesis.EditorTools
         {
             GameObject city = FindRoot(GenesisWorldBuilder.CityRootName);
             if (city == null || city.transform.Find("Open World Marker") == null) { Debug.LogWarning("Duel: Genesis: build the open city first (World > 9)."); return; }
-            GenesisDuelCenter.BuildAt(city.transform, new Vector3(0f, 0f, 96f), 180f);
+            GenesisDuelCenter.BuildColosseum(city.transform, GenesisDuelCenter.ColosseumCentre, GenesisDuelCenter.ColosseumYaw);
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
         }

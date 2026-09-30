@@ -198,7 +198,7 @@ namespace DuelGenesis.UI
                 wanted.Add((t.shopName, t.transform.position, new Color(1f, 0.8f, 0.3f), "$"));
             }
             GameObject dc = GameObject.Find("Genesis Duel Center");
-            if (dc != null) wanted.Add(("Genesis Duel Center", dc.transform.position, new Color(0.3f, 0.9f, 1f), "D"));
+            if (dc != null) wanted.Add(("Genesis Colosseum", dc.transform.position, new Color(0.3f, 0.9f, 1f), "D"));
             GameObject garden = GameObject.Find("Japanese Garden");
             if (garden != null) wanted.Add(("Japanese Garden", new Vector3(-180f, 0f, -60f), new Color(1f, 0.45f, 0.6f), "G"));
             GameObject tower = GameObject.Find("Tokyo Tower");
@@ -228,7 +228,8 @@ namespace DuelGenesis.UI
             if (near != null && Vector2.Distance(new Vector2(near.World.x, near.World.z), new Vector2(p.x, p.z)) < reach) return near.Name;
             float x = p.x, z = p.z;
             if (new Vector2(x, z).magnitude < 64f) return "Genesis Plaza";
-            if (Mathf.Abs(x) < 36f && z > 48f && z < 140f) return "Genesis Duel Center";
+            float ex = x / 52f, ez = (z - 126f) / 56f;   // the Genesis Colosseum's oval footprint
+            if (ex * ex + ez * ez < 1f || (Mathf.Abs(x) < 44f && z > 60f && z < 106f)) return "Genesis Colosseum";
             if (x > -230f && x < -130f && z > -110f && z < -12f) return "Japanese Garden";
             if (x > 55f && x < 101f && z > 7f && z < 93f) return "Genesis Card Vault";
             if (Mathf.Abs(x) > 365f || Mathf.Abs(z) > 365f) return "Forest Edge";

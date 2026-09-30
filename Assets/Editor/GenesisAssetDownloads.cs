@@ -266,6 +266,84 @@ namespace DuelGenesis.EditorTools
             Debug.Log($"Duel: Genesis downloaded {ok} Poly Haven texture files (CC0) into {PolyHavenFolder}{(failed > 0 ? $", {failed} failed" : "")}. Re-run World > 9 (or 8) to apply them.");
         }
 
+        /// <summary>
+        /// Texture roles for the Genesis Colosseum, each with Poly Haven IDs to try in order (the first one that exists is
+        /// used). The choice is written to colosseum_textures.txt so the builder knows which set fills which role.
+        /// </summary>
+        public static readonly (string role, string[] ids)[] ColosseumTextures =
+        {
+            ("stone", new[] { "large_sandstone_blocks", "sandstone_blocks_08", "castle_brick_07", "stone_brick_wall_001", "beige_wall_001" }),
+            ("trim", new[] { "beige_wall_001", "plastered_wall_02", "painted_plaster_wall", "sandstone_cracks" }),
+            ("floor", new[] { "marble_tiles", "floor_tiles_06", "stone_tiles_02", "granite_tile" }),
+            ("metal", new[] { "metal_plate", "metal_plate_02", "blue_metal_plate", "rusty_metal_02" }),
+            ("fabric", new[] { "fabric_pattern_05", "fabric_pattern_07", "velour_velvet", "denim_fabric" }),
+            ("paving", new[] { "patterned_cobblestone", "cobblestone_floor_001", "stone_tiles_02", "concrete_floor_worn_001" }),
+        };
+        public const string ColosseumRolesFile = PolyHavenFolder + "/colosseum_textures.txt";
+
+        [MenuItem("Duel Genesis/Downloads/Poly Haven Textures For The Genesis Colosseum (CC0, 2K, about 45 MB)")]
+        public static void DownloadColosseumTextures()
+        {
+            string project = Directory.GetParent(Application.dataPath).FullName;
+            var chosen = new System.Collections.Generic.List<string>();
+            int files = 0, failed = 0;
+            try
+            {
+                for (int r = 0; r < ColosseumTextures.Length; r++)
+                {
+                    var (role, ids) = ColosseumTextures[r];
+                    foreach (string id in ids)
+                    {
+                        EditorUtility.DisplayProgressBar("Duel: Genesis", $"{role}: trying {id}", r / (float)ColosseumTextures.Length);
+                        int got = 0;
+                        foreach (string map in new[] { "diff", "nor_gl" })
+                        {
+                            string file = $"{id}_{map}_2k.jpg";
+                            string dest = Path.Combine(project, PolyHavenFolder, id, file);
+                            if (File.Exists(dest)) { got++; continue; }
+                            Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                            if (SaveQuiet($"https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/{id}/{file}", dest)) got++;
+                            else break;
+                        }
+                        if (got == 2) { chosen.Add($"{role}={id}"); files += 2; break; }
+                        failed++;
+                    }
+                }
+            }
+            finally { EditorUtility.ClearProgressBar(); }
+
+            File.WriteAllText(Path.Combine(project, ColosseumRolesFile), string.Join("\n", chosen) + "\n");
+            string license = Path.Combine(project, PolyHavenFolder, "License.txt");
+            File.AppendAllText(license, "Genesis Colosseum textures from Poly Haven (https://polyhaven.com), CC0 1.0 (public domain): " +
+                string.Join(", ", chosen.Select(c => c.Substring(c.IndexOf('=') + 1))) + ".\n");
+            AssetDatabase.Refresh();
+            foreach (string c in chosen)
+            {
+                string id = c.Substring(c.IndexOf('=') + 1);
+                var importer = AssetImporter.GetAtPath($"{PolyHavenFolder}/{id}/{id}_nor_gl_2k.jpg") as TextureImporter;
+                if (importer != null && importer.textureType != TextureImporterType.NormalMap)
+                {
+                    importer.textureType = TextureImporterType.NormalMap;
+                    importer.SaveAndReimport();
+                }
+            }
+            Debug.Log($"Duel: Genesis downloaded the Colosseum textures (CC0): {string.Join(", ", chosen)} ({files} files; {failed} IDs not found and skipped).");
+        }
+
+        /// <summary>Downloads a file; false (and no file left behind) if it fails.</summary>
+        private static bool SaveQuiet(string url, string dest)
+        {
+            using (var request = UnityWebRequest.Get(url))
+            {
+                request.downloadHandler = new DownloadHandlerFile(dest);
+                var op = request.SendWebRequest();
+                while (!op.isDone) { }
+                if (request.result == UnityWebRequest.Result.Success) return true;
+            }
+            if (File.Exists(dest)) File.Delete(dest);
+            return false;
+        }
+
         [MenuItem("Duel Genesis/Downloads/Kenney Furniture Kit (CC0, 5 MB)")]
         public static void DownloadFurnitureKit()
         {

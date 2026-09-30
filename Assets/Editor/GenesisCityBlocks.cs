@@ -114,7 +114,7 @@ namespace DuelGenesis.EditorTools
         private static bool Blocked(Vector2 p, float pad)
         {
             if (p.magnitude < 70f + pad) return true;
-            if (Mathf.Abs(p.x) < 36f + pad && p.y > 48f - pad && p.y < 140f + pad) return true;
+            if (GenesisDuelCenter.InColosseum(p, pad)) return true;
             if (GenesisDuelCenter.InCardShopLot(p)) return true;
             if (GenesisGarden.IsReserved(p)) return true;
             if (Mathf.Abs(p.x) > 364f - pad || Mathf.Abs(p.y) > 364f - pad) return true;
