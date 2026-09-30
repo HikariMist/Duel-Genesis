@@ -153,6 +153,7 @@ namespace DuelGenesis.Dueling
             Named["Mirror Force"] = new MirrorForce();
             Named["Magic Cylinder"] = new MagicCylinder();
             Named["Negate Attack"] = new NegateAttack();
+            Named["Magical Hats"] = new MagicalHats();
             Named["Sakuretsu Armor"] = new SakuretsuArmor();
             Named["Threatening Roar"] = new ThreateningRoar();
 
@@ -878,6 +879,93 @@ namespace DuelGenesis.Dueling
             if (a == null) return 0;
             int threat = ctx.Opp.MonstersOnField.Where(m => m.IsAttackPosition && !m.HasAttacked).Sum(m => ctx.Engine.GetAttack(m)) + ctx.Engine.GetAttack(a);
             return threat >= 2500 || ctx.Trigger.Defender == null && ctx.Engine.GetAttack(a) >= ctx.Me.LifePoints ? 85 : 0;
+        }
+    }
+
+    /// <summary>
+    /// Magical Hats: when the opponent attacks, send 2 Spells/Traps from your Deck to the Graveyard and put 2 "Magical Hat"
+    /// decoys (0/0, face-down) on the field, set one of your monsters face-down, then shuffle the three. The attack lands on a
+    /// random hat. The decoys are destroyed when the Battle Phase ends. (The 2 Deck cards stand in for the decoys, which is why
+    /// they go straight to the Graveyard.)
+    /// </summary>
+    internal sealed class MagicalHats : CardEffect
+    {
+        public override bool CanActivate(EffectContext ctx) => false;
+        public override bool CanRespond(EffectContext ctx) =>
+            CardEffects.IsOpponentTurnTrigger(ctx, DuelTriggerKind.AttackDeclared) &&
+            ctx.Me.MonsterCount >= 1 && ctx.Me.Monsters.Count(m => m == null) >= 2 &&
+            ctx.Me.Deck.Count(c => c.IsSpell || c.IsTrap) >= 2;
+
+        public override void Resolve(EffectContext ctx)
+        {
+            var spellsTraps = ctx.Me.Deck.Where(c => c.IsSpell || c.IsTrap).ToList();
+            if (spellsTraps.Count < 2 || ctx.Me.MonsterCount == 0) { ctx.Finish(); return; }
+            ctx.Engine.Ask(new DuelChoice
+            {
+                Player = ctx.Player,
+                Title = "Magical Hats",
+                Prompt = "Choose 2 Spell/Trap Cards from your Deck to hide under the hats.",
+                SourceCard = ctx.Card,
+                Candidates = spellsTraps,
+                MinCount = 2,
+                MaxCount = 2,
+                Context = "deck-to-graveyard",
+                OnCards = picks => Hide(ctx, picks)
+            });
+        }
+
+        private static void Hide(EffectContext ctx, List<DuelCard> picks)
+        {
+            DuelEngine e = ctx.Engine;
+            foreach (DuelCard c in picks) e.SendToGraveyard(c, destroyed: false, cause: ctx.Card);
+
+            // The monster under the hats: the one being attacked, else our strongest.
+            DuelMonsterState hidden = ctx.Trigger?.Defender != null && ctx.Me.FindMonster(ctx.Trigger.Defender.Card) == ctx.Trigger.Defender
+                ? ctx.Trigger.Defender
+                : ctx.Me.MonstersOnField.OrderByDescending(m => e.GetAttack(m)).FirstOrDefault();
+            if (hidden == null) { ctx.Finish(); return; }
+            if (hidden.IsFaceUp)
+            {
+                hidden.Position = DuelMonsterPosition.FaceDownDefense;
+                hidden.Card.FaceUp = false;
+                hidden.PositionSetTurn = e.TurnNumber;
+            }
+
+            var hats = new List<DuelMonsterState> { hidden };
+            for (int i = 0; i < 2; i++)
+            {
+                DuelMonsterState hat = e.SummonToken(ctx.Player, "Magical Hat", "Spellcaster", "DARK", 1, 0, 0, DuelMonsterPosition.FaceDownDefense, ctx.Card);
+                if (hat == null) continue;
+                hats.Add(hat);
+                e.DestroyAtEndOfBattle.Add(hat.Card);
+            }
+
+            // Shuffle the three between their zones.
+            var slots = hats.Select(h => h.Slot).ToList();
+            var rng = new Random();
+            var order = slots.OrderBy(_ => rng.Next()).ToList();
+            foreach (DuelMonsterState h in hats) ctx.Me.Monsters[h.Slot] = null;
+            for (int i = 0; i < hats.Count; i++)
+            {
+                hats[i].Slot = order[i];
+                hats[i].Card.Slot = order[i];
+                ctx.Me.Monsters[order[i]] = hats[i];
+            }
+            foreach (DuelMonsterState h in hats) e.MagicalHatsCovered.Add(h.Card.Uid);
+
+            // The attacker must guess: the attack now lands on a random hat.
+            if (ctx.Trigger != null) ctx.Trigger.Defender = hats[rng.Next(hats.Count)];
+            e.Raise(DuelEventType.Message, ctx.Player, ctx.Card, text: $"{ctx.Me.Name} hid {hidden.Name} under Magical Hats! The attack lands on a random hat.");
+            ctx.Finish();
+        }
+
+        public override int AiValue(EffectContext ctx)
+        {
+            DuelMonsterState a = ctx.Trigger?.Attacker;
+            if (a == null) return 0;
+            DuelMonsterState d = ctx.Trigger.Defender;
+            // Worth it when the attack would destroy something we care about or hit us hard directly.
+            return d != null && ctx.Engine.GetAttack(a) > (d.IsAttackPosition ? ctx.Engine.GetAttack(d) : ctx.Engine.GetDefense(d)) ? 75 : 0;
         }
     }
 

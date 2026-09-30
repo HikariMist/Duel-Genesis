@@ -201,6 +201,8 @@ namespace DuelGenesis.UI
             if (dc != null) wanted.Add(("Genesis Duel Center", dc.transform.position, new Color(0.3f, 0.9f, 1f), "D"));
             GameObject garden = GameObject.Find("Japanese Garden");
             if (garden != null) wanted.Add(("Japanese Garden", new Vector3(-180f, 0f, -60f), new Color(1f, 0.45f, 0.6f), "G"));
+            GameObject tower = GameObject.Find("Tokyo Tower");
+            if (tower != null) wanted.Add(("Tokyo Tower", tower.transform.position, new Color(1f, 0.35f, 0.25f), "T"));
 
             if (wanted.Count == _pins.Count && wanted.Select(w => w.name).SequenceEqual(_pins.Select(m => m.Name))) return;
             foreach (var m in _pins) if (m.Icon != null) Destroy(m.Icon.gameObject);
@@ -222,13 +224,15 @@ namespace DuelGenesis.UI
         private string AreaName(Vector3 p)
         {
             Marker near = _pins.Where(m => m.Name != "Japanese Garden").OrderBy(m => Vector3.Distance(m.World, p)).FirstOrDefault();
-            if (near != null && Vector2.Distance(new Vector2(near.World.x, near.World.z), new Vector2(p.x, p.z)) < 26f) return near.Name;
+            float reach = near != null && near.Name == "Tokyo Tower" ? 36f : 26f;
+            if (near != null && Vector2.Distance(new Vector2(near.World.x, near.World.z), new Vector2(p.x, p.z)) < reach) return near.Name;
             float x = p.x, z = p.z;
             if (new Vector2(x, z).magnitude < 64f) return "Genesis Plaza";
             if (Mathf.Abs(x) < 36f && z > 48f && z < 140f) return "Genesis Duel Center";
             if (x > -230f && x < -130f && z > -110f && z < -12f) return "Japanese Garden";
             if (x > 55f && x < 101f && z > 7f && z < 93f) return "Genesis Card Vault";
             if (Mathf.Abs(x) > 365f || Mathf.Abs(z) > 365f) return "Forest Edge";
+            if (x > 126f && x < 234f && z > -140f && z < -100f) return "Chinatown Street";
             bool park = Mathf.Abs(x) > 14f && Mathf.Abs(x) < 108f && Mathf.Abs(z) > 14f && Mathf.Abs(z) < 108f;
             string quarter = z >= 0f ? (x >= 0f ? "Neon Heights" : "Kanda Ward") : (x >= 0f ? "Harbor Row" : "Old Town");
             return park ? "Sakura Park · " + quarter : quarter;

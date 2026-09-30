@@ -14,7 +14,7 @@ namespace DuelGenesis.EditorTools
     public static class GenesisSketchfabModels
     {
         public const string Root = "Assets/ThirdParty/Sketchfab";
-        public static readonly string[] Models = { "DragonGateInn", "SciFiBar" };
+        public static readonly string[] Models = { "DragonGateInn", "SciFiBar", "PotOfGreed", "MagicalHats" };
 
         [System.Serializable] private class MatDef { public string name; public float[] color; public string baseTex; public float[] emissive; public string emissiveTex; public string alpha; public float cutoff; public bool doubleSided; public float smoothness; public float metallic; }
         [System.Serializable] private class MatFile { public MatDef[] materials; }
@@ -40,6 +40,14 @@ namespace DuelGenesis.EditorTools
 
         public static GameObject Load(string model) => AssetDatabase.LoadAssetAtPath<GameObject>($"{Root}/{model}/{model}.obj");
 
+        /// <summary>A material asset file name Unity accepts (no leading dot, no path characters).</summary>
+        private static string SafeName(string name)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+            name = name.TrimStart('.', ' ');
+            return string.IsNullOrEmpty(name) ? "Material" : name;
+        }
+
         public static void SetUp(string model)
         {
             string folder = $"{Root}/{model}";
@@ -60,7 +68,7 @@ namespace DuelGenesis.EditorTools
             int made = 0;
             foreach (MatDef d in file.materials)
             {
-                string path = $"{matFolder}/{d.name}.mat";
+                string path = $"{matFolder}/{SafeName(d.name)}.mat";
                 var m = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (m == null) { m = new Material(lit); AssetDatabase.CreateAsset(m, path); }
                 m.shader = lit;

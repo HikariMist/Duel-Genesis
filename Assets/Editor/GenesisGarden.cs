@@ -233,7 +233,7 @@ namespace DuelGenesis.EditorTools
         /// <summary>Realistic cherry trees (set up from the Sketchfab downloads) if present.</summary>
         public static GameObject[] CherryPrefabs() =>
             AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/ThirdParty/Sketchfab" })
-                .Select(AssetDatabase.GUIDToAssetPath).Where(p => p.ToLowerInvariant().Contains("sakura") || p.ToLowerInvariant().Contains("cherry"))
+                .Select(AssetDatabase.GUIDToAssetPath).Where(p => p.EndsWith(".prefab") && (p.ToLowerInvariant().Contains("sakura") || p.ToLowerInvariant().Contains("cherry")))
                 .Select(AssetDatabase.LoadAssetAtPath<GameObject>).Where(g => g != null).ToArray();
 
         private static int Tree(Transform parent, Mesh tree, Mesh carpet, Vector2 p, System.Random rng)
