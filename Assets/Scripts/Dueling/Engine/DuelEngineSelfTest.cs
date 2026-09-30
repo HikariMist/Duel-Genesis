@@ -28,6 +28,7 @@ namespace DuelGenesis.Dueling
                 CheckFlipEffects(failures);
                 CheckFieldSpells(failures);
                 CheckCounterTraps(failures);
+                CheckMagicalHats(failures);
                 SimulateDuels(simulatedDuels, failures);
             }
             catch (Exception exception)
@@ -197,6 +198,49 @@ namespace DuelGenesis.Dueling
             Expect(failures, e.Activate(0, e.DebugPutInHand(0, "Final Flame")), "Final Flame could not be activated.");
             Expect(failures, e.Me(1).LifePoints == 8000 && e.Me(0).LifePoints == 7400,
                 $"Barrel Behind the Door should reflect 600 (LP {e.Me(0).LifePoints} / {e.Me(1).LifePoints}).");
+        }
+
+        private static void CheckMagicalHats(List<string> failures)
+        {
+            // B hides its monster under Magical Hats when A attacks: 2 Spells from the Deck go to the GY, two hat tokens
+            // appear face-down, the attack lands on one of the three, and the hats vanish at the end of the Battle Phase.
+            List<CardData> a = VanillaDeck();
+            List<CardData> b = VanillaDeck();
+            a[39] = Monster("Big Attacker", 4, 1900, 1000);
+            b[39] = Trap("Magical Hats", "Normal", "During your opponent's Battle Phase: Choose 2 Spells/Traps from your Deck and Special Summon them as Normal Monsters (ATK 0/DEF 0). Then, shuffle them and 1 face-down Defense Position monster.");
+            for (int i = 0; i < 10; i++) b[29 + i] = Spell("Hidden Spell " + i);   // plenty left in the Deck whatever gets drawn
+            DuelEngine e = NewEngine(a, b, 41, aiBoth: true);
+            e.StartDuel(1);
+            DuelCard guard = e.DebugPutInHand(1, "Vanilla 0");
+            e.NormalSummon(1, guard, set: false);
+            DuelCard hats = e.DebugPutInHand(1, "Magical Hats");
+            Expect(failures, e.SetSpellTrap(1, hats), "Magical Hats could not be Set.");
+            e.AdvancePhase(1);
+
+            DuelCard big = e.DebugPutInHand(0, "Big Attacker");
+            e.NormalSummon(0, big, set: false);
+            e.AdvancePhase(0);
+            Expect(failures, e.Phase == DuelPhase.Battle, "Magical Hats test: A should be in the Battle Phase.");
+            DuelMonsterState attacker = e.FindMonster(big);
+            DuelMonsterState target = e.FindMonster(guard);
+            string why = "";
+            if (attacker != null && target != null)
+            {
+                var probe = new DuelTrigger { Kind = DuelTriggerKind.AttackDeclared, Player = 0, Attacker = attacker, Defender = target, Card = big };
+                DuelBackrowState set = e.FindBackrow(hats);
+                CardEffect fx = CardEffects.Get(hats.Data);
+                var pctx = new EffectContext(e, 1, hats, probe);
+                why = $" [set={(set != null)} faceDown={set?.FaceDown} setTurn={set?.SetTurn} turn={e.TurnNumber} effect={fx?.GetType().Name} canRespond={fx?.CanRespond(pctx)} " +
+                      $"aiValue={fx?.AiValue(pctx)} deckST={e.Me(1).Deck.Count(c => c.IsSpell || c.IsTrap)} freeZones={e.Me(1).Monsters.Count(m => m == null)} candidates={e.ResponseCandidates(1, probe).Count} decider={e.Deciders[1]?.GetType().Name}]";
+            }
+            Expect(failures, attacker != null && target != null && e.DeclareAttack(0, attacker, target), "Magical Hats test: the attack could not be declared.");
+            Expect(failures, hats.Zone == DuelZone.Graveyard, "Magical Hats should be activated (CPU) in response to the attack and go to the GY." + why);
+            Expect(failures, e.Me(1).Graveyard.Count(c => c.Name.StartsWith("Hidden Spell")) == 2, "Magical Hats should send 2 Spells from the Deck to the GY.");
+            Expect(failures, e.FindMonster(big) != null && e.FindMonster(big).HasAttacked, "Magical Hats: the attack should still go ahead (onto a random hat).");
+            Expect(failures, e.Me(1).LifePoints == 8000, $"Magical Hats: B should take no damage (the hidden monster is face-down), LP {e.Me(1).LifePoints}.");
+            e.AdvancePhase(0);
+            Expect(failures, !e.Me(1).MonstersOnField.Any(m => m.Name == "Magical Hat"), "The Magical Hat tokens should be gone after the Battle Phase.");
+            Expect(failures, e.MagicalHatsCovered.Count == 0, "Magical Hats cover markers should clear after the Battle Phase.");
         }
 
         private static void CheckFieldSpells(List<string> failures)
