@@ -60,6 +60,60 @@ namespace DuelGenesis.Shops
             Make("insect", "Insect Pack", "Insect monsters", 1200, new Color(0.55f, 0.85f, 0.25f), Types("Insect")),
         };
 
+        // ------------------------------------------------------------------ which shop sells what
+
+        /// <summary>The main shop (the Card Vault rotunda): carries every pack, on a daily rotation.</summary>
+        public const string MainShopName = "Genesis Card Shop";
+        /// <summary>How many packs the main shop has on its shelves at once.</summary>
+        public const int MainShopShelf = 10;
+
+        /// <summary>The 4 lineups every other shop is split into (5 packs each, every pack in exactly one lineup).</summary>
+        public static readonly string[][] Lineups =
+        {
+            new[] { "monster", "dark", "dragon", "fiend", "zombie" },
+            new[] { "spell", "light", "spellcaster", "fairy", "thunder" },
+            new[] { "trap", "earth", "warrior", "beast", "insect" },
+            new[] { "fire", "water", "wind", "machine", "monster" },
+        };
+
+        public static readonly string[] LineupNames = { "Shadow Lineup", "Arcane Lineup", "Wild Lineup", "Elemental Lineup" };
+
+        public static bool IsMainShop(string shopName) => string.Equals(shopName, MainShopName, StringComparison.OrdinalIgnoreCase);
+
+        private static readonly Dictionary<string, int> LineupCache = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lineup (0-3) a shop carries. All shops in the world (except the main one) are sorted by
+        /// name and dealt the 4 lineups in turn, so each lineup is carried by an even share of shops.</summary>
+        public static int LineupFor(string shopName)
+        {
+            shopName ??= string.Empty;
+            if (LineupCache.TryGetValue(shopName, out int cached)) return cached;
+            LineupCache.Clear();
+            List<string> names = UnityEngine.Object.FindObjectsByType<CardShopTerminal>(FindObjectsSortMode.None)
+                .Select(t => t.shopName ?? string.Empty).Where(n => !IsMainShop(n))
+                .Append(shopName).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+            for (int i = 0; i < names.Count; i++) LineupCache[names[i]] = i % Lineups.Length;
+            return LineupCache[shopName];
+        }
+
+        /// <summary>Packs on sale at the named shop.</summary>
+        public static GenesisPackType[] ForShop(string shopName)
+        {
+            if (IsMainShop(shopName))
+            {
+                // Every pack, MainShopShelf at a time, moving on by half a shelf each real-world day.
+                int day = (int)(DateTime.Now.Date - new DateTime(2026, 1, 1)).TotalDays;
+                int start = (day * (MainShopShelf / 2)) % All.Length;
+                return Enumerable.Range(0, Math.Min(MainShopShelf, All.Length)).Select(i => All[(start + i) % All.Length]).ToArray();
+            }
+            return Lineups[LineupFor(shopName)].Select(Get).Distinct().ToArray();
+        }
+
+        public static string ShopBlurb(string shopName) => IsMainShop(shopName)
+            ? "Every pack in the game, on daily rotation"
+            : LineupNames[LineupFor(shopName)];
+
         public static GenesisPackType Get(string id) => All.FirstOrDefault(p => p.id == id) ?? All[0];
 
         private static GenesisPackType Make(string id, string name, string blurb, int price, Color accent, Func<CardData, bool> filter) =>
@@ -136,6 +190,7 @@ namespace DuelGenesis.Shops
         private static void ResetForPlaySession()
         {
             foreach (GenesisPackType p in All) p.ClearArt();
+            LineupCache.Clear();
         }
     }
 }

@@ -29,6 +29,7 @@ namespace DuelGenesis.Shops
         private string _message = "";
         private float _messageUntil;
         private string _shopName = "Genesis Card Shop";
+        private GenesisPackType[] _packs = GenesisPacks.All;
 
         private GameObject _player;
         private GenesisWallet _wallet;
@@ -46,6 +47,7 @@ namespace DuelGenesis.Shops
             _wallet = player.GetComponent<GenesisWallet>();
             _collection = player.GetComponent<PlayerCollection>() ?? player.AddComponent<PlayerCollection>();
             if (!string.IsNullOrEmpty(shopName)) _shopName = shopName;
+            _packs = GenesisPacks.ForShop(_shopName);
 
             _playerController = player.GetComponent<ThirdPersonPlayerController>();
             _thirdPersonCamera = Object.FindFirstObjectByType<ThirdPersonCamera>();
@@ -122,8 +124,8 @@ namespace DuelGenesis.Shops
                 case Stage.Shop:
                     if (keyboard.tabKey.wasPressedThisFrame) _matsTab = !_matsTab;
                     if (_matsTab) break;
-                    for (int i = 0; i < GenesisPacks.All.Length && i < 9; i++)
-                        if (keyboard[Key.Digit1 + i].wasPressedThisFrame) Buy(GenesisPacks.All[i]);
+                    for (int i = 0; i < _packs.Length && i < 9; i++)
+                        if (keyboard[Key.Digit1 + i].wasPressedThisFrame) Buy(_packs[i]);
                     break;
                 case Stage.Tearing:
                     if (Time.unscaledTime - _stageStart > TearSeconds) SetStage(Stage.Reveal);
@@ -193,7 +195,7 @@ namespace DuelGenesis.Shops
 
         private void DrawShop(Rect body)
         {
-            GenesisPackType[] packs = GenesisPacks.All;
+            GenesisPackType[] packs = _packs;
             int perRow = packs.Length <= 10 ? 5 : Mathf.CeilToInt(packs.Length / 3f);
             int rows = Mathf.CeilToInt(packs.Length / (float)perRow);
             float labelH = 54f;
@@ -225,6 +227,8 @@ namespace DuelGenesis.Shops
                 if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) Buy(pack);
             }
 
+            GUI.Label(new Rect(body.x, body.yMax - 44f, body.width, 22f), GenesisPacks.ShopBlurb(_shopName),
+                Style(14, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white));
             GUI.Label(new Rect(body.x, body.yMax - 22f, body.width, 22f), GenesisPacks.OddsText,
                 Style(13, FontStyle.Normal, TextAnchor.MiddleCenter, GenesisTheme.Muted));
         }

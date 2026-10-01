@@ -10,7 +10,7 @@ namespace DuelGenesis.Shops
         public int boosterPackCost = 1000;
 
         public string InteractionPrompt => CardDatabase.IsReady
-            ? $"Browse booster packs ({GenesisPacks.All.Length} kinds)"
+            ? $"Browse booster packs ({GenesisPacks.ShopBlurb(shopName)})"
             : "Real card catalog required";
 
         /// <summary>Opens the pack counter: nine boosters with their own wrapper art (see GenesisPacks).</summary>
