@@ -94,7 +94,7 @@ namespace DuelGenesis.EditorTools
             for (float p = -Half + 5f; p <= Half - 5f; p += dashLength + gap)
             {
                 float mid = p + dashLength * 0.5f;
-                if (SkipRoadPaint(0f, mid)) continue;
+                if (SkipBoulevardDash(mid)) continue;
                 foreach (float x in new[] { -laneOffset, laneOffset })
                 {
                     Box(parent, "Boulevard N/S Lane Dash", new Vector3(x, 0.038f, mid),
@@ -106,7 +106,7 @@ namespace DuelGenesis.EditorTools
             for (float p = -Half + 5f; p <= Half - 5f; p += dashLength + gap)
             {
                 float mid = p + dashLength * 0.5f;
-                if (SkipRoadPaint(mid, 0f)) continue;
+                if (SkipBoulevardDash(mid)) continue;
                 foreach (float z in new[] { -laneOffset, laneOffset })
                 {
                     Box(parent, "Boulevard E/W Lane Dash", new Vector3(mid, 0.038f, z),
@@ -117,14 +117,12 @@ namespace DuelGenesis.EditorTools
             return count;
         }
 
-        private static bool SkipRoadPaint(float x, float z)
+        private static bool SkipBoulevardDash(float alongRoad)
         {
-            // Keep the central plaza/ring readable and keep dashed paint out of all intersections.
-            if (new Vector2(x, z).magnitude < 72f) return true;
+            // Keep the plaza/ring and each cross-street intersection free of broken lane paint.
+            if (Mathf.Abs(alongRoad) < 72f) return true;
             foreach (float line in StreetLines)
-            {
-                if (Mathf.Abs(x - line) < 13f || Mathf.Abs(z - line) < 13f) return true;
-            }
+                if (Mathf.Abs(alongRoad - line) < 13f) return true;
             return false;
         }
 
@@ -136,7 +134,7 @@ namespace DuelGenesis.EditorTools
             {
                 if (new Vector2(x, z).magnitude < 82f) continue;
 
-                // Fully mark the boulevard junctions, plus every other outer grid junction. This gives
+                // Fully mark the boulevard junctions, plus major outer-grid junctions. This gives
                 // the city visual rhythm without creating thousands of tiny renderers.
                 bool boulevardJunction = Mathf.Abs(x) < 0.01f || Mathf.Abs(z) < 0.01f;
                 bool majorOuter = IsMajorGridLine(x) && IsMajorGridLine(z);
@@ -152,7 +150,6 @@ namespace DuelGenesis.EditorTools
                 Zebra(parent, new Vector3(x - eastWestOffset, 0.044f, z), horizontalWidth - 1.6f, false);
                 Zebra(parent, new Vector3(x + eastWestOffset, 0.044f, z), horizontalWidth - 1.6f, false);
 
-                // Stop bars sit just before each crossing.
                 Box(parent, "Stop Line", new Vector3(x, 0.045f, z - northSouthOffset - 2.3f),
                     new Vector3(verticalWidth - 1.2f, 0.009f, 0.38f), _white);
                 Box(parent, "Stop Line", new Vector3(x, 0.045f, z + northSouthOffset + 2.3f),
@@ -203,7 +200,6 @@ namespace DuelGenesis.EditorTools
                 candidates.Add(p);
             }
 
-            // Symmetric deterministic order: nearer useful districts first, then farther blocks.
             candidates = candidates.OrderBy(p => p.sqrMagnitude).ThenBy(p => p.y).ThenBy(p => p.x).ToList();
 
             foreach (Vector2 p in candidates)
@@ -235,10 +231,11 @@ namespace DuelGenesis.EditorTools
         private static bool AreaClear(Transform city, Vector2 p, Vector2 size)
         {
             Bounds target = new Bounds(new Vector3(p.x, 4f, p.y), new Vector3(size.x + 5f, 8f, size.y + 5f));
+            Transform upgradeRoot = city.Find("Map/" + RootName);
             foreach (Renderer r in city.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null || !r.enabled) continue;
-                if (r.transform.IsChildOf(city.Find("Map/" + RootName))) continue;
+                if (upgradeRoot != null && r.transform.IsChildOf(upgradeRoot)) continue;
                 string n = r.gameObject.name.ToLowerInvariant();
                 if (n.Contains("ground") || n.Contains("road") || n.Contains("pavement") || n.Contains("curb") ||
                     n.Contains("paving") || n.Contains("plot") || n.Contains("grass")) continue;
@@ -257,7 +254,6 @@ namespace DuelGenesis.EditorTools
 
             Box(lot, "Asphalt", new Vector3(0f, 0.019f, 0f), new Vector3(ParkingWidth, 0.038f, ParkingDepth), _asphalt);
 
-            // Perimeter lines make the lot read clearly from street level and from the minimap.
             Box(lot, "Parking Edge", new Vector3(0f, 0.043f, -ParkingDepth * 0.5f + 0.35f), new Vector3(ParkingWidth - 0.7f, 0.008f, 0.16f), _white);
             Box(lot, "Parking Edge", new Vector3(0f, 0.043f, ParkingDepth * 0.5f - 0.35f), new Vector3(ParkingWidth - 0.7f, 0.008f, 0.16f), _white);
             Box(lot, "Parking Edge", new Vector3(-ParkingWidth * 0.5f + 0.35f, 0.043f, 0f), new Vector3(0.16f, 0.008f, ParkingDepth - 0.7f), _white);
@@ -281,7 +277,6 @@ namespace DuelGenesis.EditorTools
                 }
                 Box(lot, "Stall Head Line", new Vector3(0f, 0.046f, innerEdge), new Vector3(stallsPerRow * stallWidth, 0.009f, 0.12f), _white);
 
-                // Concrete wheel stops keep the rows visually grounded without adding colliders.
                 for (int i = 0; i < stallsPerRow; i++)
                 {
                     float x = startX + (i + 0.5f) * stallWidth;
@@ -290,7 +285,6 @@ namespace DuelGenesis.EditorTools
                 }
             }
 
-            // Two accessible spaces nearest the central aisle.
             for (int side = -1; side <= 1; side += 2)
             {
                 float x = startX + (stallsPerRow / 2f) * stallWidth;
@@ -298,8 +292,7 @@ namespace DuelGenesis.EditorTools
                 Box(lot, "Accessible Space Marker", new Vector3(x, 0.05f, z), new Vector3(2.0f, 0.01f, 2.0f), _disabledBlue);
             }
 
-            // Directional centre aisle and a small red no-parking box at each end improve readability.
-            Box(lot, "Aisle Centre Dash", new Vector3(0f, 0.044f, 0f), new Vector3(ParkingWidth - 7f, 0.008f, 0.12f), _yellow);
+            Box(lot, "Aisle Centre Line", new Vector3(0f, 0.044f, 0f), new Vector3(ParkingWidth - 7f, 0.008f, 0.12f), _yellow);
             Box(lot, "No Parking End", new Vector3(-ParkingWidth * 0.5f + 2f, 0.045f, 0f), new Vector3(2.5f, 0.009f, 3.2f), _stopRed);
             Box(lot, "No Parking End", new Vector3(ParkingWidth * 0.5f - 2f, 0.045f, 0f), new Vector3(2.5f, 0.009f, 3.2f), _stopRed);
         }
