@@ -92,6 +92,63 @@ namespace DuelGenesis.Dueling
 
         /// <summary>How much the CPU wants to use this card right now (0 or less = don't).</summary>
         public virtual int AiValue(EffectContext ctx) => 40;
+
+        // ---- added for the full card library (all optional; default = no effect)
+
+        /// <summary>Stops <paramref name="player"/> activating <paramref name="card"/> right now (Royal Decree, Anti-Spell Fragrance, Xing Zhen Hu...).</summary>
+        public virtual bool LocksActivation(DuelEngine engine, DuelBackrowState source, int player, DuelCard card) => false;
+        /// <summary>The (face-up) effect of <paramref name="card"/> is negated while this card is face-up (Royal Decree, The Emperor's Holiday...).</summary>
+        public virtual bool NegatesCard(DuelEngine engine, DuelBackrowState source, DuelCard card) => false;
+        /// <summary>A monster on the field (<paramref name="monster"/>) cannot be destroyed by battle with <paramref name="opponent"/>.</summary>
+        public virtual bool ProtectsFromBattleDestruction(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster, DuelMonsterState opponent) => false;
+        /// <summary>This monster inflicts piercing battle damage.</summary>
+        public virtual bool GrantsPiercing(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker) => false;
+        /// <summary>This monster can attack directly.</summary>
+        public virtual bool GrantsDirectAttack(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker) => false;
+        /// <summary>Extra attacks per Battle Phase for this monster.</summary>
+        public virtual int ExtraAttacks(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker) => 0;
+        /// <summary>Restricts which monster <paramref name="attacker"/> may attack (Raregold Armor, Ring of Magnetism).</summary>
+        public virtual bool RestrictsAttackTarget(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker, DuelMonsterState target) => false;
+        /// <summary>Battle damage <paramref name="attacker"/>'s controller deals becomes this (Rod of the Mind's Eye); -1 = unchanged.</summary>
+        public virtual int FixBattleDamage(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker, int damage) => -1;
+        /// <summary>Extra ATK for <paramref name="monster"/> during damage calculation against <paramref name="opponent"/> only.</summary>
+        public virtual int DamageCalcBonus(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster, DuelMonsterState opponent) => 0;
+        /// <summary>A Spell, Trap or monster effect (<paramref name="card"/>) activated by <paramref name="player"/> finished resolving.</summary>
+        public virtual void OnCardResolved(DuelEngine engine, DuelBackrowState source, int player, DuelCard card) { }
+        /// <summary>Battle damage was dealt: <paramref name="attacker"/> (or null) to <paramref name="victim"/>.</summary>
+        public virtual void OnBattleDamage(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker, int victim, int amount, bool direct) { }
+        /// <summary>A card moved (to the Graveyard, banished, to the hand...).</summary>
+        public virtual void OnCardMoved(DuelEngine engine, DuelBackrowState source, DuelCard card, DuelZone from, DuelZone to, int lastController, bool byOpponentEffect) { }
+        /// <summary>A player took effect or battle damage.</summary>
+        public virtual void OnDamage(DuelEngine engine, DuelBackrowState source, int player, int amount, bool battle, DuelCard cause) { }
+        /// <summary>A player gained Life Points.</summary>
+        public virtual void OnLifeGained(DuelEngine engine, DuelBackrowState source, int player, int amount) { }
+        /// <summary>A player drew card(s).</summary>
+        public virtual void OnDraw(DuelEngine engine, DuelBackrowState source, int player, List<DuelCard> drawn) { }
+        /// <summary>Called for every face-up Spell/Trap during each End Phase (either player's).</summary>
+        public virtual void OnEndPhase(DuelEngine engine, DuelBackrowState source, int turnPlayer) { }
+        /// <summary>A monster declared an attack while this card is face-up.</summary>
+        public virtual void OnAttackDeclared(DuelEngine engine, DuelBackrowState source, DuelMonsterState attacker, DuelMonsterState defender) { }
+        /// <summary>This card was destroyed while Set (Dark Coffin, Statue of the Wicked).</summary>
+        public virtual void OnDestroyedWhileSet(DuelEngine engine, DuelCard card, DuelCard cause) { }
+        /// <summary>This face-up card was destroyed by a card effect (Blast with Chain, Smoke Grenade of the Thief).</summary>
+        public virtual void OnDestroyedByEffect(DuelEngine engine, DuelBackrowState source, DuelCard cause) { }
+        /// <summary>Cost in Life Points <paramref name="player"/> pays to play <paramref name="card"/> from the hand (Chain Energy).</summary>
+        public virtual int HandPlayTax(DuelEngine engine, DuelBackrowState source, int player, DuelCard card) => 0;
+        /// <summary><paramref name="player"/> cannot place <paramref name="card"/> as a monster right now (Kaiser Colosseum, Jam Breeding Machine...).</summary>
+        public virtual bool BlocksMonsterPlacement(DuelEngine engine, DuelBackrowState source, int player, DuelCard card, bool special, bool set) => false;
+        /// <summary>The monster <paramref name="target"/> cannot be targeted by <paramref name="effectCard"/> controlled by <paramref name="player"/>.</summary>
+        public virtual bool ShieldsFromTargeting(DuelEngine engine, DuelBackrowState source, DuelMonsterState target, DuelCard effectCard, int player) => false;
+        /// <summary>Monster Type override (DNA Surgery). null = unchanged.</summary>
+        public virtual string OverrideType(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster) => null;
+        /// <summary>Monster Attribute override (DNA Transplant). null = unchanged.</summary>
+        public virtual string OverrideAttribute(DuelEngine engine, DuelBackrowState source, DuelMonsterState monster) => null;
+        /// <summary>Changes a player's hand size limit (Enervating Mist, Infinite Cards). -1 = no change.</summary>
+        public virtual int HandLimit(DuelEngine engine, DuelBackrowState source, int player) => -1;
+        /// <summary>Stops <paramref name="player"/> conducting the Battle Phase (D.D. Borderline).</summary>
+        public virtual bool BlocksBattlePhase(DuelEngine engine, DuelBackrowState source, int player) => false;
+        /// <summary>Neither player can Tribute (Mask of Restrict).</summary>
+        public virtual bool BlocksTributes(DuelEngine engine, DuelBackrowState source, int player) => false;
     }
 
     /// <summary>Passive effects printed on monsters (stat changes that always apply).</summary>
@@ -105,6 +162,58 @@ namespace DuelGenesis.Dueling
         public virtual DuelCard BattleSubstitute(DuelEngine engine, DuelMonsterState self) => null;
         /// <summary>Battle damage its controller takes from battles involving it is also dealt to the opponent.</summary>
         public virtual bool MirrorsBattleDamage(DuelEngine engine, DuelMonsterState self) => false;
+
+        // ---- added for the full card library (all optional)
+        public virtual int AuraDefenseModifier(DuelEngine engine, DuelMonsterState source, DuelMonsterState target) => 0;
+        public virtual bool Piercing(DuelEngine engine, DuelMonsterState self) => false;
+        /// <summary>Another monster (<paramref name="attacker"/>) inflicts piercing damage because of this face-up monster (Enraged Battle Ox).</summary>
+        public virtual bool AuraPiercing(DuelEngine engine, DuelMonsterState source, DuelMonsterState attacker) => false;
+        public virtual bool CanAttackDirectly(DuelEngine engine, DuelMonsterState self) => false;
+        public virtual int ExtraAttacks(DuelEngine engine, DuelMonsterState self) => 0;
+        public virtual bool CannotAttack(DuelEngine engine, DuelMonsterState self) => false;
+        /// <summary>This face-up monster stops <paramref name="attacker"/> from attacking (Invitation to a Dark Sleep...).</summary>
+        public virtual bool ForbidsAttack(DuelEngine engine, DuelMonsterState source, DuelMonsterState attacker) => false;
+        /// <summary>Opponent's monsters cannot select <paramref name="target"/> as an attack target because of this face-up monster.</summary>
+        public virtual bool ProtectsFromAttack(DuelEngine engine, DuelMonsterState source, DuelMonsterState target) => false;
+        public virtual bool IndestructibleByBattle(DuelEngine engine, DuelMonsterState self, DuelMonsterState opponent) => false;
+        /// <summary>Cannot be destroyed by <paramref name="cause"/> (a card effect).</summary>
+        public virtual bool IndestructibleByEffect(DuelEngine engine, DuelMonsterState self, DuelCard cause) => false;
+        /// <summary>Unaffected by <paramref name="card"/>'s effects (Horus LV6: Spells; Silent Swordsman LV5: opponent's Spells).</summary>
+        public virtual bool UnaffectedBy(DuelEngine engine, DuelMonsterState self, DuelCard card) => false;
+        /// <summary><paramref name="player"/> cannot target this monster with <paramref name="card"/>.</summary>
+        public virtual bool Untargetable(DuelEngine engine, DuelMonsterState self, DuelCard card, int player) => false;
+        /// <summary>Its controller takes no battle damage from battles involving it.</summary>
+        public virtual bool NoBattleDamageToController(DuelEngine engine, DuelMonsterState self) => false;
+        /// <summary>Extra ATK during damage calculation only.</summary>
+        public virtual int DamageCalcBonus(DuelEngine engine, DuelMonsterState self, DuelMonsterState opponent) => 0;
+        /// <summary>Before damage calculation; return true to stop the battle (Adhesive Explosive, Blast Sphere).</summary>
+        public virtual bool BeforeDamageCalc(DuelEngine engine, DuelMonsterState self, DuelMonsterState opponent, bool selfAttacking) => false;
+        /// <summary>After damage calculation (D.D. Warrior, Wall of Illusion, Spear Dragon...). <paramref name="opponent"/> may have left the field.</summary>
+        public virtual void AfterDamageCalc(DuelEngine engine, DuelMonsterState self, DuelMonsterState opponent, bool selfAttacking) { }
+        /// <summary>Stops <paramref name="player"/> activating <paramref name="card"/> (Spell Canceller, Mirage Dragon...).</summary>
+        public virtual bool LocksActivation(DuelEngine engine, DuelMonsterState self, int player, DuelCard card) => false;
+        /// <summary>The effect of the face-up <paramref name="card"/> is negated (Silent Swordsman LV7: Spells).</summary>
+        public virtual bool NegatesCard(DuelEngine engine, DuelMonsterState self, DuelCard card) => false;
+        /// <summary>Stops <paramref name="player"/> Special Summoning (Jowgen the Spiritualist).</summary>
+        public virtual bool BlocksSpecialSummon(DuelEngine engine, DuelMonsterState self, int player, DuelCard card) => false;
+        /// <summary>A Spell/Trap/monster effect activated by <paramref name="player"/> finished resolving (Spell Counters...).</summary>
+        public virtual void OnCardResolved(DuelEngine engine, DuelMonsterState self, int player, DuelCard card) { }
+        public virtual void OnMonsterSummoned(DuelEngine engine, DuelMonsterState self, DuelMonsterState summoned, int player, bool special) { }
+        public virtual void OnLifeGained(DuelEngine engine, DuelMonsterState self, int player, int amount) { }
+        public virtual void OnDraw(DuelEngine engine, DuelMonsterState self, int player, List<DuelCard> drawn) { }
+        /// <summary>How many Tributes this monster counts as for summoning <paramref name="summoning"/> (Double Coston: 2 for DARK).</summary>
+        public virtual int TributeWeight(DuelEngine engine, DuelMonsterState self, DuelCard summoning) => 1;
+        /// <summary>Original ATK override (Tyranno Infinity, King of the Skull Servants); -1 = printed.</summary>
+        public virtual int OriginalAttack(DuelEngine engine, DuelMonsterState self) => -1;
+        public virtual string ExtraAttribute(DuelEngine engine, DuelMonsterState self) => null;
+        /// <summary>A destroy-substitute when it would be destroyed by a card effect (Gravekeeper's Visionary).</summary>
+        public virtual DuelCard EffectSubstitute(DuelEngine engine, DuelMonsterState self) => null;
+        /// <summary>Its control cannot switch.</summary>
+        public virtual bool ControlLocked(DuelEngine engine, DuelMonsterState self) => false;
+        /// <summary>Checked whenever the board settles; return true to destroy itself (Thunder Nyan Nyan).</summary>
+        public virtual bool SelfDestructs(DuelEngine engine, DuelMonsterState self) => false;
+        /// <summary>Cards sent to the Graveyard are banished instead (Banisher of the Light).</summary>
+        public virtual bool BanishesInsteadOfGraveyard(DuelEngine engine, DuelMonsterState self) => false;
     }
 
     /// <summary>Registry of implemented card effects, looked up by card name.</summary>
@@ -196,6 +305,11 @@ namespace DuelGenesis.Dueling
             if (card == null || card.kind != CardKind.Monster) return null;
             return Monsters.TryGetValue(card.cardName, out MonsterEffect effect) ? effect : null;
         }
+
+        /// <summary>Registers a monster's passive effect (see <see cref="MonsterCards"/>).</summary>
+        internal static void RegisterMonster(string name, MonsterEffect effect) => Monsters[name] = effect;
+
+        internal static bool HasMonsterPassive(string name) => Monsters.ContainsKey(name);
 
         public static bool IsImplemented(CardData card) => card != null && (card.kind == CardKind.Monster || Get(card) != null);
 

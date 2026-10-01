@@ -78,8 +78,25 @@ namespace DuelGenesis.Dueling
     public sealed class DuelCard
     {
         public readonly int Uid;
-        public readonly CardData Data;
+        private readonly CardData _data;
+        /// <summary>The card as it currently reads: a Trap Card Special Summoned as a monster reads as its monster form while on the field.</summary>
+        public CardData Data => MonsterForm ?? _data;
+        /// <summary>The card as printed (a Trap Card stays a Trap here even while it is a monster).</summary>
+        public CardData PrintedData => _data;
+        /// <summary>Set while a Trap Card is on the field as a monster (Embodiment of Apophis, Zoma the Spirit...).</summary>
+        public CardData MonsterForm;
+        /// <summary>The monster form it last had (so its triggers still resolve after it leaves the field).</summary>
+        public CardData LastMonsterForm;
         public readonly int Owner;
+        /// <summary>Shuffled into the Deck face-up (Pharaoh's Treasure).</summary>
+        public bool FaceUpInDeck;
+        public int BattleDestroyedTurn = -1;   // turn it was last destroyed by battle
+        public int DestroyedTurn = -1;         // turn it was last destroyed (battle or effect) on the field
+        public bool DestroyedByOpponent;       // ...and whether the opponent's card did it
+        public int SentToGraveTurn = -1;       // turn it was last sent to the Graveyard
+        public int BanishedTurn = -1;          // turn it was last banished
+        public bool BanishedFaceUpFromField;   // banished while face-up on its owner's field (D.D. Survivor)
+        public bool BanishedFaceDown;          // banished face-down (Different Dimension Capsule, Lightforce Sword)
 
         public DuelZone Zone = DuelZone.None;
         public int Controller;
@@ -89,7 +106,7 @@ namespace DuelGenesis.Dueling
         public DuelCard(int uid, CardData data, int owner)
         {
             Uid = uid;
-            Data = data;
+            _data = data;
             Owner = owner;
             Controller = owner;
         }
@@ -128,6 +145,30 @@ namespace DuelGenesis.Dueling
         public bool CannotDeclareAttack; // Tricky Tokens
         public readonly List<DuelBackrowState> Equips = new();
 
+        // ---- added for the full card library
+        public int DirectAttackTurn = -1;     // can attack directly this turn (Secret Pass to the Treasures, Delta Attacker)
+        public int AttackAllTurn = -1;        // can attack every opponent's monster once this turn (Diffusion Wave-Motion)
+        public readonly HashSet<int> AttackedUids = new();
+        public int AttacksMade;               // attacks declared this turn (second attacks)
+        public int BattledTurn = -1;          // involved in damage calculation this turn (After the Struggle)
+        public int BanditTurn = -1;           // The Secret of the Bandit
+        public int SpellCounters;
+        public int Counters;                  // other counters (Balloon Lizard...)
+        public bool CannotBeTributed;         // Army Ant / Ojama Tokens
+        public bool TributeSummoned;
+        public int CannotChangePositionTurn = -1;
+        public int CannotAttackUntilTurn = -1;  // cannot declare an attack while TurnNumber <= this (Harpie Lady 3, Electric Lizard)
+        public int EffectsNegatedTurn = -1;     // its effects are negated this turn
+        public int DestroyedByBattleThisTurn = -1;  // turn it destroyed a monster by battle (Horus LV)
+        public int IndestructibleTurn = -1;     // cannot be destroyed by battle or effects until the end of this turn
+        public int IndestructibleBattleTurn = -1;
+        public bool DestroyAtEndPhase;          // Mirage Token, Ocean of Regeneration
+        public string SummonedBy;               // name of the card that Special Summoned it (LV chains)
+        public int OriginalAttackOverride = -1; // "original ATK becomes ..." (Beast King Barbaros, Twin-Headed Behemoth)
+        public int OriginalDefenseOverride = -1;
+        public bool MustAttack;                 // Amazoness Archers
+        public bool MirrorWallHalved;           // attacked while Mirror Wall was face-up
+
         public bool IsFaceDown => Position == DuelMonsterPosition.FaceDownDefense;
         public bool IsFaceUp => !IsFaceDown;
         public bool IsAttackPosition => Position == DuelMonsterPosition.FaceUpAttack;
@@ -157,6 +198,11 @@ namespace DuelGenesis.Dueling
         public int Counter;                      // generic per-card counter (turns passed, stored value...)
         public string Declared;                  // a declared Type / name (Array of Revealing Light)
         public bool Resolving;                   // a Normal Spell/Trap on the field only while it resolves
+        public int ProtectCounters;              // Magic Reflector counters
+        public DuelCard TargetCard;              // the card it was activated on (Mask of Dispel, Different Dimension Gate...)
+        public readonly List<DuelCard> Stored = new();   // cards it keeps track of (banished by Different Dimension Gate...)
+        public readonly List<DuelMonsterPosition> StoredPositions = new();
+        public int SpellCounters;
 
         public string Name => Card.Name;
 
@@ -192,6 +238,30 @@ namespace DuelGenesis.Dueling
         public bool NormalSummonUsed;
         public bool CannotAttackThisTurn;     // Threatening Roar, Negate Attack
         public int SkipDraws;                  // Reckless Greed, Time Seal, Offerings to the Doomed
+
+        // ---- added for the full card library (turn numbers: the restriction applies while TurnNumber equals the value)
+        public int HandLimit = DuelRules.HandSizeLimit;   // Hieroglyph Lithograph 7, Infinite Cards: no limit
+        public int NoSpecialSummonTurn = -1;   // Cards from the Sky
+        public int NoBattlePhaseTurn = -1;
+        public bool SkipNextBattlePhase;       // Frozen Soul
+        public int NoSetSpellTrapTurn = -1;    // Left Arm Offering
+        public int NoSummonTurn = -1;          // cannot Normal/Special Summon (Set allowed) - Stray Lambs
+        public int NoSummonAtAllTurn = -1;     // cannot Summon or Set - Non Aggression Area
+        public int NoPositionChangeTurn = -1;  // Mesmeric Control
+        public int LevelDownTurn = -1, LevelDown;  // Cost Down
+        public int CountdownWinTurn = -1;      // Final Countdown
+        public int TrapLockTurn = -1;          // this player cannot activate Traps (Triangle Ecstasy Spark)
+        public int SpellTrapLockTurn = -1;     // this player cannot activate Spells/Traps (Penalty Game!)
+        public int NoEffectDamageTurn = -1;    // Pikeru's Circle of Enchantment
+        public int NoDamageTurn = -1;          // Hallowed Life Barrier
+        public int NoBattleDamageTurn = -1;    // Winged Kuriboh
+        public DuelCard SoulExchange;
+        public int SoulExchangeTurn = -1;
+        public int SpiritEliminationTurn = -1;
+        public bool SkipNextStandby;           // Solomon's Lawbook
+        public int LifePaidThisTurn, LifePaidLastTurn;   // Life Absorbing Machine
+        public int DoraLevel, DoraTurn = -1;   // Dora of Fate
+        public int SpellCountersRemoved;
 
         public DuelistState(int index, string name)
         {
@@ -291,7 +361,20 @@ namespace DuelGenesis.Dueling
     }
 
     /// <summary>What a response window is reacting to.</summary>
-    public enum DuelTriggerKind { AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase, MonsterEffectActivated }
+    public enum DuelTriggerKind
+    {
+        AttackDeclared, NormalSummoned, FlipSummoned, SpecialSummoned, SpellActivated, TrapActivated, MainPhase, MonsterEffectActivated,
+        /// <summary>Damage Step, before damage calculation (Attacker / Defender set).</summary>
+        DamageStep,
+        /// <summary>Monster(s) destroyed by battle and sent to the Graveyard (Targets).</summary>
+        MonsterDestroyedByBattle,
+        /// <summary>Card(s) destroyed by a card effect (Targets; Player = who controlled the effect).</summary>
+        CardsDestroyedByEffect,
+        /// <summary>A player took damage (Amount, Battle; Player = the player who caused it, Other side took it).</summary>
+        DamageTaken,
+        /// <summary>A monster was Set (Card).</summary>
+        MonsterSet
+    }
 
     public sealed class DuelTrigger
     {
@@ -302,6 +385,9 @@ namespace DuelGenesis.Dueling
         public DuelMonsterState Defender;  // null for a direct attack
         public bool Negated;
         public int Depth;
+        public int Amount;                 // damage taken (DamageTaken)
+        public bool Battle;                // battle damage (DamageTaken)
+        public int Victim = -1;            // the player who took the damage (DamageTaken)
         /// <summary>The cards the activated Spell/Trap targets (empty if it targets nothing).</summary>
         public List<DuelCard> Targets = new();
     }
