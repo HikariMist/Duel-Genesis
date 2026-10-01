@@ -55,18 +55,32 @@ namespace DuelGenesis.Cards
             return count;
         }
 
+        /// <summary>Chance per pack (or random pull) of a Legendary card.</summary>
+        public const float LegendaryChance = 1f / 10000f;
+
+        /// <summary>The rarest cards in the game: only ever pulled at 1 in 10,000.</summary>
+        public static readonly string[] LegendaryNames =
+        {
+            "Black Luster Soldier", "Black Luster Soldier - Envoy of the Beginning", "Blue-Eyes White Dragon", "Chaos Sorcerer"
+        };
+
+        public static bool IsLegendary(CardData c) => c != null && LegendaryNames.Contains(c.cardName);
+
         public static CardData GetRandomCard(bool guaranteedRareOrBetter = false)
         {
             if (Cards.Count == 0)
                 return null;
 
             CardRarity rarity = RollRarity(guaranteedRareOrBetter);
-            List<CardData> pool = Cards.Where(c => c.rarity == rarity).ToList();
+            List<CardData> legends = Cards.Where(IsLegendary).ToList();
+            if (legends.Count > 0 && Random.value < LegendaryChance)
+                return legends[Random.Range(0, legends.Count)];
+            List<CardData> pool = Cards.Where(c => c.rarity == rarity && !IsLegendary(c)).ToList();
 
             // Some production catalogs do not contain rarity data yet. In that
             // case draw from the real catalog instead of inventing fallback cards.
             if (pool.Count == 0)
-                pool = Cards;
+                pool = Cards.Where(c => !IsLegendary(c)).ToList();
 
             return pool[Random.Range(0, pool.Count)];
         }

@@ -75,8 +75,12 @@ namespace DuelGenesis.Shops
         /// <summary>Rolls a full pack, rarest card last. Returns null if the pack's pool is empty.</summary>
         public static List<CardData> Roll(GenesisPackType pack)
         {
-            List<CardData> pool = pack.Pool();
-            if (pool.Count == 0) return null;
+            List<CardData> fullPool = pack.Pool();
+            if (fullPool.Count == 0) return null;
+            // The Legendary cards never come from normal slots...
+            List<CardData> pool = fullPool.Where(c => !IsLegendary(c)).ToList();
+            List<CardData> legends = fullPool.Where(IsLegendary).ToList();
+            if (pool.Count == 0) pool = fullPool;
 
             var byRarity = pool.GroupBy(c => c.rarity).ToDictionary(g => g.Key, g => g.ToList());
             var cards = new List<CardData>(CardsPerPack);
@@ -85,8 +89,14 @@ namespace DuelGenesis.Shops
                 CardRarity wanted = i < 6 ? CardRarity.Common : i < 8 ? RollRare() : RollFoil();
                 cards.Add(Pick(byRarity, pool, wanted));
             }
-            return cards.OrderBy(c => (int)c.rarity).ToList();
+            // ...only from a 1-in-10,000 "Legendary pull" that replaces the foil card.
+            if (legends.Count > 0 && UnityEngine.Random.value < LegendaryChance)
+                cards[cards.Count - 1] = legends[UnityEngine.Random.Range(0, legends.Count)];
+            return cards.OrderBy(c => IsLegendary(c) ? 99 : (int)c.rarity).ToList();
         }
+
+        public const float LegendaryChance = CardDatabase.LegendaryChance;
+        public static bool IsLegendary(CardData c) => CardDatabase.IsLegendary(c);
 
         // Rare slots (x2): Rare 86%, Super 11%, Ultra 3%.
         public const float RareSlotSuper = 0.11f, RareSlotUltra = 0.03f;
@@ -95,7 +105,7 @@ namespace DuelGenesis.Shops
 
         /// <summary>The odds line shown at the pack counter.</summary>
         public static string OddsText =>
-            $"Each pack: 9 cards  ·  6 Common  ·  2 Rare slots  ·  1 Foil slot: Super {FoilSuper * 100:0}%  ·  Ultra {FoilUltra * 100:0}%  ·  Secret {FoilSecret * 100:0}%";
+            $"Each pack: 9 cards  ·  6 Common  ·  2 Rare slots  ·  1 Foil slot: Super {FoilSuper * 100:0}%  ·  Ultra {FoilUltra * 100:0}%  ·  Secret {FoilSecret * 100:0}%  ·  Legendary 1 in 10,000";
 
         private static CardRarity RollRare()
         {
