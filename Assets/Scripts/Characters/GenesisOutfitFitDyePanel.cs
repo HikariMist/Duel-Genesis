@@ -60,6 +60,8 @@ namespace DuelGenesis.Characters
             if (worn.Count == 0) return;
             _selected = Mathf.Clamp(_selected, 0, worn.Count - 1);
 
+            int oldDepth = GUI.depth;
+            GUI.depth = -60; // creator uses -40; keep this compact inspector clearly above it.
             Matrix4x4 oldMatrix = GUI.matrix;
             float scale = Mathf.Max(0.45f, Mathf.Min(Screen.height / 1080f, Screen.width / 1920f));
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
@@ -143,6 +145,7 @@ namespace DuelGenesis.Characters
             }
 
             GUI.matrix = oldMatrix;
+            GUI.depth = oldDepth;
         }
 
         private void DrawPalette(GenesisEquip equip, int channel)
